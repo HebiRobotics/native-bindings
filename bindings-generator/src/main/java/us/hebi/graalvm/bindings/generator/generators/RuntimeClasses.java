@@ -21,9 +21,9 @@ class RuntimeClasses {
     public static final ClassName DoubleSpan = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "DoubleSpan");
 
     /**
-     * Name of the trailing length out-param on entry points that return a span
+     * Name of the trailing out-struct param on entry points that return a span
      */
-    public static final String SPAN_LENGTH_OUT = "_lengthOut";
+    public static final String SPAN_OUT = "_spanOut";
 
     public static void addGuardedInvocation(MethodSpec.Builder builder, CodeBlock invocation, DataType returnType) {
 
@@ -47,8 +47,8 @@ class RuntimeClasses {
             // until the thread's next call, same as the string returns
             case FLOAT64_SPAN -> code
                     .add("double[] _values = ").addStatement(invocation)
-                    .addStatement("$N.write(_values == null ? 0 : _values.length)", SPAN_LENGTH_OUT)
-                    .addStatement("return $T.toTempDoublePointer(_values)", CTypes);
+                    .addStatement("$N.setData($T.toTempDoublePointer(_values))", SPAN_OUT, CTypes)
+                    .addStatement("$N.setLength(_values == null ? 0 : _values.length)", SPAN_OUT);
             default -> code.add("return ").addStatement(invocation);
         }
         return code.build();
@@ -64,8 +64,8 @@ class RuntimeClasses {
                  FLOAT32_POINTER, FLOAT64_POINTER,
                  OBJECT_HANDLE -> code.addStatement("return $T.nullPointer()", WordFactory.class);
             case FLOAT64_SPAN -> code
-                    .addStatement("$N.write(0)", SPAN_LENGTH_OUT)
-                    .addStatement("return $T.nullPointer()", WordFactory.class);
+                    .addStatement("$N.setData($T.nullPointer())", SPAN_OUT, WordFactory.class)
+                    .addStatement("$N.setLength(0)", SPAN_OUT);
             case VOID_WITH_ERROR_CODE ->
                     code.addStatement("return $T.returnErrorStatusCode(throwable)", ExceptionHandlers);
             case VOID -> {

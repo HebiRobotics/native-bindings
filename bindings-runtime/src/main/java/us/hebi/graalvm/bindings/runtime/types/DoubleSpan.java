@@ -1,60 +1,39 @@
 package us.hebi.graalvm.bindings.runtime.types;
 
+import org.graalvm.nativeimage.c.CContext;
+import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import org.graalvm.word.PointerBase;
 
 /**
- * Borrowed view of a caller-owned double buffer, i.e. a C {@code (const double*, size_t)}
- * pair passed as one value. Valid only for the duration of the call it was passed to.
- * The buffer is never owned or freed through this class.
+ * View of a C {@code (const double*, size_t)} pair, i.e. a pointer to the by-value
+ * span struct in the public ABI. A word type, so parameters cross the boundary with
+ * zero allocation.
+ * <p>
+ * Spans passed as parameters are caller-owned and only valid for the duration of
+ * the call. The buffer is never owned or freed through this type.
  *
  * @author Florian Enner
  * @since 01 Aug 2026
  */
-public final class DoubleSpan {
+@CContext(SpanDirectives.class)
+@CStruct("DoubleSpan")
+public interface DoubleSpan extends PointerBase {
 
-    public static DoubleSpan of(CDoublePointer pointer, long length) {
-        return new DoubleSpan(pointer, CTypes.capSizeToLong(length));
-    }
+    @CField("data")
+    CDoublePointer data();
 
-    /**
-     * Array-backed span so that annotated classes can be exercised on HotSpot
-     * without building a native image.
-     */
-    public static DoubleSpan of(double... values) {
-        return new DoubleSpan(new CDoublePointerMock(values), values.length);
-    }
+    @CField("data")
+    void setData(CDoublePointer data);
 
-    private DoubleSpan(CDoublePointer pointer, long length) {
-        this.pointer = pointer;
-        // No reference comparison: CDoublePointer is a GraalVM word type inside the
-        // image, where comparing against a Java null is a build-time error
-        this.length = pointer.isNull() ? 0 : length;
-    }
+    @CField("length")
+    long length();
 
-    public double read(int index) {
-        return pointer.read(index);
-    }
+    @CField("length")
+    void setLength(long length);
 
-    /**
-     * @return the element count, capped to 31 bits like other size_t inputs
-     */
-    public int length() {
-        return CTypes.capSizeToInt(length);
-    }
-
-    public boolean isEmpty() {
-        return length == 0;
-    }
-
-    public double[] toArray() {
-        return CTypes.getDoubles(pointer, length());
-    }
-
-    public CDoublePointer getPointer() {
-        return pointer;
-    }
-
-    private final CDoublePointer pointer;
-    private final long length;
+    // No convenience methods here on purpose: native-image rejects any method on a
+    // @CStruct interface that is not an annotated accessor. Helpers live in Spans.
 
 }

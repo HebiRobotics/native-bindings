@@ -113,7 +113,7 @@ public class ProcessorValidationTest {
                 @CLibClass("SpanReturn")
                 public class SpanReturn {
                     @CLibMethod(flags = Noexcept)
-                    public static DoubleSpan values() { return DoubleSpan.of(); }
+                    public static DoubleSpan values() { return null; }
                 }
                 """))).hadErrorContaining("Span returns must be declared as double[]");
     }

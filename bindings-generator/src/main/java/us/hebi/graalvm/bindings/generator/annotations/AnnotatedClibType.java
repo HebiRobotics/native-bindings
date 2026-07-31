@@ -7,7 +7,7 @@ import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CDoublePointer;
+import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
 import us.hebi.graalvm.bindings.annotations.CDefault;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
@@ -82,9 +82,9 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (isNativeApiType(mirror)) return TypeName.get(ObjectHandle.class);
         if (isString()) return ClassName.get(CCharPointer.class);
         if (isSizeType()) return TypeName.LONG;
-        // Span returns come back as the data pointer plus a trailing length out-param.
-        // Span parameters never reach this: the entry point generator explodes them.
-        if (isSpan()) return ClassName.get(CDoublePointer.class);
+        // Span parameters cross as a pointer to the by-value ABI struct, a word type
+        // with zero allocation. Span returns get a trailing out-param of the same type.
+        if (isSpan()) return ClassName.get(DoubleSpan.class);
 
         // Map enums to int rather than going through a generated header. We already know all numbers anyways
         var generatedEnum = getGeneratedCEnumType();

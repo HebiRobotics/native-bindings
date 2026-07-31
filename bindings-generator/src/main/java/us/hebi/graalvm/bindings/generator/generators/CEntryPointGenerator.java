@@ -5,8 +5,6 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CDoublePointer;
-import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -43,9 +41,10 @@ public class CEntryPointGenerator extends AbstractGenerator {
             CodeBlock.Builder invocation = CodeBlock.builder();
             CodeBlock.Builder invocationClose = CodeBlock.builder();
 
-            // Handle conversions with return types
+            // Handle conversions with return types. Span returns stay void: the entry
+            // point fills a trailing out-struct instead (see below).
             var returnType = method.getReturnType();
-            if (!returnType.isVoid()) {
+            if (!returnType.isVoid() && !returnType.isSpan()) {
                 builder.returns(returnType.getCEntryType());
 
                 // Wrap known Java types as handles if needed
@@ -81,11 +80,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 if (param.isIsolateThread()) {
                     // Pass the existing isolate parameter
                     invocation.add("$N", ISOLATE_NAME);
-                } else if (param.isSpan()) {
-                    // The by-value struct in the public ABI arrives exploded into two arguments
-                    builder.addParameter(CDoublePointer.class, param.getName() + "_data");
-                    builder.addParameter(TypeName.LONG, param.getName() + "_length");
-                    invocation.add("$T.of($N, $N)", DoubleSpan, param.getName() + "_data", param.getName() + "_length");
                 } else {
                     builder.addParameter(param.getCEntryType(), param.getName());
                     var apiTypeWrapper = param.getApiTypeWrapperClass();
@@ -112,9 +106,9 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 }
             }
 
-            // Span returns write their length through a trailing out-param
+            // Span returns fill a trailing caller-provided out-struct
             if (returnType.isSpan()) {
-                builder.addParameter(CLongPointer.class, SPAN_LENGTH_OUT);
+                builder.addParameter(DoubleSpan, SPAN_OUT);
             }
 
             // Add guards

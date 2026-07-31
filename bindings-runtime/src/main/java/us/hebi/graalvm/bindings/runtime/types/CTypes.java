@@ -119,6 +119,10 @@ public class CTypes {
         return new CDoublePointerMock(values, 0);
     }
 
+    public static DoubleSpanMock toDoubleSpan(double... values) {
+        return new DoubleSpanMock(values);
+    }
+
     public static CDoublePointerMock allocateCDoublePointer(int size) {
         return new CDoublePointerMock(new double[size], 0);
     }

@@ -4,7 +4,6 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
-import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
@@ -77,10 +76,10 @@ public final class NativeArrays$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Arrays_dotProduct"
     )
-    public static double bindings_tests_Arrays_dotProduct(IsolateThread _isolate,
-            CDoublePointer x_data, long x_length, CDoublePointer y_data, long y_length) {
+    public static double bindings_tests_Arrays_dotProduct(IsolateThread _isolate, DoubleSpan x,
+            DoubleSpan y) {
         try {
-            return NativeArrays.dotProduct(DoubleSpan.of(x_data, x_length), DoubleSpan.of(y_data, y_length));
+            return NativeArrays.dotProduct(x, y);
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -90,33 +89,32 @@ public final class NativeArrays$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Arrays_addOffset"
     )
-    public static CDoublePointer bindings_tests_Arrays_addOffset(IsolateThread _isolate,
-            CDoublePointer values_data, long values_length, double offset,
-            CLongPointer _lengthOut) {
+    public static void bindings_tests_Arrays_addOffset(IsolateThread _isolate, DoubleSpan values,
+            double offset, DoubleSpan _spanOut) {
         try {
-            double[] _values = NativeArrays.addOffset(DoubleSpan.of(values_data, values_length), offset);
-            _lengthOut.write(_values == null ? 0 : _values.length);
-            return CTypes.toTempDoublePointer(_values);
+            double[] _values = NativeArrays.addOffset(values, offset);
+            _spanOut.setData(CTypes.toTempDoublePointer(_values));
+            _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
-            _lengthOut.write(0);
-            return WordFactory.nullPointer();
+            _spanOut.setData(WordFactory.nullPointer());
+            _spanOut.setLength(0);
         }
     }
 
     @CEntryPoint(
             name = "__bindings_tests_Arrays_getSequence"
     )
-    public static CDoublePointer bindings_tests_Arrays_getSequence(IsolateThread _isolate,
-            long count, CLongPointer _lengthOut) {
+    public static void bindings_tests_Arrays_getSequence(IsolateThread _isolate, long count,
+            DoubleSpan _spanOut) {
         try {
             double[] _values = NativeArrays.getSequence(CTypes.capSizeToInt(count));
-            _lengthOut.write(_values == null ? 0 : _values.length);
-            return CTypes.toTempDoublePointer(_values);
+            _spanOut.setData(CTypes.toTempDoublePointer(_values));
+            _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
-            _lengthOut.write(0);
-            return WordFactory.nullPointer();
+            _spanOut.setData(WordFactory.nullPointer());
+            _spanOut.setLength(0);
         }
     }
 }

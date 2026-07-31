@@ -7,6 +7,7 @@ import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
+import us.hebi.graalvm.bindings.runtime.types.Spans;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 
@@ -79,12 +80,13 @@ public class NativeArrays {
             "mismatch is checked once here rather than in every language wrapper.",
             throwsOn = "mismatched lengths")
     public static double dotProduct(DoubleSpan x, DoubleSpan y) {
-        if (x.length() != y.length()) {
-            throw new IllegalArgumentException("x has " + x.length() + " elements, y has " + y.length());
+        int count = Spans.size(x);
+        if (count != Spans.size(y)) {
+            throw new IllegalArgumentException("x has " + count + " elements, y has " + Spans.size(y));
         }
         double sum = 0;
-        for (int i = 0; i < x.length(); i++) {
-            sum += x.read(i) * y.read(i);
+        for (int i = 0; i < count; i++) {
+            sum += Spans.read(x, i) * Spans.read(y, i);
         }
         return sum;
     }
@@ -92,9 +94,9 @@ public class NativeArrays {
     @CLibMethod(flags = Noexcept)
     @CLibComment("Returns a new array with the offset added to every element. Checks a span in and an array out.")
     public static double[] addOffset(DoubleSpan values, double offset) {
-        double[] result = new double[values.length()];
+        double[] result = new double[Spans.size(values)];
         for (int i = 0; i < result.length; i++) {
-            result[i] = values.read(i) + offset;
+            result[i] = Spans.read(values, i) + offset;
         }
         return result;
     }
