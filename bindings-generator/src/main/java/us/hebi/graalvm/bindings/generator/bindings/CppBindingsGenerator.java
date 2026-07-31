@@ -175,9 +175,6 @@ public class CppBindingsGenerator extends BindingGenerator {
                     .toList();
             var hasDedicatedConstructor = methods.stream().anyMatch(MethodDescription::getIsConstructor);
 
-            // Declaration of the static factory that a delegating value constructor needs (see below)
-            String constructorFactoryDecl = "";
-
             // Wrap all methods
             List<String> cParams = new ArrayList<>();
             List<String> cppParams = new ArrayList<>();
@@ -219,13 +216,14 @@ public class CppBindingsGenerator extends BindingGenerator {
                     if (apiClass.hasParent()) {
                         // The base class has no default constructor, so the value constructor has to delegate
                         // to the pointer constructor that initializes the inherited part. Base initializers run
-                        // before the constructor body, so the null check moves into a static factory that runs
-                        // while the delegated arguments get evaluated.
-                        constructorFactoryDecl = "  static %s %s(%s);\n".formatted(
-                                getCppType(apiClass.getType()), CONSTRUCTOR_FACTORY, argJoiner.join(cppParams));
+                        // before the constructor body, so the null check moves into a factory that runs
+                        // while the delegated arguments get evaluated. It is a free function in the internal
+                        // namespace rather than a class member so that it cannot collide with a wrapped method.
+                        var factoryName = getConstructorFactoryName(apiClass.getType());
+                        impl.write("namespace %s {\n".formatted(INTERNAL_POINTER_NAMESPACE));
                         impl.write("// The null check happens here because the base class gets initialized before the constructor body runs\n");
-                        impl.write("inline %s %s::%s(%s) {\n".formatted(
-                                getCppType(apiClass.getType()), cppClassName, CONSTRUCTOR_FACTORY, argJoiner.join(cppParams)));
+                        impl.write("inline %s %s(%s) {\n".formatted(
+                                getCppType(apiClass.getType()), factoryName, argJoiner.join(cppParams)));
                         if (useDynamicLookup) {
                             impl.write(getDynamicFunctionLookup(apiClass, method));
                         }
@@ -239,9 +237,10 @@ public class CppBindingsGenerator extends BindingGenerator {
                         }
                         impl.write("  return ptr;\n");
                         impl.write("}\n");
-                        impl.write("inline %s::%s(%s) : %s(%s(%s)) {}\n".formatted(
+                        impl.write("}\n");
+                        impl.write("inline %s::%s(%s) : %s(%s::%s(%s)) {}\n".formatted(
                                 cppClassName, cppClassName, argJoiner.join(cppParams),
-                                cppClassName, CONSTRUCTOR_FACTORY, argJoiner.join(cParams)));
+                                cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, argJoiner.join(cParams)));
                     } else {
                         impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, argJoiner.join(cppParams)));
                         if (useDynamicLookup) {
@@ -421,8 +420,6 @@ public class CppBindingsGenerator extends BindingGenerator {
                                   %%CTYPE%% ptr_{};
                                 """;
                     }
-                    classDef += constructorFactoryDecl;
-
                     classImpl = """
                             inline %%PARENT_CTYPE%% %%CLASS%%::get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept {%%DYNAMIC_LOOKUP%%
                               return %%CAST%%(cPointer);
@@ -563,9 +560,12 @@ public class CppBindingsGenerator extends BindingGenerator {
     private static final String INTERNAL_POINTER_NAMESPACE = "internal";
 
     /**
-     * Name of the static factory that value constructors of child classes delegate through
+     * Name of the factory that value constructors of child classes delegate through. It carries the
+     * class name and lives in the internal namespace, so it cannot collide with a wrapped method.
      */
-    private static final String CONSTRUCTOR_FACTORY = "createPointer";
+    private static String getConstructorFactoryName(TypeDescription type) {
+        return "create" + getCppClassName(type) + "Pointer";
+    }
 
     interface OverloadWriter {
         void write(String params, String body, String call) throws IOException;
