@@ -123,6 +123,7 @@ struct MatlabStringArray {
             mxFree(ptrs);
         }
     }
+    operator char**() const { return ptrs; }
     operator const char**() const { return (const char**)ptrs; }
     MatlabStringArray(const MatlabStringArray&) = delete;
 };
