@@ -166,6 +166,47 @@ class ArraysTest(unittest.TestCase):
         self.assertEqual([4.0, 3.0, 2.0, 1.0], list(values))
 
 
+class SpansTest(unittest.TestCase):
+    """Pointer and length crossing as one by-value struct, so no count arguments."""
+
+    def test_dot_product(self):
+        # Plain lists work because the wrapper converts through numpy
+        self.assertEqual(32.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]))
+
+    def test_length_mismatch(self):
+        # The length check lives once in the Java implementation. A mismatch
+        # returns the type default and sets the last error.
+        bindings_tests.Errors.clear_last_error()
+        self.assertEqual(0.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0]))
+        self.assertIn("elements", bindings_tests.Errors.get_last_error())
+        bindings_tests.Errors.clear_last_error()
+
+    def test_add_offset(self):
+        # Span in, numpy array out. The wrapper copies out of the library-owned
+        # buffer before returning.
+        result = bindings_tests.Arrays.add_offset([1.0, 2.0, 3.0], 10.0)
+        self.assertEqual([11.0, 12.0, 13.0], list(result))
+
+    def test_get_sequence(self):
+        self.assertEqual([0.0, 1.0, 2.0, 3.0, 4.0], list(bindings_tests.Arrays.get_sequence(5)))
+
+    def test_get_sequence_empty(self):
+        self.assertEqual(0, len(bindings_tests.Arrays.get_sequence(0)))
+
+    def test_get_sequence_grows_scratch_buffer(self):
+        # 200 elements, which forces the 128 element scratch buffer to grow
+        result = bindings_tests.Arrays.get_sequence(200)
+        self.assertEqual(200, len(result))
+        self.assertEqual(199.0, result[199])
+
+    def test_results_survive_next_call(self):
+        # Each returned array must be an independent copy of the scratch buffer
+        first = bindings_tests.Arrays.get_sequence(3)
+        second = bindings_tests.Arrays.add_offset([5.0, 5.0, 5.0], 1.0)
+        self.assertEqual([0.0, 1.0, 2.0], list(first))
+        self.assertEqual([6.0, 6.0, 6.0], list(second))
+
+
 class ShapesTest(unittest.TestCase):
     """Inheritance, including the generated upcast."""
 

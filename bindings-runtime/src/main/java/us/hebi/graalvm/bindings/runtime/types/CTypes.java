@@ -62,6 +62,28 @@ public class CTypes {
 
     private static final ThreadLocal<ByteBuffer> utf8StringBuffer = new ThreadLocal<ByteBuffer>();
 
+    /**
+     * Copies a double array into a per-thread scratch buffer for returning it as a span.
+     * Mirrors {@link #toTempCString(byte[], int, int)}: the returned address is only valid
+     * until this thread's next call and has to be copied immediately. null maps to nullptr,
+     * an empty array to a valid zero-length address.
+     */
+    public static CDoublePointer toTempDoublePointer(double[] values) {
+        if (values == null) return WordFactory.nullPointer();
+        int numBytes = values.length * Double.BYTES;
+        ByteBuffer buffer = doubleArrayBuffer.get();
+        if (buffer == null || buffer.capacity() < numBytes) {
+            buffer = ByteBuffer.allocateDirect(Math.max(numBytes, 128 * Double.BYTES));
+            buffer.order(ByteOrder.nativeOrder());
+            doubleArrayBuffer.set(buffer);
+        }
+        Buffer6.rewind(buffer);
+        buffer.asDoubleBuffer().put(values);
+        return WordFactory.pointer(DirectBuffer6.getAddress(buffer));
+    }
+
+    private static final ThreadLocal<ByteBuffer> doubleArrayBuffer = new ThreadLocal<ByteBuffer>();
+
     public static int capSizeToInt(long size_t) {
         // Anything over 31 bits gets capped to the max
         if (size_t >>> 31 == 0) {

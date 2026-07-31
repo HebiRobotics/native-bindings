@@ -106,6 +106,29 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("Error provider must be a static no-args method");
     }
 
+    @Test
+    public void rejectsDoubleSpanReturn() {
+        assertThat(compile(source("SpanReturn", """
+                import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
+                @CLibClass("SpanReturn")
+                public class SpanReturn {
+                    @CLibMethod(flags = Noexcept)
+                    public static DoubleSpan values() { return DoubleSpan.of(); }
+                }
+                """))).hadErrorContaining("Span returns must be declared as double[]");
+    }
+
+    @Test
+    public void rejectsDoubleArrayParameter() {
+        assertThat(compile(source("ArrayParam", """
+                @CLibClass("ArrayParam")
+                public class ArrayParam {
+                    @CLibMethod(flags = Noexcept)
+                    public static double sum(double[] values) { return 0; }
+                }
+                """))).hadErrorContaining("Span parameters must be declared as DoubleSpan");
+    }
+
     private Compilation compile(JavaFileObject source) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred

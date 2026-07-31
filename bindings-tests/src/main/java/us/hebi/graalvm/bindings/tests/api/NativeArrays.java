@@ -6,6 +6,7 @@ import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 
@@ -68,6 +69,47 @@ public class NativeArrays {
             values.write(i, values.read(j));
             values.write(j, tmp);
         }
+    }
+
+    // ---- Span variants. Each buffer carries its own length, so wrappers pass
+    // their native array types without a separate count argument. ----
+
+    @CLibMethod
+    @CLibComment(value = "Dot product of two spans. The lengths ride along in the spans, so a " +
+            "mismatch is checked once here rather than in every language wrapper.",
+            throwsOn = "mismatched lengths")
+    public static double dotProduct(DoubleSpan x, DoubleSpan y) {
+        if (x.length() != y.length()) {
+            throw new IllegalArgumentException("x has " + x.length() + " elements, y has " + y.length());
+        }
+        double sum = 0;
+        for (int i = 0; i < x.length(); i++) {
+            sum += x.read(i) * y.read(i);
+        }
+        return sum;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Returns a new array with the offset added to every element. Checks a span in and an array out.")
+    public static double[] addOffset(DoubleSpan values, double offset) {
+        double[] result = new double[values.length()];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = values.read(i) + offset;
+        }
+        return result;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("""
+            Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
+            over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
+            """)
+    public static double[] getSequence(@CSizeType int count) {
+        double[] result = new double[Math.max(count, 0)];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = i;
+        }
+        return result;
     }
 
 }

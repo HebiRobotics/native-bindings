@@ -1,6 +1,9 @@
 package us.hebi.graalvm.bindings.generator.annotations;
 
 import com.google.common.base.Strings;
+import com.squareup.javapoet.ArrayTypeName;
+import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.TypeName;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibLastErrorProvider;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
@@ -42,7 +45,20 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
             }
             flags.add(toModelFlag(flag));
         }
+
+        // Spans have one Java form per direction: parameters borrow a caller-owned buffer
+        // through the DoubleSpan view, returns hand back a copied double[]
+        checkArgument(!DOUBLE_SPAN_TYPE.equals(returnType.getJavaType()),
+                "Span returns must be declared as double[], not DoubleSpan: %s", executableElement.getSimpleName());
+        for (var parameter : getParameters()) {
+            checkArgument(!DOUBLE_ARRAY_TYPE.equals(parameter.getJavaType()),
+                    "Span parameters must be declared as DoubleSpan, not double[]: %s", executableElement.getSimpleName());
+        }
     }
+
+    private static final TypeName DOUBLE_SPAN_TYPE =
+            ClassName.get("us.hebi.graalvm.bindings.runtime.types", "DoubleSpan");
+    private static final TypeName DOUBLE_ARRAY_TYPE = ArrayTypeName.of(TypeName.DOUBLE);
 
     /**
      * @return the name this method is exported under, which the annotation may override

@@ -32,6 +32,15 @@ typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
 
+// A (pointer, length) view of a contiguous double buffer, passed and returned
+// by value. Inputs are caller-owned and only read during the call. Returned
+// spans are library-owned and stay valid until the calling thread's next
+// library call, so they have to be copied immediately.
+typedef struct {
+    const double* data;
+    size_t length;
+} bindings_tests_double_span;
+
 typedef enum bindings_tests_Color {
   bindings_tests_Color_Red = 0,
   bindings_tests_Color_Green = 1,
@@ -82,6 +91,9 @@ DLL_PUBLIC int bindings_tests_Arrays_sumInt32(int* values, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
 DLL_PUBLIC void bindings_tests_Arrays_cumulativeSum(double* source, double* target, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
+DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y);
+DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
+DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
 DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);

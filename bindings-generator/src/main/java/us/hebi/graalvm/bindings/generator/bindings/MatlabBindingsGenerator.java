@@ -121,6 +121,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         if (param.getDataType() == DataType.TYPEDEF) {
             return "void*"; // callbacks are not supported at this time
         }
+        if (param.getDataType() == DataType.FLOAT64_SPAN) {
+            return "DoubleSpan"; // layout-compatible local struct defined in the MEX template
+        }
         return (param.getIsConst() ? "const " : "") + TypeMap.toExternalC(param.getDataType());
     }
 
@@ -152,6 +155,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
             case CHAR_POINTER_POINTER -> "MatlabStringArray %s(prhs[%d])".formatted(param.getParamName(), index);
 
+            // MatlabArray handles class conversion, and the element count rides along in the span
+            case FLOAT64_SPAN -> ("MatlabArray<double, mxDOUBLE_CLASS> %1$s_arr(prhs[%2$d]);\n" +
+                                  "DoubleSpan %1$s = {%1$s_arr.ptr, mxGetNumberOfElements(prhs[%2$d])}")
+                    .formatted(param.getParamName(), index);
+
             default -> throw new IllegalStateException("Unsupported input type: " + param.getDataType());
         };
     }
@@ -167,6 +175,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
             // Strings (C-String to MATLAB String)
             case CHAR_POINTER -> "createMexString(%%RETURN_VALUE%%)";
+
+            // Spans (copied into a MATLAB row vector)
+            case FLOAT64_SPAN -> "createMexDoubleArray(%%RETURN_VALUE%%)";
 
             default -> throw new IllegalStateException("Unsupported output type: " + type.getDataType());
         };
@@ -933,7 +944,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private List<String> mapToMatlabType(TypeDescription type) {
         return switch (type.getDataType()) {
             case BOOL -> List.of("logical");
-            case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T,
+            case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, FLOAT64_SPAN,
                  INT16_POINTER, INT32_POINTER, INT64_POINTER, FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");

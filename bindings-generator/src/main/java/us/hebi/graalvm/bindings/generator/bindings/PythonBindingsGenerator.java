@@ -170,6 +170,14 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
+        if (GeneratorUtil.usesSpans(lib)) {
+            content.append("""
+                    class _DoubleSpan(Structure):
+                        # A (pointer, length) view of a double buffer, passed and returned by value
+                        _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
+
+                    """);
+        }
         for (ClassDescription apiClass : apiClasses) {
             content.append(TemplateString.of("""
                             class struct_%%CLASS_NAME%%_(Structure):
@@ -442,12 +450,12 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var body = overload.tryGetBody().map(appendNewline).map(indent).orElse("");
         var conversions = indent.apply(paramLists.inputConversions);
         var postBody = overload.tryGetPostBody().map(appendNewline).map(indent).orElse("");
-        var numpy = isUsingNumpy(body, conversions, postBody) ? indent.apply("np = _require_numpy()\n") : "";
 
         // C call and type conversion
         var returnTemplate = indent.apply(getReturnTemplate(apiClass, method)
                 .set("CALL", "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
                 .render());
+        var numpy = isUsingNumpy(body, conversions, postBody, returnTemplate) ? indent.apply("np = _require_numpy()\n") : "";
 
         // Build the full method body
         content.append(TemplateString.of("""
@@ -520,6 +528,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
             case CHAR_POINTER -> """
                     ptr_ = %%CALL%%
                     return ptr_.decode("utf-8") if ptr_ is not None else ""
+                    """;
+            // Copied out immediately because the span is only valid until the next call
+            case FLOAT64_SPAN -> """
+                    span_ = %%CALL%%
+                    if span_.length == 0 or not span_.data:
+                        return np.empty(0, dtype=np.float64)
+                    return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
                     """;
             case ENUM -> "return %%RETURN_TYPE%%(%%CALL%%)";
             case BOOL -> "return %%CALL%% != 0";
@@ -703,6 +718,16 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(c_char_p)):
                             encoded_list = [s.encode('utf-8') if isinstance(s, str) else s for s in %%NAME%%]
                             %%NAME%% = (c_char_p * len(encoded_list))(*encoded_list)
+                        """).set("NAME", name).render());
+
+            } else if (pyType.equals("_DoubleSpan")) {
+                // The temporary array keeps the buffer alive until the call returns
+                out.append(TemplateString.of("""
+                        if %%NAME%% is None:
+                            %%NAME%% = _DoubleSpan(None, 0)
+                        elif not isinstance(%%NAME%%, _DoubleSpan):
+                            %%NAME%%_arr = np.ascontiguousarray(%%NAME%%, dtype=np.float64)
+                            %%NAME%% = _DoubleSpan(%%NAME%%_arr.ctypes.data_as(POINTER(c_double)), len(%%NAME%%_arr))
                         """).set("NAME", name).render());
 
             } else if (pyType.startsWith("POINTER(c_")) {

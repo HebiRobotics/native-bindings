@@ -142,6 +142,33 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(reversed, [4 3 2 1]);
         end
 
+        function testSpans(testCase)
+            % Pointer and length cross as one by-value struct, so span methods
+            % take plain arrays without a count argument.
+            testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5 6]), 32);
+
+            % The length check lives once in the Java implementation. A mismatch
+            % returns the type default and sets the last error.
+            bindings_tests.Errors.clearLastError();
+            testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5]), 0);
+            testCase.verifyTrue(contains(bindings_tests.Errors.getLastError(), 'elements'));
+            bindings_tests.Errors.clearLastError();
+
+            % Span in, row vector out. The MEX gateway copies out of the
+            % library-owned buffer before returning.
+            testCase.verifyEqual(bindings_tests.Arrays.addOffset([1 2 3], 10), [11 12 13]);
+
+            testCase.verifyEqual(bindings_tests.Arrays.getSequence(5), [0 1 2 3 4]);
+
+            % A count of zero returns an empty array
+            testCase.verifyTrue(isempty(bindings_tests.Arrays.getSequence(0)));
+
+            % 200 elements, which forces the 128 element scratch buffer to grow
+            long = bindings_tests.Arrays.getSequence(200);
+            testCase.verifyEqual(numel(long), 200);
+            testCase.verifyEqual(long(200), 199);
+        end
+
         function testShapes(testCase)
             % Inheritance. MATLAB models the hierarchy with real classdef
             % inheritance, and the generated cast function runs when the

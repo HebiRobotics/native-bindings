@@ -174,6 +174,26 @@ void __bindings_tests_Arrays_reverseFloat64(graal_isolatethread_t* isolate, doub
 void bindings_tests_Arrays_reverseFloat64(double* values, size_t count) {
     __bindings_tests_Arrays_reverseFloat64(isolate::global(), values, static_cast<long long>(count));
 }
+double __bindings_tests_Arrays_dotProduct(graal_isolatethread_t* isolate, double* x_data, long long x_length, double* y_data, long long y_length);
+double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y) {
+    return __bindings_tests_Arrays_dotProduct(isolate::global(), const_cast<double*>(x.data), static_cast<long long>(x.length), const_cast<double*>(y.data), static_cast<long long>(y.length));
+}
+double* __bindings_tests_Arrays_addOffset(graal_isolatethread_t* isolate, double* values_data, long long values_length, double offset, long long* lengthOut);
+bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset) {
+    long long length_ = 0;
+    bindings_tests_double_span result_;
+    result_.data = __bindings_tests_Arrays_addOffset(isolate::global(), const_cast<double*>(values.data), static_cast<long long>(values.length), offset, &length_);
+    result_.length = static_cast<size_t>(length_);
+    return result_;
+}
+double* __bindings_tests_Arrays_getSequence(graal_isolatethread_t* isolate, long long count, long long* lengthOut);
+bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count) {
+    long long length_ = 0;
+    bindings_tests_double_span result_;
+    result_.data = __bindings_tests_Arrays_getSequence(isolate::global(), static_cast<long long>(count), &length_);
+    result_.length = static_cast<size_t>(length_);
+    return result_;
+}
 
 // ==== Callbacks ====
 void __bindings_tests_Callbacks_invokeTimes(graal_isolatethread_t* isolate, IndexCallbackFunction func, void* userData, long long times);

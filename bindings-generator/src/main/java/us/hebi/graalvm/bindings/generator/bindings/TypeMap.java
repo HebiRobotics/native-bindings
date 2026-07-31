@@ -1,11 +1,13 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
+import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.*;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.TypeDescription;
+import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,9 +52,16 @@ public final class TypeMap {
         return switch (type.getDataType()) {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
             case TYPEDEF, ENUM -> type.getCPrefix() + type.getTypeName();
+            case FLOAT64_SPAN -> type.getCPrefix() + SPAN_STRUCT_NAME;
             default -> toExternalC(type.getDataType());
         };
     }
+
+    /**
+     * Simple name of the by-value span struct, prefixed with the library c_prefix
+     * in the public header.
+     */
+    public static final String SPAN_STRUCT_NAME = "double_span";
 
     public static final String C_PTR_SUFFIX = "Ptr";
 
@@ -99,7 +108,10 @@ public final class TypeMap {
             case ENUM -> "int";               // @CEnum maps to int
             case OBJECT_HANDLE -> "void*";    // technically void*
 
-            case TYPEDEF, UNSPECIFIED -> throw new IllegalArgumentException("Can't determine C type for: " + type);
+            // Spans only exist as a by-value struct in the public ABI. The internal entry
+            // point explodes them into (pointer, length), so they never have an internal name.
+            case FLOAT64_SPAN, TYPEDEF, UNSPECIFIED ->
+                    throw new IllegalArgumentException("Can't determine C type for: " + type);
         };
     }
 
@@ -134,6 +146,9 @@ public final class TypeMap {
             case ENUM -> "c_int32";             // @CEnum maps to int
             case OBJECT_HANDLE -> "c_void_p";   // Opaque handles
 
+            // The span Structure emitted once per generated Python file
+            case FLOAT64_SPAN -> "_DoubleSpan";
+
             case UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
             case VOID_WITH_ERROR_CODE -> "c_int";
         };
@@ -158,7 +173,7 @@ public final class TypeMap {
             case VOID_POINTER -> "Any | bytes | None";
 
             // Note: we could use numpy.typing's ArrayLike, but we want to be compatible without numpy
-            case FLOAT32_POINTER, FLOAT64_POINTER -> "Sequence[float]";
+            case FLOAT32_POINTER, FLOAT64_POINTER, FLOAT64_SPAN -> "Sequence[float]";
             case INT32_POINTER, INT64_POINTER -> "Sequence[int]";
 
             // Map string arrays to List of strings
@@ -209,6 +224,10 @@ public final class TypeMap {
             addMapping(CFloatPointer.class, DataType.FLOAT32_POINTER);
             addMapping(CDoublePointer.class, DataType.FLOAT64_POINTER);
             addMapping(ObjectHandle.class, DataType.OBJECT_HANDLE);
+
+            // Spans: DoubleSpan params (borrowed view) and double[] returns (copied out)
+            addMapping(DoubleSpan.class, DataType.FLOAT64_SPAN);
+            mapping.put(ArrayTypeName.of(TypeName.DOUBLE), DataType.FLOAT64_SPAN);
         }
     }
 

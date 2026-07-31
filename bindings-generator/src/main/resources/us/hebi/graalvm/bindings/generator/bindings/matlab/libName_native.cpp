@@ -1,6 +1,7 @@
 #include "mex.h"
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #ifdef _WIN32
@@ -131,6 +132,22 @@ struct MatlabStringArray {
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
     return mxCreateDoubleMatrix(0, 0, mxREAL);
+}
+
+// Layout-compatible with the by-value span struct in the C ABI. Returned spans are
+// library-owned and only valid until the next call, so they get copied immediately.
+struct DoubleSpan {
+    const double* data;
+    size_t length;
+};
+
+inline mxArray* createMexDoubleArray(DoubleSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
+    std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
+    return array;
 }
 
 inline mxArray* createMexString(const char* c_str) {

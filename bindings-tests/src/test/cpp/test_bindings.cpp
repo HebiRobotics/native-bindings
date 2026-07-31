@@ -155,6 +155,50 @@ static void testArrays() {
 }
 
 // ---------------------------------------------------------------------------
+// Spans (pointer and length as one by-value struct)
+// ---------------------------------------------------------------------------
+
+static void testSpans() {
+  // The vector overload packs the span without a separate count argument
+  std::vector<double> x = {1.0, 2.0, 3.0};
+  std::vector<double> y = {4.0, 5.0, 6.0};
+  CHECK(bt::arrays::dotProduct(x, y) == 32.0);
+
+  // The raw span form stays available for existing C style callers
+  bt::internal::double_span rawX{x.data(), x.size()};
+  bt::internal::double_span rawY{y.data(), y.size()};
+  CHECK(bt::arrays::dotProduct(rawX, rawY) == 32.0);
+
+  // The length check lives once in the Java implementation. A mismatch
+  // returns the type default and sets the last error.
+  bt::errors::clearLastError();
+  std::vector<double> shorter = {4.0, 5.0};
+  CHECK(bt::arrays::dotProduct(x, shorter) == 0.0);
+  CHECK(bt::errors::getLastError().find("elements") != std::string::npos);
+
+  // Span in, vector out. The wrapper copies before the next call invalidates it.
+  std::vector<double> offset = bt::arrays::addOffset(x, 10.0);
+  CHECK(offset.size() == 3);
+  CHECK(offset[0] == 11.0);
+  CHECK(offset[1] == 12.0);
+  CHECK(offset[2] == 13.0);
+
+  std::vector<double> sequence = bt::arrays::getSequence(5);
+  CHECK(sequence.size() == 5);
+  for (int i = 0; i < 5; ++i) {
+    CHECK(sequence[i] == static_cast<double>(i));
+  }
+
+  // A count of zero returns an empty vector
+  CHECK(bt::arrays::getSequence(0).empty());
+
+  // 200 elements, which forces the 128 element scratch buffer to grow
+  std::vector<double> longSequence = bt::arrays::getSequence(200);
+  CHECK(longSequence.size() == 200);
+  CHECK(longSequence[199] == 199.0);
+}
+
+// ---------------------------------------------------------------------------
 // Shapes (inheritance)
 // ---------------------------------------------------------------------------
 
@@ -346,6 +390,7 @@ int main() {
   testCounter();
   testStrings();
   testArrays();
+  testSpans();
   testShapes();
   testPalette();
   testErrors();

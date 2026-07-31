@@ -40,6 +40,10 @@ using CounterPtr = struct Counter_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
+struct double_span {
+  const double* data;
+  size_t length;
+};
 }
 
 // ==== Class Wrappers ====
@@ -187,6 +191,34 @@ void cumulativeSum(double* source, double* target, size_t count) noexcept;
  * @param count 
  */
 void reverseFloat64(double* values, size_t count) noexcept;
+
+/**
+ * @brief Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
+ *
+ * @param x 
+ * @param y 
+ * @throw mismatched lengths
+ */
+double dotProduct(internal::double_span x, internal::double_span y);
+double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
+
+/**
+ * @brief Returns a new array with the offset added to every element. Checks a span in and an array out.
+ *
+ * @param values 
+ * @param offset 
+ */
+std::vector<double> addOffset(internal::double_span values, double offset) noexcept;
+std::vector<double> addOffset(const std::vector<double>& values, double offset) noexcept;
+
+/**
+ * @details 
+ * Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
+ * over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
+ *
+ * @param count 
+ */
+std::vector<double> getSequence(size_t count) noexcept;
 } // namespace arrays
 
 
@@ -521,6 +553,9 @@ extern "C" {
   void bindings_tests_Arrays_fillFloat64(double*, size_t, double);
   void bindings_tests_Arrays_cumulativeSum(double*, double*, size_t);
   void bindings_tests_Arrays_reverseFloat64(double*, size_t);
+  double bindings_tests_Arrays_dotProduct(internal::double_span, internal::double_span);
+  internal::double_span bindings_tests_Arrays_addOffset(internal::double_span, double);
+  internal::double_span bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
   int bindings_tests_Errors_requireNonNegative(int);
@@ -735,6 +770,23 @@ inline void arrays::cumulativeSum(double* source, double* target, size_t count) 
 }
 inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
   bindings_tests_Arrays_reverseFloat64(values, count);
+}
+inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
+  return bindings_tests_Arrays_dotProduct(x, y);
+}
+inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
+  return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
+}
+inline std::vector<double> arrays::addOffset(internal::double_span values, double offset) noexcept {
+  auto span_ = bindings_tests_Arrays_addOffset(values, offset);
+  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
+}
+inline std::vector<double> arrays::addOffset(const std::vector<double>& values, double offset) noexcept {
+  return addOffset({values.data(), values.size()}, offset);
+}
+inline std::vector<double> arrays::getSequence(size_t count) noexcept {
+  auto span_ = bindings_tests_Arrays_getSequence(count);
+  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
 }
 
 // Callbacks

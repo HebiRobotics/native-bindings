@@ -523,6 +523,75 @@
       "isConstructor": false,
       "documentation": "Reverses the buffer in place.",
       "flags": ["Noexcept"]
+    }, {
+      "name": "dotProduct",
+      "lowerUnderscoreName": "dot_product",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_dotProduct",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "x",
+        "lowerUnderscoreParamName": "x",
+        "cPrefix": "bindings_tests_",
+        "dataType": "FLOAT64_SPAN"
+      }, {
+        "isConst": false,
+        "paramName": "y",
+        "lowerUnderscoreParamName": "y",
+        "cPrefix": "bindings_tests_",
+        "dataType": "FLOAT64_SPAN"
+      }],
+      "isConstructor": false,
+      "documentation": "Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.",
+      "throwsOn": "mismatched lengths"
+    }, {
+      "name": "addOffset",
+      "lowerUnderscoreName": "add_offset",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_addOffset",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "dataType": "FLOAT64_SPAN"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "cPrefix": "bindings_tests_",
+        "dataType": "FLOAT64_SPAN"
+      }, {
+        "isConst": false,
+        "paramName": "offset",
+        "lowerUnderscoreParamName": "offset",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns a new array with the offset added to every element. Checks a span in and an array out.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getSequence",
+      "lowerUnderscoreName": "get_sequence",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_getSequence",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "dataType": "FLOAT64_SPAN"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count\nover 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.\n",
+      "flags": ["Noexcept"]
     }]
   }, {
     "type": {

@@ -7,6 +7,7 @@ import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CDoublePointer;
 import us.hebi.graalvm.bindings.annotations.CDefault;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
@@ -81,6 +82,9 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (isNativeApiType(mirror)) return TypeName.get(ObjectHandle.class);
         if (isString()) return ClassName.get(CCharPointer.class);
         if (isSizeType()) return TypeName.LONG;
+        // Span returns come back as the data pointer plus a trailing length out-param.
+        // Span parameters never reach this: the entry point generator explodes them.
+        if (isSpan()) return ClassName.get(CDoublePointer.class);
 
         // Map enums to int rather than going through a generated header. We already know all numbers anyways
         var generatedEnum = getGeneratedCEnumType();
@@ -147,6 +151,14 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         return isTypeOf(rawMirror, String.class);
     }
 
+    /**
+     * True for both forms of {@link DataType#FLOAT64_SPAN}: DoubleSpan parameters
+     * (borrowed view) and double[] returns (copied out via a temp buffer).
+     */
+    public boolean isSpan() {
+        return TypeMap.getGraalDataType(type) == DataType.FLOAT64_SPAN;
+    }
+
     public boolean isNativeApiType() {
         return isNativeApiType(rawMirror);
     }
@@ -175,6 +187,8 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
             }
             case ENUM -> Optional.ofNullable(getTypeAnnotation(mirror, CLibEnum.class))
                     .map(annotation -> AnnotatedCLibEnum.getCPrefix(getOptions(), annotation));
+            // The span struct is defined once per library, so it uses the library-wide prefix
+            case FLOAT64_SPAN -> Optional.of(AnnotationUtil.getCPrefix(getOptions(), "") + "_");
             default -> Optional.empty();
         };
     }

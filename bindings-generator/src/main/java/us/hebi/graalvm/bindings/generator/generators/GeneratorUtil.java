@@ -130,4 +130,20 @@ public class GeneratorUtil {
         return symbols;
     }
 
+    /**
+     * True if any method passes or returns a span, so generators can emit the
+     * struct definition only when it is needed.
+     */
+    public static boolean usesSpans(LibraryDescription lib) {
+        for (ClassDescription apiClass : lib.getClasses()) {
+            for (MethodDescription method : apiClass.getMethods()) {
+                if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) return true;
+                for (TypeDescription param : method.getParameters()) {
+                    if (param.getDataType() == DataType.FLOAT64_SPAN) return true;
+                }
+            }
+        }
+        return false;
+    }
+
 }

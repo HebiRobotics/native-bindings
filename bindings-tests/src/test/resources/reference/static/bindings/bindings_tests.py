@@ -104,6 +104,10 @@ def _require_numpy():
     return _numpy
 
 # API definitions
+class _DoubleSpan(Structure):
+    # A (pointer, length) view of a double buffer, passed and returned by value
+    _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
+
 class struct_Counter_(Structure):
     pass
 CounterPtr = POINTER(struct_Counter_)
@@ -221,6 +225,12 @@ libbindings_tests.bindings_tests_Arrays_cumulativeSum.argtypes = [POINTER(c_doub
 libbindings_tests.bindings_tests_Arrays_cumulativeSum.restype = None
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.argtypes = [POINTER(c_double), c_size_t]
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.restype = None
+libbindings_tests.bindings_tests_Arrays_dotProduct.argtypes = [_DoubleSpan, _DoubleSpan]
+libbindings_tests.bindings_tests_Arrays_dotProduct.restype = c_double
+libbindings_tests.bindings_tests_Arrays_addOffset.argtypes = [_DoubleSpan, c_double]
+libbindings_tests.bindings_tests_Arrays_addOffset.restype = _DoubleSpan
+libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
+libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 
 # ==== Callbacks ====
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
@@ -555,6 +565,63 @@ class Arrays:
         if values is not None and not isinstance(values, POINTER(c_double)):
             values = np.ascontiguousarray(values, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         libbindings_tests.bindings_tests_Arrays_reverseFloat64(values, count)
+
+    @classmethod
+    def dot_product(cls, x: Sequence[float], y: Sequence[float]) -> float:
+        """Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
+        
+        Args:
+            x: 
+            y: 
+        
+        Raises:
+            Exception: mismatched lengths
+        """
+        np = _require_numpy()
+        if x is None:
+            x = _DoubleSpan(None, 0)
+        elif not isinstance(x, _DoubleSpan):
+            x_arr = np.ascontiguousarray(x, dtype=np.float64)
+            x = _DoubleSpan(x_arr.ctypes.data_as(POINTER(c_double)), len(x_arr))
+        if y is None:
+            y = _DoubleSpan(None, 0)
+        elif not isinstance(y, _DoubleSpan):
+            y_arr = np.ascontiguousarray(y, dtype=np.float64)
+            y = _DoubleSpan(y_arr.ctypes.data_as(POINTER(c_double)), len(y_arr))
+        return libbindings_tests.bindings_tests_Arrays_dotProduct(x, y)
+
+    @classmethod
+    def add_offset(cls, values: Sequence[float], offset: float) -> Sequence[float]:
+        """Returns a new array with the offset added to every element. Checks a span in and an array out.
+        
+        Args:
+            values: 
+            offset:
+        """
+        np = _require_numpy()
+        if values is None:
+            values = _DoubleSpan(None, 0)
+        elif not isinstance(values, _DoubleSpan):
+            values_arr = np.ascontiguousarray(values, dtype=np.float64)
+            values = _DoubleSpan(values_arr.ctypes.data_as(POINTER(c_double)), len(values_arr))
+        span_ = libbindings_tests.bindings_tests_Arrays_addOffset(values, offset)
+        if span_.length == 0 or not span_.data:
+            return np.empty(0, dtype=np.float64)
+        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
+
+    @classmethod
+    def get_sequence(cls, count: int) -> Sequence[float]:
+        """Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
+        over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
+        
+        Args:
+            count:
+        """
+        np = _require_numpy()
+        span_ = libbindings_tests.bindings_tests_Arrays_getSequence(count)
+        if span_.length == 0 or not span_.data:
+            return np.empty(0, dtype=np.float64)
+        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
 
 
 class Callbacks:
