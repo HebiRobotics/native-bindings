@@ -104,6 +104,10 @@ def _require_numpy():
     return _numpy
 
 # API definitions
+class _DoubleSpan(Structure):
+    # A (pointer, length) view of a double buffer, passed and returned by value
+    _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
+
 class struct_Counter_(Structure):
     pass
 CounterPtr = POINTER(struct_Counter_)
@@ -221,6 +225,12 @@ libbindings_tests.bindings_tests_Arrays_cumulativeSum.argtypes = [POINTER(c_doub
 libbindings_tests.bindings_tests_Arrays_cumulativeSum.restype = None
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.argtypes = [POINTER(c_double), c_size_t]
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.restype = None
+libbindings_tests.bindings_tests_Arrays_dotProduct.argtypes = [_DoubleSpan, _DoubleSpan]
+libbindings_tests.bindings_tests_Arrays_dotProduct.restype = c_double
+libbindings_tests.bindings_tests_Arrays_addOffset.argtypes = [_DoubleSpan, c_double]
+libbindings_tests.bindings_tests_Arrays_addOffset.restype = _DoubleSpan
+libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
+libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 
 # ==== Callbacks ====
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
@@ -291,6 +301,10 @@ libbindings_tests.bindings_tests_Overloads_greet.argtypes = [c_char_p, c_char_p]
 libbindings_tests.bindings_tests_Overloads_greet.restype = c_char_p
 libbindings_tests.bindings_tests_Overloads_total.argtypes = [c_int, c_int]
 libbindings_tests.bindings_tests_Overloads_total.restype = c_int
+libbindings_tests.bindings_tests_Overloads_gain.argtypes = [c_int, c_double]
+libbindings_tests.bindings_tests_Overloads_gain.restype = c_double
+libbindings_tests.bindings_tests_Overloads_echoIndex.argtypes = [c_int]
+libbindings_tests.bindings_tests_Overloads_echoIndex.restype = c_int
 libbindings_tests.bindings_tests_Overloads_answer.argtypes = [c_int]
 libbindings_tests.bindings_tests_Overloads_answer.restype = c_int
 libbindings_tests.bindings_tests_Overloads_renamed.argtypes = []
@@ -303,6 +317,8 @@ libbindings_tests.bindings_tests_Palette_nameOf.argtypes = [c_int32]
 libbindings_tests.bindings_tests_Palette_nameOf.restype = c_char_p
 libbindings_tests.bindings_tests_Palette_ordinalOf.argtypes = [c_int32]
 libbindings_tests.bindings_tests_Palette_ordinalOf.restype = c_int
+libbindings_tests.bindings_tests_Palette_describe.argtypes = [c_int32, c_int32]
+libbindings_tests.bindings_tests_Palette_describe.restype = c_char_p
 libbindings_tests.bindings_tests_Palette_fromOrdinal.argtypes = [c_int]
 libbindings_tests.bindings_tests_Palette_fromOrdinal.restype = c_int32
 
@@ -329,6 +345,10 @@ class Color(IntEnum):
     RED = 0
     GREEN = 1
     BLUE = 2
+
+class Marker(IntEnum):
+    DOT = 0
+    CROSS = 1
 
 
 # ==== Class Wrappers ====
@@ -500,6 +520,13 @@ class Arrays:
 
     @classmethod
     def sum_float64(cls, values: Sequence[float], count: int) -> float:
+        """A const input buffer. Besides the const in the C header, this is what makes the
+        C++ generator add a std::vector<double> overload next to the raw pointer one.
+        
+        Args:
+            values: 
+            count:
+        """
         np = _require_numpy()
         if values is not None and not isinstance(values, POINTER(c_double)):
             values = np.ascontiguousarray(values, dtype=np.float64).ctypes.data_as(POINTER(c_double))
@@ -507,6 +534,12 @@ class Arrays:
 
     @classmethod
     def sum_int32(cls, values: Sequence[int], count: int) -> int:
+        """Const on a non-double pointer, which gets the const but no vector overload.
+        
+        Args:
+            values: 
+            count:
+        """
         np = _require_numpy()
         if values is not None and not isinstance(values, POINTER(c_int)):
             values = np.ascontiguousarray(values, dtype=np.int32).ctypes.data_as(POINTER(c_int))
@@ -529,7 +562,9 @@ class Arrays:
     @classmethod
     def cumulative_sum(cls, source: Sequence[float], target: Sequence[float], count: int) -> None:
         """Writes the running total of source into target. Both buffers must hold at
-        least count elements. Passing the same buffer for both is supported.
+        least count elements. Passing the same buffer for both is supported. One const
+        and one mutable pointer in the same signature, so only the source picks up the
+        vector overload.
         
         Args:
             source: 
@@ -555,6 +590,63 @@ class Arrays:
         if values is not None and not isinstance(values, POINTER(c_double)):
             values = np.ascontiguousarray(values, dtype=np.float64).ctypes.data_as(POINTER(c_double))
         libbindings_tests.bindings_tests_Arrays_reverseFloat64(values, count)
+
+    @classmethod
+    def dot_product(cls, x: Sequence[float], y: Sequence[float]) -> float:
+        """Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
+        
+        Args:
+            x: 
+            y: 
+        
+        Raises:
+            Exception: mismatched lengths
+        """
+        np = _require_numpy()
+        if x is None:
+            x = _DoubleSpan(None, 0)
+        elif not isinstance(x, _DoubleSpan):
+            x_arr = np.ascontiguousarray(x, dtype=np.float64)
+            x = _DoubleSpan(x_arr.ctypes.data_as(POINTER(c_double)), len(x_arr))
+        if y is None:
+            y = _DoubleSpan(None, 0)
+        elif not isinstance(y, _DoubleSpan):
+            y_arr = np.ascontiguousarray(y, dtype=np.float64)
+            y = _DoubleSpan(y_arr.ctypes.data_as(POINTER(c_double)), len(y_arr))
+        return libbindings_tests.bindings_tests_Arrays_dotProduct(x, y)
+
+    @classmethod
+    def add_offset(cls, values: Sequence[float], offset: float) -> Sequence[float]:
+        """Returns a new array with the offset added to every element. Checks a span in and an array out.
+        
+        Args:
+            values: 
+            offset:
+        """
+        np = _require_numpy()
+        if values is None:
+            values = _DoubleSpan(None, 0)
+        elif not isinstance(values, _DoubleSpan):
+            values_arr = np.ascontiguousarray(values, dtype=np.float64)
+            values = _DoubleSpan(values_arr.ctypes.data_as(POINTER(c_double)), len(values_arr))
+        span_ = libbindings_tests.bindings_tests_Arrays_addOffset(values, offset)
+        if span_.length == 0 or not span_.data:
+            return np.empty(0, dtype=np.float64)
+        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
+
+    @classmethod
+    def get_sequence(cls, count: int) -> Sequence[float]:
+        """Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
+        over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
+        
+        Args:
+            count:
+        """
+        np = _require_numpy()
+        span_ = libbindings_tests.bindings_tests_Arrays_getSequence(count)
+        if span_.length == 0 or not span_.data:
+            return np.empty(0, dtype=np.float64)
+        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
 
 
 class Callbacks:
@@ -836,6 +928,29 @@ class Overloads:
         return libbindings_tests.bindings_tests_Overloads_total(total, factor)
 
     @classmethod
+    def gain(cls, invert: bool = False, scale: float = 1e-3) -> float:
+        """A boolean default and a double default in scientific notation. Each wrapper has
+        to render both in its own syntax, which is where they tend to go wrong.
+        
+        Args:
+            invert: 
+            scale:
+        """
+        return libbindings_tests.bindings_tests_Overloads_gain(invert, scale)
+
+    @classmethod
+    def echo_index(cls, index: int) -> int:
+        """Returns the index unchanged. MATLAB converts to zero based indexing on the way
+        in and back to one based on the way out, so it sees the value it passed in.
+        Python clamps negatives instead, which matches C for every valid index.
+        
+        Args:
+            index:
+        """
+        index = max(index, 0)
+        return libbindings_tests.bindings_tests_Overloads_echoIndex(index)
+
+    @classmethod
     def answer(cls, multiplier: int) -> int:
         """The C++ wrapper body is hand written and never calls into the library, so
         this is the one method where the C++ result may legitimately differ from
@@ -875,6 +990,17 @@ class Palette:
     @classmethod
     def ordinal_of(cls, color: Color) -> int:
         return libbindings_tests.bindings_tests_Palette_ordinalOf(color)
+
+    @classmethod
+    def describe(cls, color: Color, marker: Marker) -> str:
+        """Takes both enums at once, so the two generated types have to coexist in one signature.
+        
+        Args:
+            color: 
+            marker:
+        """
+        ptr_ = libbindings_tests.bindings_tests_Palette_describe(color, marker)
+        return ptr_.decode("utf-8") if ptr_ is not None else ""
 
     @classmethod
     def from_ordinal(cls, ordinal: int) -> Color:
@@ -949,7 +1075,7 @@ class Strings:
 
     @classmethod
     def join(cls, values: Sequence[str], count: int, separator: str) -> str:
-        """Joins a char* array with a separator. Checks char** parameter handling.
+        """Joins a char* array with a separator. Checks const char** parameter handling.
         
         Args:
             values: 

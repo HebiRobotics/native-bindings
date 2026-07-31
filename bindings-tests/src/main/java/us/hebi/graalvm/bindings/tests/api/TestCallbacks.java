@@ -26,7 +26,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Synchronous callbacks into caller-provided function pointers.")
 @CLibClass(value = "Callbacks", enableInstancing = false)
-public class NativeCallbacks {
+public class TestCallbacks {
 
     @CLibTypeDef(name = "IndexCallbackFunction",
             cDefinition = """

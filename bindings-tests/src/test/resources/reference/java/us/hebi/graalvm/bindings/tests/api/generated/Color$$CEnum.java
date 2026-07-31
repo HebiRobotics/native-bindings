@@ -1,9 +1,9 @@
 package us.hebi.graalvm.bindings.tests.api.generated;
 
-import us.hebi.graalvm.bindings.tests.api.NativePalette;
+import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
 public class Color$$CEnum {
-    public static int fromJava(NativePalette.Color value) {
+    public static int fromJava(TestPalette.Color value) {
         return switch (value) {
             case Red -> 0;
             case Green -> 1;
@@ -11,11 +11,11 @@ public class Color$$CEnum {
         } ;
     }
 
-    public static NativePalette.Color toJava(int value) {
+    public static TestPalette.Color toJava(int value) {
         return switch (value) {
-            case 0 -> NativePalette.Color.Red;
-            case 1 -> NativePalette.Color.Green;
-            case 2 -> NativePalette.Color.Blue;
+            case 0 -> TestPalette.Color.Red;
+            case 1 -> TestPalette.Color.Green;
+            case 2 -> TestPalette.Color.Blue;
             default -> throw new IllegalArgumentException("Unknown enum value: " + value);
         } ;
     }

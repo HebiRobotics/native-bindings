@@ -40,6 +40,34 @@ classdef (Sealed) Overloads
             result = bindings_tests_native('bindings_tests_Overloads_total', sum(values), factor);
         end
 
+        function result = gain(invert, scale)
+            % A boolean default and a double default in scientific notation. Each wrapper has
+            %   to render both in its own syntax, which is where they tend to go wrong.
+            %
+            %   Inputs:
+            %       invert
+            %       scale
+            if nargin < 1
+                invert = false;
+            end
+            if nargin < 2
+                scale = 1e-3;
+            end
+            result = bindings_tests_native('bindings_tests_Overloads_gain', invert, scale);
+        end
+
+        function result = echoIndex(index)
+            % Returns the index unchanged. MATLAB converts to zero based indexing on the way
+            %   in and back to one based on the way out, so it sees the value it passed in.
+            %   Python clamps negatives instead, which matches C for every valid index.
+            %
+            %   Inputs:
+            %       index
+            index = index - 1;
+            result = bindings_tests_native('bindings_tests_Overloads_echoIndex', index);
+            result = result + 1;
+        end
+
         function result = answer(multiplier)
             % The C++ wrapper body is hand written and never calls into the library, so
             %   this is the one method where the C++ result may legitimately differ from

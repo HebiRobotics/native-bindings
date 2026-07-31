@@ -79,6 +79,12 @@ enum DataType {
   VOID_WITH_ERROR_CODE = 43;  // void method that passes error codes through the binary interface
   // STRUCT = 44;             // TODO: support structs?
 
+  // Spans: a (pointer, length) pair passed or returned as one by-value struct in the
+  // public C ABI. The internal entry point explodes it into pointer + length. Params
+  // map to Java DoubleSpan (borrowed), returns to Java double[] (copied into a
+  // per-thread scratch buffer, valid until the thread's next call).
+  FLOAT64_SPAN = 50;          // Java DoubleSpan / double[] -> struct { const double* data; size_t length; }
+
 }
 
 message TypeDescription {

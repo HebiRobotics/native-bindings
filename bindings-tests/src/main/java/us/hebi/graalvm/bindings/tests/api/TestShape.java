@@ -15,7 +15,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Base class for the shape hierarchy.")
 @CLibClass(value = "Shape", abstractClass = true)
-public abstract class NativeShape {
+public abstract class TestShape {
 
     @CLibMethod(flags = {Noexcept, Const}, property = "name")
     public String getName() {
@@ -35,7 +35,7 @@ public abstract class NativeShape {
     @CLibComment("Number of sides. Zero for shapes without straight edges.")
     public abstract int sideCount();
 
-    protected NativeShape(String name) {
+    protected TestShape(String name) {
         this.name = name;
     }
 

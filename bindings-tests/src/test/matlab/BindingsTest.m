@@ -13,7 +13,7 @@ classdef BindingsTest < matlab.unittest.TestCase
 %   first (see .github/workflows/native.yml).
 %
 %   Callbacks are deliberately not covered: MATLAB cannot pass a C function
-%   pointer, so the typedef degrades to void* and NativeCallbacks is not
+%   pointer, so the typedef degrades to void* and TestCallbacks is not
 %   callable from here. That feature area is covered by C, C++ and Python.
 %
 %   Note on types: the MEX dispatch returns every scalar as a MATLAB double,
@@ -142,6 +142,33 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(reversed, [4 3 2 1]);
         end
 
+        function testSpans(testCase)
+            % Pointer and length cross as one by-value struct, so span methods
+            % take plain arrays without a count argument.
+            testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5 6]), 32);
+
+            % The length check lives once in the Java implementation. A mismatch
+            % returns the type default and sets the last error.
+            bindings_tests.Errors.clearLastError();
+            testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5]), 0);
+            testCase.verifyTrue(contains(bindings_tests.Errors.getLastError(), 'elements'));
+            bindings_tests.Errors.clearLastError();
+
+            % Span in, row vector out. The MEX gateway copies out of the
+            % library-owned buffer before returning.
+            testCase.verifyEqual(bindings_tests.Arrays.addOffset([1 2 3], 10), [11 12 13]);
+
+            testCase.verifyEqual(bindings_tests.Arrays.getSequence(5), [0 1 2 3 4]);
+
+            % A count of zero returns an empty array
+            testCase.verifyTrue(isempty(bindings_tests.Arrays.getSequence(0)));
+
+            % 200 elements, which forces the 128 element scratch buffer to grow
+            long = bindings_tests.Arrays.getSequence(200);
+            testCase.verifyEqual(numel(long), 200);
+            testCase.verifyEqual(long(200), 199);
+        end
+
         function testShapes(testCase)
             % Inheritance. MATLAB models the hierarchy with real classdef
             % inheritance, and the generated cast function runs when the
@@ -181,6 +208,10 @@ classdef BindingsTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(bindings_tests.Palette.nameOf(bindings_tests.Color.Green), 'Green');
             testCase.verifyEqual(bindings_tests.Palette.ordinalOf(bindings_tests.Color.Blue), 2);
+
+            % Two enums declared in the same class, used in the same signature.
+            testCase.verifyEqual(bindings_tests.Palette.describe( ...
+                bindings_tests.Color.Red, bindings_tests.Marker.Cross), 'Red Cross');
 
             testCase.verifyEqual(bindings_tests.Palette.fromOrdinal(1), green);
             testCase.verifyEqual(bindings_tests.Palette.fromOrdinal(99), red);
@@ -242,6 +273,17 @@ classdef BindingsTest < matlab.unittest.TestCase
             % single form that sums whatever it is given. C takes (sum, factor).
             testCase.verifyEqual(bindings_tests.Overloads.total([1 2 3], 2), 12);
             testCase.verifyEqual(bindings_tests.Overloads.total(6, 2), 12);
+
+            % Defaults are emitted as nargin guards, including the boolean
+            % and the scientific notation double.
+            testCase.verifyEqual(bindings_tests.Overloads.gain(), 1e-3);
+            testCase.verifyEqual(bindings_tests.Overloads.gain(true), -1e-3);
+            testCase.verifyEqual(bindings_tests.Overloads.gain(false, 2.0), 2.0);
+
+            % The matlabOverload subtracts one in the postBody and adds it back
+            % in the postCall, so MATLAB sees its own one based indexing while
+            % the C ABI stays zero based.
+            testCase.verifyEqual(bindings_tests.Overloads.echoIndex(3), 3);
 
             % 42 * multiplier everywhere except C++, where the hand-written
             % cppBody returns 21 * multiplier

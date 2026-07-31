@@ -41,9 +41,10 @@ public class CEntryPointGenerator extends AbstractGenerator {
             CodeBlock.Builder invocation = CodeBlock.builder();
             CodeBlock.Builder invocationClose = CodeBlock.builder();
 
-            // Handle conversions with return types
+            // Handle conversions with return types. Span returns stay void: the entry
+            // point fills a trailing out-struct instead (see below).
             var returnType = method.getReturnType();
-            if (!returnType.isVoid()) {
+            if (!returnType.isVoid() && !returnType.isSpan()) {
                 builder.returns(returnType.getCEntryType());
 
                 // Wrap known Java types as handles if needed
@@ -103,6 +104,11 @@ public class CEntryPointGenerator extends AbstractGenerator {
                         invocation.add("$N", param.getName());
                     }
                 }
+            }
+
+            // Span returns fill a trailing caller-provided out-struct
+            if (returnType.isSpan()) {
+                builder.addParameter(DoubleSpan, SPAN_OUT);
             }
 
             // Add guards

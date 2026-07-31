@@ -7,16 +7,16 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
-import us.hebi.graalvm.bindings.tests.api.NativeSquare;
+import us.hebi.graalvm.bindings.tests.api.TestSquare;
 
-public final class NativeSquare$CEntries {
-    public static final ObjectHandles INSTANCES = NativeShape$CEntries.INSTANCES;
+public final class TestSquare$CEntries {
+    public static final ObjectHandles INSTANCES = TestShape$CEntries.INSTANCES;
 
-    public static ObjectHandle _registerInstance(final NativeSquare instance) {
+    public static ObjectHandle _registerInstance(final TestSquare instance) {
         return Handles.create(INSTANCES, instance);
     }
 
-    public static NativeSquare _getInstance(final ObjectHandle handle) {
+    public static TestSquare _getInstance(final ObjectHandle handle) {
         return Handles.get(INSTANCES, handle);
     }
 
@@ -25,7 +25,7 @@ public final class NativeSquare$CEntries {
     )
     public static ObjectHandle bindings_tests_Square_create(IsolateThread _isolate, double side) {
         try {
-            return NativeSquare$CEntries._registerInstance(NativeSquare.create(side));
+            return TestSquare$CEntries._registerInstance(TestSquare.create(side));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();

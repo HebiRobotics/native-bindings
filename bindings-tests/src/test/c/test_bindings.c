@@ -103,10 +103,7 @@ static void test_counter(void) {
 static void test_strings(void) {
     /* This file is UTF-8. The literals below must survive the round trip byte for byte. */
     const char* utf8Input = "na\xc3\xaf" "ve caf\xc3\xa9"; /* naive cafe with diacritics */
-    char* joinValues[3];
-    char a[] = "a";
-    char b[] = "b";
-    char c[] = "c";
+    const char* joinValues[3];
     const char* result;
 
     result = bindings_tests_Strings_echo("hello");
@@ -131,9 +128,9 @@ static void test_strings(void) {
 
     assert(bindings_tests_Strings_nullString() == NULL);
 
-    joinValues[0] = a;
-    joinValues[1] = b;
-    joinValues[2] = c;
+    joinValues[0] = "a";
+    joinValues[1] = "b";
+    joinValues[2] = "c";
     result = bindings_tests_Strings_join(joinValues, (size_t) 3, "-");
     assert(strcmp(result, "a-b-c") == 0);
 
@@ -196,6 +193,63 @@ static void test_arrays(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Spans (pointer and length as one by-value struct)                   */
+/* ------------------------------------------------------------------ */
+
+static void test_spans(void) {
+    double xs[3];
+    double ys[3];
+    bindings_tests_double_span x;
+    bindings_tests_double_span y;
+    bindings_tests_double_span result;
+    int i;
+
+    xs[0] = 1.0;
+    xs[1] = 2.0;
+    xs[2] = 3.0;
+    ys[0] = 4.0;
+    ys[1] = 5.0;
+    ys[2] = 6.0;
+    x.data = xs;
+    x.length = 3;
+    y.data = ys;
+    y.length = 3;
+    assert(bindings_tests_Arrays_dotProduct(x, y) == 32.0);
+
+    /* The length check lives once in the Java implementation. A mismatch
+       returns the type default and sets the last error. */
+    bindings_tests_Errors_clearLastError();
+    y.length = 2;
+    assert(bindings_tests_Arrays_dotProduct(x, y) == 0.0);
+    assert(strstr(bindings_tests_Errors_getLastError(), "elements") != NULL);
+    y.length = 3;
+
+    /* Span in, span out. The result is library-owned. */
+    result = bindings_tests_Arrays_addOffset(x, 10.0);
+    assert(result.length == 3);
+    assert(result.data[0] == 11.0);
+    assert(result.data[1] == 12.0);
+    assert(result.data[2] == 13.0);
+
+    result = bindings_tests_Arrays_getSequence((size_t) 5);
+    assert(result.length == 5);
+    for (i = 0; i < 5; i++) {
+        assert(result.data[i] == (double) i);
+    }
+
+    /* A count of zero returns an empty span */
+    result = bindings_tests_Arrays_getSequence((size_t) 0);
+    assert(result.length == 0);
+
+    /* 200 elements, which forces the 128 element scratch buffer to grow */
+    result = bindings_tests_Arrays_getSequence((size_t) 200);
+    assert(result.length == 200);
+    assert(result.data[199] == 199.0);
+
+    printf("spans ok\n");
+}
+
+/* ------------------------------------------------------------------ */
 /* Shapes (inheritance)                                                */
 /* ------------------------------------------------------------------ */
 
@@ -246,6 +300,10 @@ static void test_palette(void) {
 
     assert(strcmp(bindings_tests_Palette_nameOf(bindings_tests_Color_Green), "Green") == 0);
     assert(bindings_tests_Palette_ordinalOf(bindings_tests_Color_Blue) == 2);
+
+    /* Two enums declared in the same class, used in the same signature. */
+    assert(strcmp(bindings_tests_Palette_describe(bindings_tests_Color_Red,
+                                                  bindings_tests_Marker_Cross), "Red Cross") == 0);
 
     assert(bindings_tests_Palette_fromOrdinal(1) == bindings_tests_Color_Green);
     assert(bindings_tests_Palette_fromOrdinal(99) == bindings_tests_Color_Red);
@@ -322,6 +380,14 @@ static void test_overloads(void) {
 
     /* C takes the pre-summed total, the wrappers get a collection overload. */
     assert(bindings_tests_Overloads_total(6, 2) == 12);
+
+    /* A boolean default and a scientific notation double default. C has neither, so
+       it is the only language that has to pass both explicitly. */
+    assert(bindings_tests_Overloads_gain(0, 2.0) == 2.0);
+    assert(bindings_tests_Overloads_gain(1, 2.0) == -2.0);
+
+    /* C is the zero based baseline that the MATLAB postBody and postCall convert around. */
+    assert(bindings_tests_Overloads_echoIndex(3) == 3);
 
     assert(bindings_tests_Overloads_answer(2) == 84);
 
@@ -415,6 +481,7 @@ int main(void) {
     test_counter();
     test_strings();
     test_arrays();
+    test_spans();
     test_shapes();
     test_palette();
     test_errors();

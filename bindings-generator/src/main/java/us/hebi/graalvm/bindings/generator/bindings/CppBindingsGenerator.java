@@ -130,6 +130,10 @@ public class CppBindingsGenerator extends BindingGenerator {
                 }
             }
         }
+        if (GeneratorUtil.usesSpans(lib)) {
+            // Layout-compatible with the by-value struct in the C ABI
+            out.write("struct %s {\n  const double* data;\n  size_t length;\n};\n".formatted(TypeMap.SPAN_STRUCT_NAME));
+        }
         out.write("}\n\n");
 
         // Forward declare the whole API. Write the implementations at the end
@@ -297,6 +301,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                         }
                         case OBJECT_HANDLE, CHAR_POINTER -> impl.write("auto ptr = ");
                         case VOID_WITH_ERROR_CODE -> impl.write("int status_ = ");
+                        case FLOAT64_SPAN -> impl.write("auto span_ = ");
                         default -> impl.write("return ");
                     }
 
@@ -329,6 +334,9 @@ public class CppBindingsGenerator extends BindingGenerator {
                                 """.formatted(getCppClassName(method.getReturnType())));
                         case CHAR_POINTER -> impl.write("""
                                   return !ptr ? std::string() : std::string(ptr); // copy utf8
+                                """);
+                        case FLOAT64_SPAN -> impl.write("""
+                                  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
                                 """);
                     }
 
@@ -531,8 +539,12 @@ public class CppBindingsGenerator extends BindingGenerator {
         if (method.getReturnType().getDataType() == DataType.CHAR_POINTER) {
             return "std::string";
         }
+        if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) {
+            return "std::vector<double>"; // copied out, the raw span is only valid until the next call
+        }
         return getCppType(method.getReturnType(), false);
     }
+
 
     private String getCReturnType(MethodDescription method) {
         return getCType(method.getReturnType());
@@ -540,7 +552,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
-            case TYPEDEF, OBJECT_HANDLE, ENUM -> getCppType(type, true);
+            case TYPEDEF, OBJECT_HANDLE, ENUM, FLOAT64_SPAN -> getCppType(type, true);
             default -> TypeMap.toExternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -552,6 +564,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                     ? INTERNAL_POINTER_NAMESPACE + "::" + type.getTypeName() + C_PTR_SUFFIX
                     : type.getTypeName();
             case ENUM, TYPEDEF -> type.getTypeName();
+            case FLOAT64_SPAN -> INTERNAL_POINTER_NAMESPACE + "::" + TypeMap.SPAN_STRUCT_NAME;
             default -> TypeMap.toExternalCpp(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -639,6 +652,13 @@ public class CppBindingsGenerator extends BindingGenerator {
                         needsDefaultOverload = true;
                         continue;
                     }
+                }
+                case FLOAT64_SPAN -> {
+                    // vectors carry their own length, so the span packs without extra arguments
+                    parameters.add("const std::vector<double>& " + p.getParamName() + getDefaultParamInit(p));
+                    call.add("{" + p.getParamName() + ".data(), " + p.getParamName() + ".size()}");
+                    needsDefaultOverload = true;
+                    continue;
                 }
             }
 

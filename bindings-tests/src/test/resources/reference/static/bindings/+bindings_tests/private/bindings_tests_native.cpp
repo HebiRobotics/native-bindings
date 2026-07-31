@@ -1,6 +1,7 @@
 #include "mex.h"
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #ifdef _WIN32
@@ -131,6 +132,22 @@ struct MatlabStringArray {
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
     return mxCreateDoubleMatrix(0, 0, mxREAL);
+}
+
+// Layout-compatible with the by-value span struct in the C ABI. Returned spans are
+// library-owned and only valid until the next call, so they get copied immediately.
+struct DoubleSpan {
+    const double* data;
+    size_t length;
+};
+
+inline mxArray* createMexDoubleArray(DoubleSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
+    std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
+    return array;
 }
 
 inline mxArray* createMexString(const char* c_str) {
@@ -406,7 +423,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Arrays
         case /* hash32_fnv1a("bindings_tests_Arrays_sumFloat64") */ 770314080: {
-            static auto bindings_tests_Arrays_sumFloat64 = libLoader.getFunc<double(*)(double*, size_t)>("bindings_tests_Arrays_sumFloat64");
+            static auto bindings_tests_Arrays_sumFloat64 = libLoader.getFunc<double(*)(const double*, size_t)>("bindings_tests_Arrays_sumFloat64");
             MatlabArray<double, mxDOUBLE_CLASS> values(prhs[1]);
             size_t count = getScalar<size_t>(prhs[2]);
             double _value = bindings_tests_Arrays_sumFloat64(values, count);
@@ -414,7 +431,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Arrays_sumInt32") */ 486597228: {
-            static auto bindings_tests_Arrays_sumInt32 = libLoader.getFunc<int(*)(int*, size_t)>("bindings_tests_Arrays_sumInt32");
+            static auto bindings_tests_Arrays_sumInt32 = libLoader.getFunc<int(*)(const int*, size_t)>("bindings_tests_Arrays_sumInt32");
             MatlabArray<int32_t, mxINT32_CLASS> values(prhs[1]);
             size_t count = getScalar<size_t>(prhs[2]);
             int _value = bindings_tests_Arrays_sumInt32(values, count);
@@ -430,7 +447,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Arrays_cumulativeSum") */ 106931725: {
-            static auto bindings_tests_Arrays_cumulativeSum = libLoader.getFunc<void(*)(double*, double*, size_t)>("bindings_tests_Arrays_cumulativeSum");
+            static auto bindings_tests_Arrays_cumulativeSum = libLoader.getFunc<void(*)(const double*, double*, size_t)>("bindings_tests_Arrays_cumulativeSum");
             MatlabArray<double, mxDOUBLE_CLASS> source(prhs[1]);
             MatlabArray<double, mxDOUBLE_CLASS> target(prhs[2]);
             size_t count = getScalar<size_t>(prhs[3]);
@@ -442,6 +459,32 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             MatlabArray<double, mxDOUBLE_CLASS> values(prhs[1]);
             size_t count = getScalar<size_t>(prhs[2]);
             bindings_tests_Arrays_reverseFloat64(values, count);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_dotProduct") */ 4019140823: {
+            static auto bindings_tests_Arrays_dotProduct = libLoader.getFunc<double(*)(DoubleSpan, DoubleSpan)>("bindings_tests_Arrays_dotProduct");
+            MatlabArray<double, mxDOUBLE_CLASS> x_arr(prhs[1]);
+            DoubleSpan x = {x_arr.ptr, mxGetNumberOfElements(prhs[1])};
+            MatlabArray<double, mxDOUBLE_CLASS> y_arr(prhs[2]);
+            DoubleSpan y = {y_arr.ptr, mxGetNumberOfElements(prhs[2])};
+            double _value = bindings_tests_Arrays_dotProduct(x, y);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_addOffset") */ 3807979063: {
+            static auto bindings_tests_Arrays_addOffset = libLoader.getFunc<DoubleSpan(*)(DoubleSpan, double)>("bindings_tests_Arrays_addOffset");
+            MatlabArray<double, mxDOUBLE_CLASS> values_arr(prhs[1]);
+            DoubleSpan values = {values_arr.ptr, mxGetNumberOfElements(prhs[1])};
+            double offset = getScalar<double>(prhs[2]);
+            DoubleSpan _value = bindings_tests_Arrays_addOffset(values, offset);
+            if (nlhs > 0) plhs[0] = createMexDoubleArray(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_getSequence") */ 3328946390: {
+            static auto bindings_tests_Arrays_getSequence = libLoader.getFunc<DoubleSpan(*)(size_t)>("bindings_tests_Arrays_getSequence");
+            size_t count = getScalar<size_t>(prhs[1]);
+            DoubleSpan _value = bindings_tests_Arrays_getSequence(count);
+            if (nlhs > 0) plhs[0] = createMexDoubleArray(_value);
             break;
         }
 
@@ -663,6 +706,21 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
+        case /* hash32_fnv1a("bindings_tests_Overloads_gain") */ 1095741721: {
+            static auto bindings_tests_Overloads_gain = libLoader.getFunc<double(*)(int, double)>("bindings_tests_Overloads_gain");
+            int invert = getScalar<int>(prhs[1]);
+            double scale = getScalar<double>(prhs[2]);
+            double _value = bindings_tests_Overloads_gain(invert, scale);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Overloads_echoIndex") */ 2239329933: {
+            static auto bindings_tests_Overloads_echoIndex = libLoader.getFunc<int(*)(int)>("bindings_tests_Overloads_echoIndex");
+            int index = getScalar<int>(prhs[1]);
+            int _value = bindings_tests_Overloads_echoIndex(index);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Overloads_answer") */ 340247328: {
             static auto bindings_tests_Overloads_answer = libLoader.getFunc<int(*)(int)>("bindings_tests_Overloads_answer");
             int multiplier = getScalar<int>(prhs[1]);
@@ -697,6 +755,14 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             int color = getScalar<int>(prhs[1]);
             int _value = bindings_tests_Palette_ordinalOf(color);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Palette_describe") */ 3040758575: {
+            static auto bindings_tests_Palette_describe = libLoader.getFunc<const char*(*)(int, int)>("bindings_tests_Palette_describe");
+            int color = getScalar<int>(prhs[1]);
+            int marker = getScalar<int>(prhs[2]);
+            const char* _value = bindings_tests_Palette_describe(color, marker);
+            if (nlhs > 0) plhs[0] = createMexString(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Palette_fromOrdinal") */ 3004775343: {
@@ -750,7 +816,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Strings_join") */ 3337485289: {
-            static auto bindings_tests_Strings_join = libLoader.getFunc<const char*(*)(char**, size_t, const char*)>("bindings_tests_Strings_join");
+            static auto bindings_tests_Strings_join = libLoader.getFunc<const char*(*)(const char**, size_t, const char*)>("bindings_tests_Strings_join");
             MatlabStringArray values(prhs[1]);
             size_t count = getScalar<size_t>(prhs[2]);
             MatlabString separator(prhs[3]);

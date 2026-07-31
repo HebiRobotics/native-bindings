@@ -9,11 +9,11 @@ library for each target language. Callers never see isolates or handles.
 
 ```java
 @CLibClass("Counter")
-public class NativeCounter implements AutoCloseable {
+public class TestCounter implements AutoCloseable {
 
     @CLibMethod(constructor = true)
-    public static NativeCounter create(@CDefault("0") int start) {
-        return new NativeCounter(start);
+    public static TestCounter create(@CDefault("0") int start) {
+        return new TestCounter(start);
     }
 
     @CLibMethod(flags = Noexcept)
@@ -243,23 +243,24 @@ others points at that language's generator rather than at the API.
 
 ### What the test API covers
 
-`bindings-tests/src/main/java/.../api/` holds eleven small classes, each aimed at one
+`bindings-tests/src/main/java/.../api/` holds twelve small classes, each aimed at one
 part of the feature matrix. Everything is deterministic and synchronous: no UI, no
 threads, no sleeps. Every language suite asserts the same value table, so a divergence
 between languages is immediately visible.
 
 | Class | Covers |
 |---|---|
-| `NativeMath` | Every primitive width, `size_t`, and the 31 and 63 bit caps |
-| `NativeCounter` | Constructor, instance methods, properties, and the generated destructor |
-| `NativeStrings` | String marshalling both ways, `char**` arrays, UTF-8 versus UTF-16 lengths |
-| `NativeArrays` | The (pointer, length) pattern for input and output buffers |
-| `NativeShape`, `NativeCircle`, `NativeSquare` | Inheritance, a shared handle registry, and the generated upcast |
-| `NativePalette` | Enum round trips |
-| `NativeErrors` | Status codes, per-type error defaults, and the last error provider |
-| `NativeOverloads` | Default arguments, per-language overloads, renaming, and `ignore` |
-| `NativeIsolated` | A second isolate with its own state and its own error provider |
-| `NativeCallbacks` | Synchronous function pointer callbacks |
+| `TestMath` | Every primitive width, `size_t`, and the 31 and 63 bit caps |
+| `TestCounter` | Constructor, instance methods, properties, and the generated destructor |
+| `TestStrings` | String marshalling both ways, `const char**` arrays, UTF-8 versus UTF-16 lengths |
+| `TestArrays` | The (pointer, length) pattern for input and output buffers, spans, and `@CConst` |
+| `TestShape`, `TestCircle`, `TestSquare` | Inheritance, a shared handle registry, and the generated upcast |
+| `TestPalette` | Enum round trips |
+| `TestErrors` | Status codes, per-type error defaults, and the last error provider |
+| `TestOverloads` | Default arguments, per-language overloads, `postBody`, `postCall`, renaming, and `ignore` |
+| `TestIsolated` | A second isolate with its own state and its own error provider |
+| `TestCallbacks` | Synchronous function pointer callbacks |
+| `TestIgnored` | A class level `ignore`, which must produce no output at all |
 
 `ProcessorValidationTest` covers the other half: the cases that are rejected at compile
 time and therefore cannot live in a source tree that has to compile.
@@ -276,7 +277,8 @@ are documented rather than fixed so that the extraction stayed behaviour preserv
   because it cannot overload on the first argument of a classdef constructor. Use
   `@CDefault` for the no-argument case.
 - **`cppOverloads` ignores `postBody`.** The C++ generator never emits that field, so
-  anything placed there is silently dropped. Put the whole prologue in `body`.
+  anything placed there is silently dropped. Put the whole prologue in `body`. Python
+  emits `postBody`, and MATLAB emits both `postBody` and `postCall`.
 - **Python static overloads need an explicit `cls`.** Static methods are emitted as
   `@classmethod` but the overload parameter list is copied verbatim, so the leading
   `cls` has to be written into the annotation.

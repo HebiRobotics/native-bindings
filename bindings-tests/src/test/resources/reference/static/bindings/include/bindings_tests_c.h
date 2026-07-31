@@ -16,6 +16,15 @@ typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
 
+// A (pointer, length) view of a contiguous double buffer, passed and returned
+// by value. Inputs are caller-owned and only read during the call. Returned
+// spans are library-owned and stay valid until the calling thread's next
+// library call, so they have to be copied immediately.
+typedef struct {
+    const double* data;
+    size_t length;
+} bindings_tests_double_span;
+
 typedef enum bindings_tests_Color {
   bindings_tests_Color_Red = 0,
   bindings_tests_Color_Green = 1,
@@ -25,6 +34,16 @@ typedef enum bindings_tests_Color {
 static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bindings_tests_Color enum");
 #else
 _Static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bindings_tests_Color enum");
+#endif
+
+typedef enum bindings_tests_Marker {
+  bindings_tests_Marker_Dot = 0,
+  bindings_tests_Marker_Cross = 1
+} bindings_tests_Marker;
+#if defined(_MSC_VER) || defined(__cplusplus)
+static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for bindings_tests_Marker enum");
+#else
+_Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for bindings_tests_Marker enum");
 #endif
 
 
@@ -61,11 +80,14 @@ int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
 bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr ptr);
 
 // ==== Arrays ====
-double bindings_tests_Arrays_sumFloat64(double* values, size_t count);
-int bindings_tests_Arrays_sumInt32(int* values, size_t count);
+double bindings_tests_Arrays_sumFloat64(const double* values, size_t count);
+int bindings_tests_Arrays_sumInt32(const int* values, size_t count);
 void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
-void bindings_tests_Arrays_cumulativeSum(double* source, double* target, size_t count);
+void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count);
 void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
+double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y);
+bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
+bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
 void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
@@ -106,6 +128,8 @@ size_t bindings_tests_Math_maxSize();
 int bindings_tests_Overloads_scale(int value, int factor);
 const char* bindings_tests_Overloads_greet(const char* name, const char* greeting);
 int bindings_tests_Overloads_total(int sum, int factor);
+double bindings_tests_Overloads_gain(int invert, double scale);
+int bindings_tests_Overloads_echoIndex(int index);
 int bindings_tests_Overloads_answer(int multiplier);
 int bindings_tests_Overloads_renamed();
 
@@ -113,6 +137,7 @@ int bindings_tests_Overloads_renamed();
 bindings_tests_Color bindings_tests_Palette_next(bindings_tests_Color color);
 const char* bindings_tests_Palette_nameOf(bindings_tests_Color color);
 int bindings_tests_Palette_ordinalOf(bindings_tests_Color color);
+const char* bindings_tests_Palette_describe(bindings_tests_Color color, bindings_tests_Marker marker);
 bindings_tests_Color bindings_tests_Palette_fromOrdinal(int ordinal);
 
 // ==== Strings ====
@@ -122,7 +147,7 @@ size_t bindings_tests_Strings_utf8Length(const char* value);
 size_t bindings_tests_Strings_utf16Length(const char* value);
 const char* bindings_tests_Strings_empty();
 const char* bindings_tests_Strings_nullString();
-const char* bindings_tests_Strings_join(char** values, size_t count, const char* separator);
+const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);

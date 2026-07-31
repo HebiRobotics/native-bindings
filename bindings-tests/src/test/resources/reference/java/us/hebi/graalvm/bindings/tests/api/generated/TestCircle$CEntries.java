@@ -7,16 +7,16 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
-import us.hebi.graalvm.bindings.tests.api.NativeCircle;
+import us.hebi.graalvm.bindings.tests.api.TestCircle;
 
-public final class NativeCircle$CEntries {
-    public static final ObjectHandles INSTANCES = NativeShape$CEntries.INSTANCES;
+public final class TestCircle$CEntries {
+    public static final ObjectHandles INSTANCES = TestShape$CEntries.INSTANCES;
 
-    public static ObjectHandle _registerInstance(final NativeCircle instance) {
+    public static ObjectHandle _registerInstance(final TestCircle instance) {
         return Handles.create(INSTANCES, instance);
     }
 
-    public static NativeCircle _getInstance(final ObjectHandle handle) {
+    public static TestCircle _getInstance(final ObjectHandle handle) {
         return Handles.get(INSTANCES, handle);
     }
 
@@ -25,7 +25,7 @@ public final class NativeCircle$CEntries {
     )
     public static ObjectHandle bindings_tests_Circle_create(IsolateThread _isolate, double radius) {
         try {
-            return NativeCircle$CEntries._registerInstance(NativeCircle.create(radius));
+            return TestCircle$CEntries._registerInstance(TestCircle.create(radius));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();

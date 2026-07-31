@@ -28,6 +28,11 @@ enum class Color : int32_t {
   Blue = 2
 };
 
+enum class Marker : int32_t {
+  Dot = 0,
+  Cross = 1
+};
+
 // ==== Forward Declarations ====
 class Counter;
 class Shape;
@@ -40,6 +45,10 @@ using CounterPtr = struct Counter_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
+struct double_span {
+  const double* data;
+  size_t length;
+};
 }
 
 // ==== Class Wrappers ====
@@ -157,8 +166,25 @@ private:
  * @brief Bulk array operations over caller-owned buffers.
  */
 namespace arrays {
-double sumFloat64(double* values, size_t count) noexcept;
-int sumInt32(int* values, size_t count) noexcept;
+
+/**
+ * @details 
+ * A const input buffer. Besides the const in the C header, this is what makes the
+ * C++ generator add a std::vector<double> overload next to the raw pointer one.
+ *
+ * @param values 
+ * @param count 
+ */
+double sumFloat64(const double* values, size_t count) noexcept;
+double sumFloat64(const std::vector<double>& values, size_t count) noexcept;
+
+/**
+ * @brief Const on a non-double pointer, which gets the const but no vector overload.
+ *
+ * @param values 
+ * @param count 
+ */
+int sumInt32(const int* values, size_t count) noexcept;
 
 /**
  * @brief Writes value into every element of target. Checks output buffer handling.
@@ -172,13 +198,16 @@ void fillFloat64(double* target, size_t count, double value) noexcept;
 /**
  * @details 
  * Writes the running total of source into target. Both buffers must hold at
- * least count elements. Passing the same buffer for both is supported.
+ * least count elements. Passing the same buffer for both is supported. One const
+ * and one mutable pointer in the same signature, so only the source picks up the
+ * vector overload.
  *
  * @param source 
  * @param target 
  * @param count 
  */
-void cumulativeSum(double* source, double* target, size_t count) noexcept;
+void cumulativeSum(const double* source, double* target, size_t count) noexcept;
+void cumulativeSum(const std::vector<double>& source, double* target, size_t count) noexcept;
 
 /**
  * @brief Reverses the buffer in place.
@@ -187,6 +216,34 @@ void cumulativeSum(double* source, double* target, size_t count) noexcept;
  * @param count 
  */
 void reverseFloat64(double* values, size_t count) noexcept;
+
+/**
+ * @brief Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
+ *
+ * @param x 
+ * @param y 
+ * @throw mismatched lengths
+ */
+double dotProduct(internal::double_span x, internal::double_span y);
+double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
+
+/**
+ * @brief Returns a new array with the offset added to every element. Checks a span in and an array out.
+ *
+ * @param values 
+ * @param offset 
+ */
+std::vector<double> addOffset(internal::double_span values, double offset) noexcept;
+std::vector<double> addOffset(const std::vector<double>& values, double offset) noexcept;
+
+/**
+ * @details 
+ * Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
+ * over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
+ *
+ * @param count 
+ */
+std::vector<double> getSequence(size_t count) noexcept;
 } // namespace arrays
 
 
@@ -391,6 +448,26 @@ int total(const std::vector<int>& values, int factor) noexcept;
 
 /**
  * @details 
+ * A boolean default and a double default in scientific notation. Each wrapper has
+ * to render both in its own syntax, which is where they tend to go wrong.
+ *
+ * @param invert 
+ * @param scale 
+ */
+double gain(bool invert = false, double scale = 1e-3) noexcept;
+
+/**
+ * @details 
+ * Returns the index unchanged. MATLAB converts to zero based indexing on the way
+ * in and back to one based on the way out, so it sees the value it passed in.
+ * Python clamps negatives instead, which matches C for every valid index.
+ *
+ * @param index 
+ */
+int echoIndex(int index) noexcept;
+
+/**
+ * @details 
  * The C++ wrapper body is hand written and never calls into the library, so
  * this is the one method where the C++ result may legitimately differ from
  * the others. Kept deliberately obvious.
@@ -419,6 +496,14 @@ namespace palette {
 Color next(Color color) noexcept;
 std::string nameOf(Color color) noexcept;
 int ordinalOf(Color color) noexcept;
+
+/**
+ * @brief Takes both enums at once, so the two generated types have to coexist in one signature.
+ *
+ * @param color 
+ * @param marker 
+ */
+std::string describe(Color color, Marker marker) noexcept;
 
 /**
  * @brief Returns the enum with the given ordinal, or Red if it is out of range.
@@ -471,14 +556,14 @@ std::string empty() noexcept;
 std::string nullString() noexcept;
 
 /**
- * @brief Joins a char* array with a separator. Checks char** parameter handling.
+ * @brief Joins a char* array with a separator. Checks const char** parameter handling.
  *
  * @param values 
  * @param count number of entries in values
  * @param separator 
  */
-std::string join(char** values, size_t count, const char* separator) noexcept;
-std::string join(char** values, size_t count, const std::string& separator) noexcept;
+std::string join(const char** values, size_t count, const char* separator) noexcept;
+std::string join(const char** values, size_t count, const std::string& separator) noexcept;
 
 /**
  * @brief Returns a string longer than the initial scratch buffer, forcing it to grow.
@@ -516,11 +601,14 @@ extern "C" {
   double bindings_tests_Square_area(internal::SquarePtr);
   int bindings_tests_Square_sideCount(internal::SquarePtr);
   internal::ShapePtr bindings_tests_Square_to_Shape(internal::SquarePtr);
-  double bindings_tests_Arrays_sumFloat64(double*, size_t);
-  int bindings_tests_Arrays_sumInt32(int*, size_t);
+  double bindings_tests_Arrays_sumFloat64(const double*, size_t);
+  int bindings_tests_Arrays_sumInt32(const int*, size_t);
   void bindings_tests_Arrays_fillFloat64(double*, size_t, double);
-  void bindings_tests_Arrays_cumulativeSum(double*, double*, size_t);
+  void bindings_tests_Arrays_cumulativeSum(const double*, double*, size_t);
   void bindings_tests_Arrays_reverseFloat64(double*, size_t);
+  double bindings_tests_Arrays_dotProduct(internal::double_span, internal::double_span);
+  internal::double_span bindings_tests_Arrays_addOffset(internal::double_span, double);
+  internal::double_span bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
   int bindings_tests_Errors_requireNonNegative(int);
@@ -551,11 +639,14 @@ extern "C" {
   int bindings_tests_Overloads_scale(int, int);
   const char* bindings_tests_Overloads_greet(const char*, const char*);
   int bindings_tests_Overloads_total(int, int);
+  double bindings_tests_Overloads_gain(int, double);
+  int bindings_tests_Overloads_echoIndex(int);
   int bindings_tests_Overloads_answer(int);
   int bindings_tests_Overloads_renamed();
   Color bindings_tests_Palette_next(Color);
   const char* bindings_tests_Palette_nameOf(Color);
   int bindings_tests_Palette_ordinalOf(Color);
+  const char* bindings_tests_Palette_describe(Color, Marker);
   Color bindings_tests_Palette_fromOrdinal(int);
   const char* bindings_tests_Strings_echo(const char*);
   const char* bindings_tests_Strings_concat(const char*, const char*);
@@ -563,7 +654,7 @@ extern "C" {
   size_t bindings_tests_Strings_utf16Length(const char*);
   const char* bindings_tests_Strings_empty();
   const char* bindings_tests_Strings_nullString();
-  const char* bindings_tests_Strings_join(char**, size_t, const char*);
+  const char* bindings_tests_Strings_join(const char**, size_t, const char*);
   const char* bindings_tests_Strings_repeat(const char*, size_t);
   void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 }
@@ -721,20 +812,43 @@ inline Square& Square::operator=(Square&& from) noexcept {
 };
 
 // Arrays
-inline double arrays::sumFloat64(double* values, size_t count) noexcept {
+inline double arrays::sumFloat64(const double* values, size_t count) noexcept {
   return bindings_tests_Arrays_sumFloat64(values, count);
 }
-inline int arrays::sumInt32(int* values, size_t count) noexcept {
+inline double arrays::sumFloat64(const std::vector<double>& values, size_t count) noexcept {
+  return sumFloat64(values.data(), count);
+}
+inline int arrays::sumInt32(const int* values, size_t count) noexcept {
   return bindings_tests_Arrays_sumInt32(values, count);
 }
 inline void arrays::fillFloat64(double* target, size_t count, double value) noexcept {
   bindings_tests_Arrays_fillFloat64(target, count, value);
 }
-inline void arrays::cumulativeSum(double* source, double* target, size_t count) noexcept {
+inline void arrays::cumulativeSum(const double* source, double* target, size_t count) noexcept {
   bindings_tests_Arrays_cumulativeSum(source, target, count);
+}
+inline void arrays::cumulativeSum(const std::vector<double>& source, double* target, size_t count) noexcept {
+  cumulativeSum(source.data(), target, count);
 }
 inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
   bindings_tests_Arrays_reverseFloat64(values, count);
+}
+inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
+  return bindings_tests_Arrays_dotProduct(x, y);
+}
+inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
+  return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
+}
+inline std::vector<double> arrays::addOffset(internal::double_span values, double offset) noexcept {
+  auto span_ = bindings_tests_Arrays_addOffset(values, offset);
+  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
+}
+inline std::vector<double> arrays::addOffset(const std::vector<double>& values, double offset) noexcept {
+  return addOffset({values.data(), values.size()}, offset);
+}
+inline std::vector<double> arrays::getSequence(size_t count) noexcept {
+  auto span_ = bindings_tests_Arrays_getSequence(count);
+  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
 }
 
 // Callbacks
@@ -852,6 +966,12 @@ inline int overloads::total(int sum, int factor) noexcept {
 inline int overloads::total(const std::vector<int>& values, int factor) noexcept {
   int sum = 0; for (int v : values) { sum += v; }return total(sum, factor);
 }
+inline double overloads::gain(bool invert, double scale) noexcept {
+  return bindings_tests_Overloads_gain(invert, scale);
+}
+inline int overloads::echoIndex(int index) noexcept {
+  return bindings_tests_Overloads_echoIndex(index);
+}
 inline int overloads::answer(int multiplier) noexcept {
 return 21 * multiplier;
   return bindings_tests_Overloads_answer(multiplier);
@@ -870,6 +990,10 @@ inline std::string palette::nameOf(Color color) noexcept {
 }
 inline int palette::ordinalOf(Color color) noexcept {
   return bindings_tests_Palette_ordinalOf(color);
+}
+inline std::string palette::describe(Color color, Marker marker) noexcept {
+  auto ptr = bindings_tests_Palette_describe(color, marker);
+  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 inline Color palette::fromOrdinal(int ordinal) noexcept {
   return bindings_tests_Palette_fromOrdinal(ordinal);
@@ -910,11 +1034,11 @@ inline std::string strings::nullString() noexcept {
   auto ptr = bindings_tests_Strings_nullString();
   return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
-inline std::string strings::join(char** values, size_t count, const char* separator) noexcept {
+inline std::string strings::join(const char** values, size_t count, const char* separator) noexcept {
   auto ptr = bindings_tests_Strings_join(values, count, separator);
   return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
-inline std::string strings::join(char** values, size_t count, const std::string& separator) noexcept {
+inline std::string strings::join(const char** values, size_t count, const std::string& separator) noexcept {
   return join(values, count, separator.c_str());
 }
 inline std::string strings::repeat(const char* value, size_t times) noexcept {

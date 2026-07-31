@@ -166,6 +166,47 @@ class ArraysTest(unittest.TestCase):
         self.assertEqual([4.0, 3.0, 2.0, 1.0], list(values))
 
 
+class SpansTest(unittest.TestCase):
+    """Pointer and length crossing as one by-value struct, so no count arguments."""
+
+    def test_dot_product(self):
+        # Plain lists work because the wrapper converts through numpy
+        self.assertEqual(32.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]))
+
+    def test_length_mismatch(self):
+        # The length check lives once in the Java implementation. A mismatch
+        # returns the type default and sets the last error.
+        bindings_tests.Errors.clear_last_error()
+        self.assertEqual(0.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0]))
+        self.assertIn("elements", bindings_tests.Errors.get_last_error())
+        bindings_tests.Errors.clear_last_error()
+
+    def test_add_offset(self):
+        # Span in, numpy array out. The wrapper copies out of the library-owned
+        # buffer before returning.
+        result = bindings_tests.Arrays.add_offset([1.0, 2.0, 3.0], 10.0)
+        self.assertEqual([11.0, 12.0, 13.0], list(result))
+
+    def test_get_sequence(self):
+        self.assertEqual([0.0, 1.0, 2.0, 3.0, 4.0], list(bindings_tests.Arrays.get_sequence(5)))
+
+    def test_get_sequence_empty(self):
+        self.assertEqual(0, len(bindings_tests.Arrays.get_sequence(0)))
+
+    def test_get_sequence_grows_scratch_buffer(self):
+        # 200 elements, which forces the 128 element scratch buffer to grow
+        result = bindings_tests.Arrays.get_sequence(200)
+        self.assertEqual(200, len(result))
+        self.assertEqual(199.0, result[199])
+
+    def test_results_survive_next_call(self):
+        # Each returned array must be an independent copy of the scratch buffer
+        first = bindings_tests.Arrays.get_sequence(3)
+        second = bindings_tests.Arrays.add_offset([5.0, 5.0, 5.0], 1.0)
+        self.assertEqual([0.0, 1.0, 2.0], list(first))
+        self.assertEqual([6.0, 6.0, 6.0], list(second))
+
+
 class ShapesTest(unittest.TestCase):
     """Inheritance, including the generated upcast."""
 
@@ -213,6 +254,11 @@ class PaletteTest(unittest.TestCase):
         Color = bindings_tests.Color
         self.assertEqual("Green", bindings_tests.Palette.name_of(Color.GREEN))
         self.assertEqual(2, bindings_tests.Palette.ordinal_of(Color.BLUE))
+
+    def test_describe_uses_both_enums(self):
+        # Two enums declared in the same class, used in the same signature
+        self.assertEqual("Red Cross", bindings_tests.Palette.describe(
+            bindings_tests.Color.RED, bindings_tests.Marker.CROSS))
 
     def test_from_ordinal(self):
         Color = bindings_tests.Color
@@ -283,11 +329,27 @@ class OverloadsTest(unittest.TestCase):
     def test_hidden_is_absent(self):
         self.assertFalse(hasattr(bindings_tests.Overloads, "hidden"))
 
+    def test_ignored_class_is_absent(self):
+        # TestIgnored is annotated with ignore = true, so the whole class is gone
+        self.assertFalse(hasattr(bindings_tests, "Ignored"))
+
     def test_total(self):
         # The pythonOverload replaces the signature rather than adding to it, so the
         # pre-summed (sum, factor) form only exists in C. Here it takes a collection.
         self.assertEqual(12, bindings_tests.Overloads.total([1, 2, 3], 2))
         self.assertEqual(6, bindings_tests.Overloads.total([1, 2, 3]))
+
+    def test_gain_defaults(self):
+        # Rendered as 'invert: bool = False, scale: float = 1e-3'
+        self.assertEqual(1e-3, bindings_tests.Overloads.gain())
+        self.assertEqual(-1e-3, bindings_tests.Overloads.gain(True))
+        self.assertEqual(2.0, bindings_tests.Overloads.gain(False, 2.0))
+
+    def test_echo_index(self):
+        # The pythonOverload only sets a postBody, which clamps negatives right
+        # before the call. Valid indices pass through exactly as they do in C.
+        self.assertEqual(3, bindings_tests.Overloads.echo_index(3))
+        self.assertEqual(0, bindings_tests.Overloads.echo_index(-5))
 
     def test_answer(self):
         # 42 * multiplier everywhere except C++, where the hand-written cppBody

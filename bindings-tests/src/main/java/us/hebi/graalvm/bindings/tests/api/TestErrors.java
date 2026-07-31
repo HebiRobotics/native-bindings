@@ -24,7 +24,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Deliberate failures, used to check error propagation.")
 @CLibClass(value = "Errors", enableInstancing = false)
-public class NativeErrors {
+public class TestErrors {
 
     @CLibMethod
     @CLibComment(value = "Throws when value is negative, otherwise does nothing.",

@@ -20,7 +20,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("State confined to a second isolate.")
 @CLibClass(value = "Isolated", isolateName = "secondary", enableInstancing = false)
-public class NativeIsolated {
+public class TestIsolated {
 
     @CLibMethod(flags = Noexcept)
     public static void increment() {

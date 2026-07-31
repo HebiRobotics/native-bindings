@@ -1,5 +1,16 @@
 {
   "_schemaVersion": "1.0.0",
+  "bindings_tests.Arrays.addOffset": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "offset",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Arrays.cumulativeSum": {
     "inputs": [{
         "kind": "required",
@@ -15,6 +26,17 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Arrays.dotProduct": {
+    "inputs": [{
+        "kind": "required",
+        "name": "x",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "y",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Arrays.fillFloat64": {
     "inputs": [{
         "kind": "required",
@@ -27,6 +49,13 @@
       }, {
         "kind": "required",
         "name": "value",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.getSequence": {
+    "inputs": [{
+        "kind": "required",
+        "name": "count",
         "type": ["numeric"]
       }]
   },
@@ -365,6 +394,24 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Overloads.echoIndex": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Overloads.gain": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "invert",
+        "type": ["logical"]
+      }, {
+        "kind": "ordered",
+        "name": "scale",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Overloads.greet": {
     "inputs": [{
         "kind": "required",
@@ -403,6 +450,21 @@
         "kind": "required",
         "name": "factor",
         "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Palette.describe": {
+    "inputs": [{
+        "kind": "required",
+        "name": "color",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }, {
+        "kind": "required",
+        "name": "marker",
+        "type": ["bindings_tests.Marker", "choices={'Dot', 'Cross'}"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
       }]
   },
   "bindings_tests.Palette.fromOrdinal": {

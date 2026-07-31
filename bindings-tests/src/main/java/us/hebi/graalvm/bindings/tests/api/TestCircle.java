@@ -11,11 +11,11 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("A circle. Inherits name and area from Shape.")
 @CLibClass("Circle")
-public class NativeCircle extends NativeShape {
+public class TestCircle extends TestShape {
 
     @CLibMethod(constructor = true)
-    public static NativeCircle create(double radius) {
-        return new NativeCircle(radius);
+    public static TestCircle create(double radius) {
+        return new TestCircle(radius);
     }
 
     @CLibMethod(flags = {Noexcept, Const}, property = "radius")
@@ -35,7 +35,7 @@ public class NativeCircle extends NativeShape {
         return 0;
     }
 
-    private NativeCircle(double radius) {
+    private TestCircle(double radius) {
         super("circle");
         this.radius = radius;
     }
