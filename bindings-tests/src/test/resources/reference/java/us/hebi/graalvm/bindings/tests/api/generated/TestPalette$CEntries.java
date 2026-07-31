@@ -6,15 +6,15 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
-import us.hebi.graalvm.bindings.tests.api.NativePalette;
+import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
-public final class NativePalette$CEntries {
+public final class TestPalette$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Palette_next"
     )
     public static int bindings_tests_Palette_next(IsolateThread _isolate, int color) {
         try {
-            return Color$$CEnum.fromJava(NativePalette.next(Color$$CEnum.toJava(color)));
+            return Color$$CEnum.fromJava(TestPalette.next(Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -26,7 +26,7 @@ public final class NativePalette$CEntries {
     )
     public static CCharPointer bindings_tests_Palette_nameOf(IsolateThread _isolate, int color) {
         try {
-            return CTypes.toTempCharPointer(NativePalette.nameOf(Color$$CEnum.toJava(color)));
+            return CTypes.toTempCharPointer(TestPalette.nameOf(Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();
@@ -38,7 +38,7 @@ public final class NativePalette$CEntries {
     )
     public static int bindings_tests_Palette_ordinalOf(IsolateThread _isolate, int color) {
         try {
-            return NativePalette.ordinalOf(Color$$CEnum.toJava(color));
+            return TestPalette.ordinalOf(Color$$CEnum.toJava(color));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -50,7 +50,7 @@ public final class NativePalette$CEntries {
     )
     public static int bindings_tests_Palette_fromOrdinal(IsolateThread _isolate, int ordinal) {
         try {
-            return Color$$CEnum.fromJava(NativePalette.fromOrdinal(ordinal));
+            return Color$$CEnum.fromJava(TestPalette.fromOrdinal(ordinal));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;

@@ -6,15 +6,15 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
-import us.hebi.graalvm.bindings.tests.api.NativeIsolated;
+import us.hebi.graalvm.bindings.tests.api.TestIsolated;
 
-public final class NativeIsolated$CEntries {
+public final class TestIsolated$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Isolated_increment"
     )
     public static void bindings_tests_Isolated_increment(IsolateThread _isolate) {
         try {
-            NativeIsolated.increment();
+            TestIsolated.increment();
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }
@@ -25,7 +25,7 @@ public final class NativeIsolated$CEntries {
     )
     public static int bindings_tests_Isolated_getCounter(IsolateThread _isolate) {
         try {
-            return NativeIsolated.getCounter();
+            return TestIsolated.getCounter();
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -37,7 +37,7 @@ public final class NativeIsolated$CEntries {
     )
     public static void bindings_tests_Isolated_reset(IsolateThread _isolate) {
         try {
-            NativeIsolated.reset();
+            TestIsolated.reset();
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }
@@ -48,7 +48,7 @@ public final class NativeIsolated$CEntries {
     )
     public static int bindings_tests_Isolated_alwaysFails(IsolateThread _isolate) {
         try {
-            NativeIsolated.alwaysFails();
+            TestIsolated.alwaysFails();
             return ExceptionHandlers.STATUS_CODE_SUCCESS;
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
@@ -61,7 +61,7 @@ public final class NativeIsolated$CEntries {
     )
     public static CCharPointer bindings_tests_Isolated_getLastError(IsolateThread _isolate) {
         try {
-            return CTypes.toTempCharPointer(NativeIsolated.getLastError());
+            return CTypes.toTempCharPointer(TestIsolated.getLastError());
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();

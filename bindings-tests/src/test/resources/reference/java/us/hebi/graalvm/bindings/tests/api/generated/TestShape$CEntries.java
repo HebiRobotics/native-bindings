@@ -9,16 +9,16 @@ import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
-import us.hebi.graalvm.bindings.tests.api.NativeShape;
+import us.hebi.graalvm.bindings.tests.api.TestShape;
 
-public final class NativeShape$CEntries {
+public final class TestShape$CEntries {
     public static final ObjectHandles INSTANCES = ObjectHandles.create();
 
-    public static ObjectHandle _registerInstance(final NativeShape instance) {
+    public static ObjectHandle _registerInstance(final TestShape instance) {
         return Handles.create(INSTANCES, instance);
     }
 
-    public static NativeShape _getInstance(final ObjectHandle handle) {
+    public static TestShape _getInstance(final ObjectHandle handle) {
         return Handles.get(INSTANCES, handle);
     }
 

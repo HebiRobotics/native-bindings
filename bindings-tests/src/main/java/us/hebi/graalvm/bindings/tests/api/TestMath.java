@@ -17,7 +17,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Stateless arithmetic used to check primitive type mapping.")
 @CLibClass(value = "Math", enableInstancing = false)
-public class NativeMath {
+public class TestMath {
 
     @CLibMethod(flags = Noexcept)
     public static boolean negate(boolean value) {

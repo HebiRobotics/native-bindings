@@ -20,7 +20,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("A mutable counter, used to check handle creation and release.")
 @CLibClass("Counter")
-public class NativeCounter implements AutoCloseable {
+public class TestCounter implements AutoCloseable {
 
     /**
      * A class may declare at most one constructor. The MATLAB generator asserts this,
@@ -29,8 +29,8 @@ public class NativeCounter implements AutoCloseable {
      */
     @CLibMethod(constructor = true)
     @CLibComment("Creates a counter starting at the given value, or at zero by default.")
-    public static NativeCounter create(@CDefault("0") int start) {
-        return new NativeCounter(start);
+    public static TestCounter create(@CDefault("0") int start) {
+        return new TestCounter(start);
     }
 
     @CLibMethod(flags = Noexcept)
@@ -83,7 +83,7 @@ public class NativeCounter implements AutoCloseable {
         }
     }
 
-    private NativeCounter(int start) {
+    private TestCounter(int start) {
         this.value = start;
     }
 

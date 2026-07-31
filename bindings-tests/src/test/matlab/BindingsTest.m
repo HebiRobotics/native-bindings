@@ -13,7 +13,7 @@ classdef BindingsTest < matlab.unittest.TestCase
 %   first (see .github/workflows/native.yml).
 %
 %   Callbacks are deliberately not covered: MATLAB cannot pass a C function
-%   pointer, so the typedef degrades to void* and NativeCallbacks is not
+%   pointer, so the typedef degrades to void* and TestCallbacks is not
 %   callable from here. That feature area is covered by C, C++ and Python.
 %
 %   Note on types: the MEX dispatch returns every scalar as a MATLAB double,

@@ -8,16 +8,16 @@ import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
-import us.hebi.graalvm.bindings.tests.api.NativeArrays;
+import us.hebi.graalvm.bindings.tests.api.TestArrays;
 
-public final class NativeArrays$CEntries {
+public final class TestArrays$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Arrays_sumFloat64"
     )
     public static double bindings_tests_Arrays_sumFloat64(IsolateThread _isolate,
             CDoublePointer values, long count) {
         try {
-            return NativeArrays.sumFloat64(values, CTypes.capSizeToInt(count));
+            return TestArrays.sumFloat64(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -30,7 +30,7 @@ public final class NativeArrays$CEntries {
     public static int bindings_tests_Arrays_sumInt32(IsolateThread _isolate, CIntPointer values,
             long count) {
         try {
-            return NativeArrays.sumInt32(values, CTypes.capSizeToInt(count));
+            return TestArrays.sumInt32(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -43,7 +43,7 @@ public final class NativeArrays$CEntries {
     public static void bindings_tests_Arrays_fillFloat64(IsolateThread _isolate,
             CDoublePointer target, long count, double value) {
         try {
-            NativeArrays.fillFloat64(target, CTypes.capSizeToInt(count), value);
+            TestArrays.fillFloat64(target, CTypes.capSizeToInt(count), value);
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }
@@ -55,7 +55,7 @@ public final class NativeArrays$CEntries {
     public static void bindings_tests_Arrays_cumulativeSum(IsolateThread _isolate,
             CDoublePointer source, CDoublePointer target, long count) {
         try {
-            NativeArrays.cumulativeSum(source, target, CTypes.capSizeToInt(count));
+            TestArrays.cumulativeSum(source, target, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }
@@ -67,7 +67,7 @@ public final class NativeArrays$CEntries {
     public static void bindings_tests_Arrays_reverseFloat64(IsolateThread _isolate,
             CDoublePointer values, long count) {
         try {
-            NativeArrays.reverseFloat64(values, CTypes.capSizeToInt(count));
+            TestArrays.reverseFloat64(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }
@@ -79,7 +79,7 @@ public final class NativeArrays$CEntries {
     public static double bindings_tests_Arrays_dotProduct(IsolateThread _isolate, DoubleSpan x,
             DoubleSpan y) {
         try {
-            return NativeArrays.dotProduct(x, y);
+            return TestArrays.dotProduct(x, y);
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -92,7 +92,7 @@ public final class NativeArrays$CEntries {
     public static void bindings_tests_Arrays_addOffset(IsolateThread _isolate, DoubleSpan values,
             double offset, DoubleSpan _spanOut) {
         try {
-            double[] _values = NativeArrays.addOffset(values, offset);
+            double[] _values = TestArrays.addOffset(values, offset);
             _spanOut.setData(CTypes.toTempDoublePointer(_values));
             _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
@@ -108,7 +108,7 @@ public final class NativeArrays$CEntries {
     public static void bindings_tests_Arrays_getSequence(IsolateThread _isolate, long count,
             DoubleSpan _spanOut) {
         try {
-            double[] _values = NativeArrays.getSequence(CTypes.capSizeToInt(count));
+            double[] _values = TestArrays.getSequence(CTypes.capSizeToInt(count));
             _spanOut.setData(CTypes.toTempDoublePointer(_values));
             _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {

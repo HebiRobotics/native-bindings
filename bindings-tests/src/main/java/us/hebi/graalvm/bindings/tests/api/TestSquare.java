@@ -13,11 +13,11 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("A square. Inherits name and area from Shape.")
 @CLibClass("Square")
-public class NativeSquare extends NativeShape {
+public class TestSquare extends TestShape {
 
     @CLibMethod(constructor = true)
-    public static NativeSquare create(double side) {
-        return new NativeSquare(side);
+    public static TestSquare create(double side) {
+        return new TestSquare(side);
     }
 
     @CLibMethod(flags = {Noexcept, Const}, property = "side")
@@ -37,7 +37,7 @@ public class NativeSquare extends NativeShape {
         return 4;
     }
 
-    private NativeSquare(double side) {
+    private TestSquare(double side) {
         super("square");
         this.side = side;
     }

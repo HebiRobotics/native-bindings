@@ -21,7 +21,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Bulk array operations over caller-owned buffers.")
 @CLibClass(value = "Arrays", enableInstancing = false)
-public class NativeArrays {
+public class TestArrays {
 
     @CLibMethod(flags = Noexcept)
     public static double sumFloat64(CDoublePointer values, @CSizeType int count) {

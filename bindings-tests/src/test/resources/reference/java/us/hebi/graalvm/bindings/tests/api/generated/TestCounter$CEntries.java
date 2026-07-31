@@ -7,16 +7,16 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
-import us.hebi.graalvm.bindings.tests.api.NativeCounter;
+import us.hebi.graalvm.bindings.tests.api.TestCounter;
 
-public final class NativeCounter$CEntries {
+public final class TestCounter$CEntries {
     public static final ObjectHandles INSTANCES = ObjectHandles.create();
 
-    public static ObjectHandle _registerInstance(final NativeCounter instance) {
+    public static ObjectHandle _registerInstance(final TestCounter instance) {
         return Handles.create(INSTANCES, instance);
     }
 
-    public static NativeCounter _getInstance(final ObjectHandle handle) {
+    public static TestCounter _getInstance(final ObjectHandle handle) {
         return Handles.get(INSTANCES, handle);
     }
 
@@ -33,7 +33,7 @@ public final class NativeCounter$CEntries {
     )
     public static ObjectHandle bindings_tests_Counter_create(IsolateThread _isolate, int start) {
         try {
-            return NativeCounter$CEntries._registerInstance(NativeCounter.create(start));
+            return TestCounter$CEntries._registerInstance(TestCounter.create(start));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();
@@ -105,7 +105,7 @@ public final class NativeCounter$CEntries {
     )
     public static int bindings_tests_Counter_getClosedCount(IsolateThread _isolate) {
         try {
-            return NativeCounter.getClosedCount();
+            return TestCounter.getClosedCount();
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -117,7 +117,7 @@ public final class NativeCounter$CEntries {
     )
     public static void bindings_tests_Counter_resetClosedCount(IsolateThread _isolate) {
         try {
-            NativeCounter.resetClosedCount();
+            TestCounter.resetClosedCount();
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
         }

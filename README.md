@@ -9,11 +9,11 @@ library for each target language. Callers never see isolates or handles.
 
 ```java
 @CLibClass("Counter")
-public class NativeCounter implements AutoCloseable {
+public class TestCounter implements AutoCloseable {
 
     @CLibMethod(constructor = true)
-    public static NativeCounter create(@CDefault("0") int start) {
-        return new NativeCounter(start);
+    public static TestCounter create(@CDefault("0") int start) {
+        return new TestCounter(start);
     }
 
     @CLibMethod(flags = Noexcept)
@@ -250,16 +250,16 @@ between languages is immediately visible.
 
 | Class | Covers |
 |---|---|
-| `NativeMath` | Every primitive width, `size_t`, and the 31 and 63 bit caps |
-| `NativeCounter` | Constructor, instance methods, properties, and the generated destructor |
-| `NativeStrings` | String marshalling both ways, `char**` arrays, UTF-8 versus UTF-16 lengths |
-| `NativeArrays` | The (pointer, length) pattern for input and output buffers |
-| `NativeShape`, `NativeCircle`, `NativeSquare` | Inheritance, a shared handle registry, and the generated upcast |
-| `NativePalette` | Enum round trips |
-| `NativeErrors` | Status codes, per-type error defaults, and the last error provider |
-| `NativeOverloads` | Default arguments, per-language overloads, renaming, and `ignore` |
-| `NativeIsolated` | A second isolate with its own state and its own error provider |
-| `NativeCallbacks` | Synchronous function pointer callbacks |
+| `TestMath` | Every primitive width, `size_t`, and the 31 and 63 bit caps |
+| `TestCounter` | Constructor, instance methods, properties, and the generated destructor |
+| `TestStrings` | String marshalling both ways, `char**` arrays, UTF-8 versus UTF-16 lengths |
+| `TestArrays` | The (pointer, length) pattern for input and output buffers |
+| `TestShape`, `TestCircle`, `TestSquare` | Inheritance, a shared handle registry, and the generated upcast |
+| `TestPalette` | Enum round trips |
+| `TestErrors` | Status codes, per-type error defaults, and the last error provider |
+| `TestOverloads` | Default arguments, per-language overloads, renaming, and `ignore` |
+| `TestIsolated` | A second isolate with its own state and its own error provider |
+| `TestCallbacks` | Synchronous function pointer callbacks |
 
 `ProcessorValidationTest` covers the other half: the cases that are rejected at compile
 time and therefore cannot live in a source tree that has to compile.

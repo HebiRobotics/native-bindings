@@ -18,7 +18,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Default arguments and language specific convenience overloads.")
 @CLibClass(value = "Overloads", enableInstancing = false)
-public class NativeOverloads {
+public class TestOverloads {
 
     @CLibMethod(flags = Noexcept)
     @CLibComment("Both parameters have defaults, so wrappers may call this with no arguments.")

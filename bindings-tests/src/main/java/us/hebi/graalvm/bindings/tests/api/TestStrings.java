@@ -22,7 +22,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("String conversion, including non-ASCII round trips.")
 @CLibClass(value = "Strings", enableInstancing = false)
-public class NativeStrings {
+public class TestStrings {
 
     @CLibMethod(flags = Noexcept)
     @CLibComment("Returns the input unchanged. Round trips UTF-8 through Java's UTF-16.")

@@ -16,7 +16,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Enum round trips.")
 @CLibClass(value = "Palette", enableInstancing = false)
-public class NativePalette {
+public class TestPalette {
 
     @CLibEnum("Color")
     @CLibComment("A named color. Values are ordinals, starting at zero.")
