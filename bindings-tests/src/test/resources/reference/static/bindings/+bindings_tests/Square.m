@@ -27,6 +27,7 @@ classdef (Sealed) Square < bindings_tests.Shape
             if isempty(ptr_)
                 error(['Failed to create bindings_tests.Square in Square.Square' ': ' bindings_tests_native('bindings_tests_Errors_getLastError')]);
             end
+            this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Square_to_Shape', ptr_));
             this.ref_Square = ptr_;
             if numel(varargin) > 0
                 this.set(varargin{:});

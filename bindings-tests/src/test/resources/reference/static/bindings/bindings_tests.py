@@ -440,10 +440,10 @@ class Circle(Shape):
         if not ptr_:
             raise RuntimeError(f'Failed to create Circle in Circle::__init__ ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
         self.ref_Circle = ptr_
+        super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ptr_))
         if name is not None: self.name = name
 
-
-        super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ref_Circle))    def __del__(self):
+    def __del__(self):
         super().__del__()
         self.ref_Circle = None
 
@@ -471,10 +471,10 @@ class Square(Shape):
         if not ptr_:
             raise RuntimeError(f'Failed to create Square in Square::__init__ ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
         self.ref_Square = ptr_
+        super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ptr_))
         if name is not None: self.name = name
 
-
-        super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ref_Square))    def __del__(self):
+    def __del__(self):
         super().__del__()
         self.ref_Square = None
 
@@ -832,7 +832,8 @@ class Overloads:
             sum: 
             factor:
         """
-        total = sum(values)return libbindings_tests.bindings_tests_Overloads_total(total, factor)
+        total = sum(values)
+        return libbindings_tests.bindings_tests_Overloads_total(total, factor)
 
     @classmethod
     def answer(cls, multiplier: int) -> int:

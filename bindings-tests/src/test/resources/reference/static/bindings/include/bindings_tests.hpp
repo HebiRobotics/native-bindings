@@ -132,6 +132,7 @@ private:
   explicit Circle(internal::CirclePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::CirclePtr cPointer) noexcept;
   internal::CirclePtr ptr_{};
+  static internal::CirclePtr createPointer(double radius);
 };
 
 
@@ -150,6 +151,7 @@ private:
   explicit Square(internal::SquarePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::SquarePtr cPointer) noexcept;
   internal::SquarePtr ptr_{};
+  static internal::SquarePtr createPointer(double side);
 };
 
 
@@ -651,12 +653,15 @@ inline Shape::~Shape() noexcept {
 }
 
 // Circle
-inline Circle::Circle(double radius) {
-  ptr_ = bindings_tests_Circle_create(radius);
-  if (!ptr_) {
+// The null check happens here because the base class gets initialized before the constructor body runs
+inline internal::CirclePtr Circle::createPointer(double radius) {
+  auto ptr = bindings_tests_Circle_create(radius);
+  if (!ptr) {
     throw Exception("Could not create Circle");
   }
+  return ptr;
 }
+inline Circle::Circle(double radius) : Circle(createPointer(radius)) {}
 inline double Circle::getRadius() const noexcept {
   return bindings_tests_Circle_getRadius(ptr_);
 }
@@ -681,12 +686,15 @@ inline Circle& Circle::operator=(Circle&& from) noexcept {
 };
 
 // Square
-inline Square::Square(double side) {
-  ptr_ = bindings_tests_Square_create(side);
-  if (!ptr_) {
+// The null check happens here because the base class gets initialized before the constructor body runs
+inline internal::SquarePtr Square::createPointer(double side) {
+  auto ptr = bindings_tests_Square_create(side);
+  if (!ptr) {
     throw Exception("Could not create Square");
   }
+  return ptr;
 }
+inline Square::Square(double side) : Square(createPointer(side)) {}
 inline double Square::getSide() const noexcept {
   return bindings_tests_Square_getSide(ptr_);
 }

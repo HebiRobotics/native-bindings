@@ -22,6 +22,9 @@
     </modules>
 
     <properties>
+        <!-- path to base dir set from every child -->
+        <main.basedir>${project.basedir}</main.basedir>
+
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>21</maven.compiler.release>
@@ -150,5 +153,69 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <!--
+        Platform specific properties for the native build. 'native.compiler' points native-image
+        at the wrapper script that produces the static library and the cmake fragments that stage
+        two needs. 'native.platform' is the directory name the generated wrappers look under.
+    -->
+    <profiles>
+
+        <profile>
+            <id>platform-windows</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <native.platform>win_amd64</native.platform>
+                <native.compiler>${main.basedir}/scripts/graal/compiler-windows.bat</native.compiler>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>platform-osx</id>
+            <activation>
+                <os>
+                    <name>mac os x</name>
+                </os>
+            </activation>
+            <properties>
+                <!-- Overridden by platform-osx-arm64 below on Apple Silicon -->
+                <native.platform>osx_amd64</native.platform>
+                <native.compiler>${main.basedir}/scripts/graal/compiler-osx.sh</native.compiler>
+            </properties>
+        </profile>
+
+        <!-- os.arch is 'aarch64' on Apple Silicon JDKs, so this narrows the profile above -->
+        <profile>
+            <id>platform-osx-arm64</id>
+            <activation>
+                <os>
+                    <name>mac os x</name>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <native.platform>osx_arm64</native.platform>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>platform-linux</id>
+            <activation>
+                <os>
+                    <name>linux</name>
+                </os>
+            </activation>
+            <properties>
+                <!-- TODO: no linux_aarch64 variant yet. The test matrix only covers x86_64 Linux. -->
+                <native.platform>linux_amd64</native.platform>
+                <native.compiler>${main.basedir}/scripts/graal/compiler-linux.sh</native.compiler>
+            </properties>
+        </profile>
+
+    </profiles>
 
 </project>

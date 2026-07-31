@@ -284,11 +284,10 @@ class OverloadsTest(unittest.TestCase):
         self.assertFalse(hasattr(bindings_tests.Overloads, "hidden"))
 
     def test_total(self):
-        # C takes the pre-summed total, Python gets a collection overload
-        self.assertEqual(12, bindings_tests.Overloads.total(6, 2))
-        # Static methods are emitted as @classmethod with the overload parameter list
-        # copied verbatim, so the annotation spells out the leading cls itself
+        # The pythonOverload replaces the signature rather than adding to it, so the
+        # pre-summed (sum, factor) form only exists in C. Here it takes a collection.
         self.assertEqual(12, bindings_tests.Overloads.total([1, 2, 3], 2))
+        self.assertEqual(6, bindings_tests.Overloads.total([1, 2, 3]))
 
     def test_answer(self):
         # 42 * multiplier everywhere except C++, where the hand-written cppBody

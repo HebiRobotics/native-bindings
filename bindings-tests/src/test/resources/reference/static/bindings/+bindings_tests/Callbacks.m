@@ -3,7 +3,7 @@ classdef (Sealed) Callbacks
 
     methods(Static)
 
-        function userData = invokeTimes(func, userData, times)
+        function invokeTimes(func, userData, times)
             % Invokes the callback exactly 'times' times with indices 0 to times-1, then
             %   returns. A null function pointer is ignored, and a non-positive count does
             %   nothing.
@@ -12,17 +12,17 @@ classdef (Sealed) Callbacks
             %       func
             %       userData
             %       times
-            userData = bindings_tests_native('bindings_tests_Callbacks_invokeTimes', func, userData, times);
+            bindings_tests_native('bindings_tests_Callbacks_invokeTimes', func, userData, times);
         end
 
-        function userData = invokeOnce(func, userData, index)
+        function invokeOnce(func, userData, index)
             % Invokes the callback once with the given index. Returns after it completes.
             %
             %   Inputs:
             %       func
             %       userData
             %       index
-            userData = bindings_tests_native('bindings_tests_Callbacks_invokeOnce', func, userData, index);
+            bindings_tests_native('bindings_tests_Callbacks_invokeOnce', func, userData, index);
         end
 
     end

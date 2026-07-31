@@ -175,6 +175,9 @@ public class CppBindingsGenerator extends BindingGenerator {
                     .toList();
             var hasDedicatedConstructor = methods.stream().anyMatch(MethodDescription::getIsConstructor);
 
+            // Declaration of the static factory that a delegating value constructor needs (see below)
+            String constructorFactoryDecl = "";
+
             // Wrap all methods
             List<String> cParams = new ArrayList<>();
             List<String> cppParams = new ArrayList<>();
@@ -213,19 +216,47 @@ public class CppBindingsGenerator extends BindingGenerator {
                 }
                 if (method.getIsConstructor()) {
                     out.write("%s(%s);\n".formatted(cppClassName, argJoiner.join(cppHeaderParams)));
-                    impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, argJoiner.join(cppParams)));
-                    if (useDynamicLookup) {
-                        impl.write(getDynamicFunctionLookup(apiClass, method));
+                    if (apiClass.hasParent()) {
+                        // The base class has no default constructor, so the value constructor has to delegate
+                        // to the pointer constructor that initializes the inherited part. Base initializers run
+                        // before the constructor body, so the null check moves into a static factory that runs
+                        // while the delegated arguments get evaluated.
+                        constructorFactoryDecl = "  static %s %s(%s);\n".formatted(
+                                getCppType(apiClass.getType()), CONSTRUCTOR_FACTORY, argJoiner.join(cppParams));
+                        impl.write("// The null check happens here because the base class gets initialized before the constructor body runs\n");
+                        impl.write("inline %s %s::%s(%s) {\n".formatted(
+                                getCppType(apiClass.getType()), cppClassName, CONSTRUCTOR_FACTORY, argJoiner.join(cppParams)));
+                        if (useDynamicLookup) {
+                            impl.write(getDynamicFunctionLookup(apiClass, method));
+                        }
+                        impl.write("  auto ptr = %s(%s);\n".formatted(method.getCName(), argJoiner.join(cParams)));
+                        if (isThrowing(method)) {
+                            impl.write("""
+                                      if (!ptr) {
+                                        throw Exception("Could not create %s");
+                                      }
+                                    """.formatted(getCppClassName(apiClass.getType())));
+                        }
+                        impl.write("  return ptr;\n");
+                        impl.write("}\n");
+                        impl.write("inline %s::%s(%s) : %s(%s(%s)) {}\n".formatted(
+                                cppClassName, cppClassName, argJoiner.join(cppParams),
+                                cppClassName, CONSTRUCTOR_FACTORY, argJoiner.join(cParams)));
+                    } else {
+                        impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, argJoiner.join(cppParams)));
+                        if (useDynamicLookup) {
+                            impl.write(getDynamicFunctionLookup(apiClass, method));
+                        }
+                        impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), argJoiner.join(cParams)));
+                        if (isThrowing(method)) {
+                            impl.write("""
+                                      if (!ptr_) {
+                                        throw Exception("Could not create %s");
+                                      }
+                                    """.formatted(getCppClassName(apiClass.getType())));
+                        }
+                        impl.write("}\n");
                     }
-                    impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), argJoiner.join(cParams)));
-                    if (isThrowing(method)) {
-                        impl.write("""
-                                  if (!ptr_) {
-                                    throw Exception("Could not create %s");
-                                  }
-                                """.formatted(getCppClassName(apiClass.getType())));
-                    }
-                    impl.write("}\n");
 
                 } else {
 
@@ -390,6 +421,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                                   %%CTYPE%% ptr_{};
                                 """;
                     }
+                    classDef += constructorFactoryDecl;
 
                     classImpl = """
                             inline %%PARENT_CTYPE%% %%CLASS%%::get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept {%%DYNAMIC_LOOKUP%%
@@ -529,6 +561,11 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     private static final String INTERNAL_POINTER_NAMESPACE = "internal";
+
+    /**
+     * Name of the static factory that value constructors of child classes delegate through
+     */
+    private static final String CONSTRUCTOR_FACTORY = "createPointer";
 
     interface OverloadWriter {
         void write(String params, String body, String call) throws IOException;

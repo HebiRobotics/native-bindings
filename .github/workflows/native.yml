@@ -1,8 +1,8 @@
 name: native
 
-# Builds the GraalVM shared library and runs the per-language runtime suites
-# against it. Much slower than verify.yml, which is why the reference file gate
-# lives in its own workflow.
+# Builds the GraalVM shared library and runs the C, C++, Python and MATLAB suites
+# against it on all three platforms. Much slower than verify.yml, which is why the
+# reference file gate lives in its own workflow.
 
 on:
   push:
@@ -11,19 +11,34 @@ on:
 
 jobs:
   native:
-    # Adding windows-latest and macos-latest to the list below is all that is
-    # needed to fan this job out across platforms. Every step already keys off
-    # matrix.os rather than assuming Linux.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux_amd64
+            lib_file: libbindings_tests.so
+            mex_ext: mexa64
+          - os: windows-latest
+            platform: win_amd64
+            lib_file: bindings_tests.dll
+            mex_ext: mexw64
+          - os: macos-latest
+            platform: osx_arm64
+            lib_file: libbindings_tests.dylib
+            mex_ext: mexmaca64
 
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     env:
       MODULE_DIR: bindings-tests
       BINDINGS_DIR: bindings-tests/target/image/static/bindings
+
+    # bash everywhere, so the same commands work on the Windows runner
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
@@ -36,64 +51,72 @@ jobs:
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # native-image needs the MSVC toolchain on PATH
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # Stage one. native-image runs through scripts/graal/compiler-<os>, which also emits
+      # the static library and the cmake fragments into target/image/static.
       - name: Build the shared library and the bindings
-        run: mvn -B verify -Pnative
+        run: mvn -B clean verify -Pnative
+
+      # Stage two. Links the static library into the final shared library. The MEX gateway
+      # is only built when MATLABROOT is set, and downloading the MEX SDK is out of scope
+      # here, so this always builds without it.
+      # Note: the release CI uses -G "Visual Studio 17 2022" -T v142 on Windows to stay
+      # compatible with MATLAB before R2022a. The default generator is fine for the suites.
+      - name: Link the release library with CMake
+        run: |
+          cmake -S $MODULE_DIR/target/image/static -B $MODULE_DIR/target/native-build
+          cmake --build $MODULE_DIR/target/native-build --config Release
 
       # The Python and MATLAB wrappers look for the library under
       # <bindings>/lib/<platform>/, so put a copy where they expect it.
       - name: Stage the shared library for the wrappers
-        shell: bash
         run: |
-          case "${{ matrix.os }}" in
-            windows-*) platform=win_amd64;   file=bindings_tests.dll ;;
-            macos-*)   platform=osx_arm64;   file=libbindings_tests.dylib ;;
-            *)         platform=linux_amd64; file=libbindings_tests.so ;;
-          esac
-          mkdir -p "$BINDINGS_DIR/lib/$platform"
-          cp "$MODULE_DIR/target/image/$file" "$BINDINGS_DIR/lib/$platform/$file"
+          RELEASE_LIB_DIR="$MODULE_DIR/target/native-build/release/bindings_tests/bindings_tests/lib/${{ matrix.platform }}"
+          mkdir -p "$BINDINGS_DIR/lib/${{ matrix.platform }}"
+          cp "$RELEASE_LIB_DIR/${{ matrix.lib_file }}" \
+             "$BINDINGS_DIR/lib/${{ matrix.platform }}/${{ matrix.lib_file }}"
 
-      # ---- C ----
+          # Only present when MATLABROOT was set for the cmake run above
+          MEX_FILE="bindings_tests_native.${{ matrix.mex_ext }}"
+          if [ -f "$RELEASE_LIB_DIR/$MEX_FILE" ]; then
+            cp "$RELEASE_LIB_DIR/$MEX_FILE" "$BINDINGS_DIR/+bindings_tests/private/$MEX_FILE"
+          else
+            echo "No MEX gateway was built. The MATLAB suite falls back to build_native.m."
+          fi
 
-      - name: Configure and build the C suite
+      # ---- C and C++ ----
+
+      - name: Run the C suite
         run: |
           cmake -S $MODULE_DIR/src/test/c -B $MODULE_DIR/target/ctest-c
           cmake --build $MODULE_DIR/target/ctest-c --config Release
-        shell: bash
+          ctest --test-dir $MODULE_DIR/target/ctest-c --build-config Release --output-on-failure
 
-      - name: Run the C suite
-        run: ctest --test-dir $MODULE_DIR/target/ctest-c --build-config Release --output-on-failure
-        shell: bash
-
-      # ---- C++ ----
-
-      - name: Configure and build the C++ suite
+      - name: Run the C++ suite
         run: |
           cmake -S $MODULE_DIR/src/test/cpp -B $MODULE_DIR/target/ctest-cpp
           cmake --build $MODULE_DIR/target/ctest-cpp --config Release
-        shell: bash
-
-      - name: Run the C++ suite
-        run: ctest --test-dir $MODULE_DIR/target/ctest-cpp --build-config Release --output-on-failure
-        shell: bash
+          ctest --test-dir $MODULE_DIR/target/ctest-cpp --build-config Release --output-on-failure
 
       # ---- Python ----
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install the Python test dependencies
-        # numpy is only needed for the array bindings, which convert sequences
-        # into contiguous buffers
-        run: python -m pip install --upgrade pip numpy
-
       - name: Run the Python suite
         working-directory: bindings-tests
-        run: python -m unittest discover -s src/test/python -v
+        run: |
+          python -m pip install --upgrade pip numpy
+          python -m unittest discover -s src/test/python -v
 
       # ---- MATLAB ----
-      # Guarded so that a missing or unavailable license does not fail the run.
+      # Not available on every runner, so a missing license does not fail the job.
+      # MATLAB has no arm64 Linux runner image, but macos-latest is supported.
 
       - name: Set up MATLAB
         id: setup-matlab
@@ -104,7 +127,6 @@ jobs:
 
       - name: Run the MATLAB suite
         if: steps.setup-matlab.outcome == 'success'
-        continue-on-error: true
         uses: matlab-actions/run-tests@v2
         with:
           source-folder: bindings-tests/src/test/matlab
@@ -113,3 +135,10 @@ jobs:
       - name: Report a skipped MATLAB run
         if: steps.setup-matlab.outcome != 'success'
         run: echo "MATLAB is not available on this runner, so the MATLAB suite was skipped."
+
+      - name: Upload the generated bindings on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.platform }}
+          path: bindings-tests/target/image/static

@@ -118,24 +118,27 @@ classdef BindingsTest < matlab.unittest.TestCase
         function testArrays(testCase)
             % The (pointer, length) parameter pattern for input and output buffers.
             %
-            % TODO: uncertain. None of the pointer parameters in NativeArrays are
-            % marked const, so the generator echoes every one of them back as an
-            % extra output argument. The signatures below follow that shape. If
-            % the parameters become const, or if the MEX dispatch stops echoing
-            % them, these calls collapse to a single output.
+            % Pointer parameters are caller-owned buffers that the native side
+            % writes in place, exactly as in C, so the wrapper returns only the C
+            % return value. An output buffer therefore has to be a named double
+            % variable: a temporary would be written and then discarded, and a
+            % class other than double is converted to a copy by the MEX layer.
             sum1 = bindings_tests.Arrays.sumFloat64([1.0 2.0 3.5], 3);
             testCase.verifyEqual(sum1, 6.5);
 
             sum2 = bindings_tests.Arrays.sumInt32([1 2 3], 3);
             testCase.verifyEqual(sum2, 6);
 
-            filled = bindings_tests.Arrays.fillFloat64(zeros(1, 4), 4, 2.5);
+            filled = zeros(1, 4);
+            bindings_tests.Arrays.fillFloat64(filled, 4, 2.5);
             testCase.verifyEqual(filled, [2.5 2.5 2.5 2.5]);
 
-            [~, target] = bindings_tests.Arrays.cumulativeSum([1 2 3 4], zeros(1, 4), 4);
+            target = zeros(1, 4);
+            bindings_tests.Arrays.cumulativeSum([1 2 3 4], target, 4);
             testCase.verifyEqual(target, [1 3 6 10]);
 
-            reversed = bindings_tests.Arrays.reverseFloat64([1 2 3 4], 4);
+            reversed = [1 2 3 4];
+            bindings_tests.Arrays.reverseFloat64(reversed, 4);
             testCase.verifyEqual(reversed, [4 3 2 1]);
         end
 

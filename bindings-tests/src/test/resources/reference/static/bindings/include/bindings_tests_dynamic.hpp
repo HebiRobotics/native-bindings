@@ -140,6 +140,7 @@ private:
   explicit Circle(internal::CirclePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::CirclePtr cPointer) noexcept;
   internal::CirclePtr ptr_{};
+  static internal::CirclePtr createPointer(double radius);
 };
 
 
@@ -158,6 +159,7 @@ private:
   explicit Square(internal::SquarePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::SquarePtr cPointer) noexcept;
   internal::SquarePtr ptr_{};
+  static internal::SquarePtr createPointer(double side);
 };
 
 
@@ -623,13 +625,16 @@ inline Shape::~Shape() noexcept {
 }
 
 // Circle
-inline Circle::Circle(double radius) {
+// The null check happens here because the base class gets initialized before the constructor body runs
+inline internal::CirclePtr Circle::createPointer(double radius) {
   static auto bindings_tests_Circle_create = DynamicLookup::instance().getFunc<internal::CirclePtr(*)(double)>("bindings_tests_Circle_create");
-  ptr_ = bindings_tests_Circle_create(radius);
-  if (!ptr_) {
+  auto ptr = bindings_tests_Circle_create(radius);
+  if (!ptr) {
     throw Exception("Could not create Circle");
   }
+  return ptr;
 }
+inline Circle::Circle(double radius) : Circle(createPointer(radius)) {}
 inline double Circle::getRadius() const noexcept {
   static auto bindings_tests_Circle_getRadius = DynamicLookup::instance().getFunc<double(*)(internal::CirclePtr)>("bindings_tests_Circle_getRadius");
   return bindings_tests_Circle_getRadius(ptr_);
@@ -658,13 +663,16 @@ inline Circle& Circle::operator=(Circle&& from) noexcept {
 };
 
 // Square
-inline Square::Square(double side) {
+// The null check happens here because the base class gets initialized before the constructor body runs
+inline internal::SquarePtr Square::createPointer(double side) {
   static auto bindings_tests_Square_create = DynamicLookup::instance().getFunc<internal::SquarePtr(*)(double)>("bindings_tests_Square_create");
-  ptr_ = bindings_tests_Square_create(side);
-  if (!ptr_) {
+  auto ptr = bindings_tests_Square_create(side);
+  if (!ptr) {
     throw Exception("Could not create Square");
   }
+  return ptr;
 }
+inline Square::Square(double side) : Square(createPointer(side)) {}
 inline double Square::getSide() const noexcept {
   static auto bindings_tests_Square_getSide = DynamicLookup::instance().getFunc<double(*)(internal::SquarePtr)>("bindings_tests_Square_getSide");
   return bindings_tests_Square_getSide(ptr_);

@@ -25,7 +25,7 @@ classdef (Sealed) Overloads
             %       name
             %       greeting
             if nargin < 2
-                greeting = "Hello";
+                greeting = 'Hello';
             end
             result = bindings_tests_native('bindings_tests_Overloads_greet', name, greeting);
         end

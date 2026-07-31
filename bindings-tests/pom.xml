@@ -19,6 +19,8 @@
     </description>
 
     <properties>
+        <main.basedir>${project.basedir}/..</main.basedir>
+
         <!-- Name and namespace of the generated library. Changing these invalidates every reference file. -->
         <lib.name>bindings_tests</lib.name>
         <lib.namespace>bindings.tests</lib.namespace>
@@ -86,6 +88,18 @@
                                     <groupId>us.hebi.graalvm</groupId>
                                     <artifactId>bindings-generator</artifactId>
                                     <version>${project.version}</version>
+                                </path>
+                                <!--
+                                    The processor path is an isolated classloader and does not
+                                    inherit provided-scope dependencies from the generator, so
+                                    the GraalVM API has to be listed again here. The generator
+                                    references ObjectHandles and friends as class literals while
+                                    emitting the entry points.
+                                -->
+                                <path>
+                                    <groupId>org.graalvm.nativeimage</groupId>
+                                    <artifactId>native-image-base</artifactId>
+                                    <version>${graalvm.version}</version>
                                 </path>
                             </annotationProcessorPaths>
                             <compilerArgs>
@@ -164,6 +178,13 @@
                             <useArgFile>true</useArgFile>
                             <buildArgs>
                                 <buildArg>-O1</buildArg>
+                                <!--
+                                    Wraps the platform C compiler so that the build also emits the
+                                    static library and the cmake fragments in <outputDir>/static that
+                                    the second stage links against. One '=' separated argument, as
+                                    native-image does not accept the path as a separate token.
+                                -->
+                                <buildArg>--native-compiler-path=${native.compiler}</buildArg>
                                 <buildArg>-H:TempDirectory=${project.build.directory}/native-tmp</buildArg>
                                 <!-- The debug flag must not be folded into the image heap at build time -->
                                 <buildArg>--initialize-at-run-time=us.hebi.graalvm.bindings.runtime.Debug</buildArg>

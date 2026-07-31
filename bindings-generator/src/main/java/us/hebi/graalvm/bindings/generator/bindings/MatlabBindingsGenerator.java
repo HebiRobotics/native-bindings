@@ -542,6 +542,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         content.set("INTERNAL_ARGS", joiner.join(params.internalInput));
         content.set("RETURN_TYPE", getFullyQualifiedClassName(method.getReturnType()));
 
+        // MATLAB requires an explicit superclass constructor call before 'this' can be assigned
+        content.set("SUPER_CTOR", GeneratorUtil.isConstructor(method) && apiClass.hasParent()
+                ? "this@%%PARENT_NAME%%(%%DISPATCH%%(%%CAST%%, ptr_));\n"
+                : "");
+
         var cErrorMethod = getLastErrorMethod(apiClass);
         if (cErrorMethod != null) {
             content.set("LAST_ERROR", " ': ' %%DISPATCH%%(" + getDispatchIdentifier(cErrorMethod) + ")");
@@ -571,6 +576,20 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         content.endControlFlow("end\n");
 
+    }
+
+    /**
+     * C string defaults arrive as a quoted literal, e.g. "Hello". MATLAB needs a single quoted
+     * char array, as the MEX gateway rejects the string objects that double quotes create.
+     */
+    static String convertCDefaultParamString(TypeDescription param) {
+        checkArgument(param.hasDefaultValue(), "Missing default value for c_default_param");
+        var value = param.getDefaultValue();
+        if (param.getDataType() == DataType.CHAR_POINTER && value.length() >= 2
+            && value.startsWith("\"") && value.endsWith("\"")) {
+            return quoted(value.substring(1, value.length() - 1).replace("'", "''"));
+        }
+        return value;
     }
 
     static String wrapOutputAssignment(List<String> list) {
@@ -619,7 +638,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             """);
                     if (GeneratorUtil.isConstructor(method)) {
                         externalOutput.add("this");
-                        postCallActions.append("this.%%REF_FIELD%% = ptr_;\n");
+                        postCallActions.append("%%SUPER_CTOR%%this.%%REF_FIELD%% = ptr_;\n");
                         if (needsVarargin) {
                             postCallActions.append("""
                                     if numel(varargin) > 0
@@ -728,7 +747,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                                 if nargin < %d
                                     %s = %s;
                                 end
-                                """.formatted(argsOffset + i, param.getParamName(), param.getDefaultValue()));
+                                """.formatted(argsOffset + i, param.getParamName(), convertCDefaultParamString(param)));
                     }
 
                 } else {
@@ -744,7 +763,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                                     %1$s = varargin{1};
                                     varargin(1) = [];
                                 end
-                                """.formatted(param.getParamName(), param.getDefaultValue()));
+                                """.formatted(param.getParamName(), convertCDefaultParamString(param)));
                     }
 
                 }
@@ -764,18 +783,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 }
             }
 
-            // The others can't be overwritten. C pointers are always returned by calllib as they could
-            // be modified internally. We can omit them with ~ when we know they won't be changed
+            // Pointer parameters are caller-owned buffers that the native side mutates in place,
+            // same as in C. The dispatch never echoes them back, so they are always ignored.
             for (TypeDescription parameter : method.getParameters()) {
-                if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
-                    internalOutput.add("~"); // never needed
-                } else if (TypeMap.isPointerType(parameter.getDataType())) {
-                    if (parameter.getIsConst()) {
-                        internalOutput.add("~"); // won't be changed
-                    } else {
-                        externalOutput.add(parameter.getParamName());
-                        internalOutput.add(parameter.getParamName());
-                    }
+                if (parameter.getDataType() == DataType.OBJECT_HANDLE
+                        || TypeMap.isPointerType(parameter.getDataType())) {
+                    internalOutput.add("~");
                 }
             }
 

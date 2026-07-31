@@ -336,8 +336,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // from child constructors
             checkArgument(!apiClass.hasChildren(), "Constructors are currently not supported parent classes");
             List<MethodDescription> props = getConstructionProperties(lib, constructor.get());
-            initMethod = getWrapperMethod(apiClass, constructor.get(), refField)
-                         + "%%SUPER_INIT%%";
+            // Note: the base initialization is part of the generated __init__ body (see getReturnTemplate)
+            initMethod = getWrapperMethod(apiClass, constructor.get(), refField);
         } else {
             // Not defining a constructor means that this class can't be instantiated by users
             // and that we only need to support an 'internal' constructor for generating wrappers
@@ -437,9 +437,11 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .map(string -> method.getIsStatic() ? string : "self." + refField + ", " + string)
                 .map(indent)
                 .orElseGet(() -> joiner.join(paramLists.internalInput));
-        var body = overload.tryGetBody().map(indent).orElse("");
+        // The statements that follow are appended directly, so both blocks have to end on a
+        // newline. The conversions built above already do, an annotation value never does.
+        var body = overload.tryGetBody().map(appendNewline).map(indent).orElse("");
         var conversions = indent.apply(paramLists.inputConversions);
-        var postBody = overload.tryGetPostBody().map(indent).orElse("");
+        var postBody = overload.tryGetPostBody().map(appendNewline).map(indent).orElse("");
         var numpy = isUsingNumpy(body, conversions, postBody) ? indent.apply("np = _require_numpy()\n") : "";
 
         // C call and type conversion
@@ -493,8 +495,14 @@ public class PythonBindingsGenerator extends BindingGenerator {
                             raise RuntimeError(f'Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%%%REASON%%')
                         """;
                 if (isConstructor) {
-                    template += "self.%%REF_FIELD%% = ptr_\n"
-                                + getPropertySetBlock(props, "self", "");
+                    template += "self.%%REF_FIELD%% = ptr_\n";
+                    if (apiClass.hasParent()) {
+                        // The inherited part has to be set up before any properties get applied because
+                        // inherited setters access the parent pointer. CAST is resolved by the same
+                        // render that handles the pointer __init__, so the name is not built here.
+                        template += "super().__init__(%%LIB_FIELD%%.%%CAST%%(ptr_))\n";
+                    }
+                    template += getPropertySetBlock(props, "self", "");
                 } else if (!props.isEmpty()) {
                     template += "obj_ = %%RETURN_TYPE%%(ptr_)\n"
                                 + getPropertySetBlock(props, "obj_", "")
@@ -609,6 +617,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
     static String getReceiverName(MethodDescription method) {
         return method.getIsConstructor() || !method.getIsStatic() ? "self" : "cls";
     }
+
+    /**
+     * Annotation values are written without a trailing newline, but the generated code
+     * appends the next statement directly after them.
+     */
+    private static final Function<String, String> appendNewline =
+            block -> block.endsWith("\n") ? block : block + "\n";
 
     /**
      * Builds the external (Python signature) and internal (C call) parameter lists,

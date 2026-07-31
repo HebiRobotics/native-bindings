@@ -27,6 +27,7 @@ classdef (Sealed) Circle < bindings_tests.Shape
             if isempty(ptr_)
                 error(['Failed to create bindings_tests.Circle in Circle.Circle' ': ' bindings_tests_native('bindings_tests_Errors_getLastError')]);
             end
+            this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Circle_to_Shape', ptr_));
             this.ref_Circle = ptr_;
             if numel(varargin) > 0
                 this.set(varargin{:});

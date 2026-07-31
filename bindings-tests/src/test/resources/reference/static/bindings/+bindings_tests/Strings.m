@@ -41,14 +41,14 @@ classdef (Sealed) Strings
             result = bindings_tests_native('bindings_tests_Strings_nullString');
         end
 
-        function [result, values] = join(values, count, separator)
+        function result = join(values, count, separator)
             % Joins a char* array with a separator. Checks char** parameter handling.
             %
             %   Inputs:
             %       values
             %       count - number of entries in values
             %       separator
-            [result, values] = bindings_tests_native('bindings_tests_Strings_join', values, count, separator);
+            result = bindings_tests_native('bindings_tests_Strings_join', values, count, separator);
         end
 
         function result = repeat(value, times)

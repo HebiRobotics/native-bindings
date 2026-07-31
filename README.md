@@ -83,6 +83,13 @@ Add the runtime to your dependencies and the generator to your processor path:
                 <artifactId>bindings-generator</artifactId>
                 <version>0.1.0</version>
             </path>
+            <!-- Required. The processor path is an isolated classloader and does not
+                 inherit provided-scope dependencies from the generator. -->
+            <path>
+                <groupId>org.graalvm.nativeimage</groupId>
+                <artifactId>native-image-base</artifactId>
+                <version>24.0.2</version>
+            </path>
         </annotationProcessorPaths>
         <compilerArgs>
             <arg>-Abindings.outputDir=${project.build.directory}/image/static</arg>
@@ -148,12 +155,90 @@ The diff is the review. That is the point of the reference files: a refactor tha
 supposed to be behaviour preserving should produce an empty diff, and one that is not
 shows you exactly what moved.
 
-```bash
-mvn verify -Pnative
+### Running the language suites
+
+The second tier builds the test API into a shared library with GraalVM and runs the C,
+C++, Python and MATLAB suites against it. There is a script per platform so you do not
+have to remember the staging step.
+
+Windows:
+
+```
+scripts\build-native.bat
+scripts\run-tests.bat
 ```
 
-Additionally builds the test API into a shared library with GraalVM and runs the C, C++,
-Python and MATLAB suites against it. Needs a GraalVM JDK and a working native toolchain.
+Linux and macOS:
+
+```bash
+./scripts/build-native.sh
+./scripts/run-tests.sh
+```
+
+Pass suite names to run a subset, for example `scripts\run-tests.bat c cpp` or
+`./scripts/run-tests.sh python`. Valid names are `c`, `cpp`, `python` and `matlab`.
+A suite whose tool is not installed is skipped rather than failed, so MATLAB being
+absent does not break the run.
+
+You will need:
+
+| Tool | Notes |
+|---|---|
+| GraalVM JDK 21 | On `JAVA_HOME`. `mvn -Pnative` calls `native-image` from it |
+| A C toolchain | MSVC on Windows, gcc or clang elsewhere. Also used by the C and C++ suites |
+| CMake 3.17+ | Links the release library and builds the C and C++ suites through CTest |
+| Python 3.8+ | `numpy` is only needed for the array bindings |
+| MATLAB R2018b+ | Optional. Set `MATLABROOT`, or put `matlab` on `PATH` for the scripts to derive it |
+
+On Windows, `native-image` and CMake both need `cl.exe` on `PATH`. Run the scripts from
+a shell that already has the MSVC environment loaded, such as the `x64 Native Tools
+Command Prompt for VS`. The scripts check for it and stop early with a clear message
+rather than failing halfway through the native build.
+
+### What the scripts do
+
+`build-native.bat` / `build-native.sh` run the native build in two stages.
+
+Stage one is `mvn clean verify -Pnative`. It points native-image at
+`scripts/graal/compiler-<os>`, a wrapper around the platform C compiler that builds the
+usual shared library and additionally writes a static library plus `libs.cmake` and
+`opts.cmake` into `bindings-tests/target/image/static/`. Extra arguments are passed
+through to Maven, so `./scripts/build-native.sh -o` builds offline.
+
+Stage two is CMake over that directory, using the `CMakeLists.txt` the processor
+generated next to the static library:
+
+```bash
+cmake -S bindings-tests/target/image/static -B bindings-tests/target/native-build
+cmake --build bindings-tests/target/native-build --config Release
+```
+
+This links the static library into the final shared library and, when `MATLABROOT` points
+at a MATLAB installation or a MEX SDK, also builds the MATLAB MEX gateway. The scripts use
+`MATLABROOT` if it is already set and otherwise derive it from `matlab` on `PATH`. If
+MATLAB cannot be found they say so and carry on without the gateway, because only the
+MATLAB suite needs it.
+
+The scripts then copy the built library into
+`bindings-tests/target/image/static/bindings/lib/<platform>/` and, if it was built, the
+MEX gateway into `bindings-tests/target/image/static/bindings/+bindings_tests/private/`.
+Those copies matter: the generated Python and MATLAB loaders look there first, and without
+them they fall back to downloading a release binary.
+
+`run-tests.bat` / `run-tests.sh` configure and run each suite in place and report which
+ones failed. The equivalent manual commands, from the `bindings-tests` module root:
+
+```bash
+cmake -S src/test/c -B target/ctest-c && cmake --build target/ctest-c --config Release
+ctest --test-dir target/ctest-c --build-config Release --output-on-failure
+
+python -m unittest discover -s src/test/python -v
+
+matlab -batch "results = runtests('src/test/matlab'); assertSuccess(results);"
+```
+
+Every suite asserts the same value table, so a failure in one language and not the
+others points at that language's generator rather than at the API.
 
 ### What the test API covers
 

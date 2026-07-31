@@ -21,7 +21,24 @@ enable_testing()
 # bindings-tests module root, three levels up from src/test/cpp
 get_filename_component(MODULE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 
-set(BINDINGS_IMAGE_DIR "${MODULE_ROOT}/target/image"
+# Same platform naming the release CMakeLists uses
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(_platform_prefix "linux")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(_platform_prefix "osx")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(_platform_prefix "win")
+endif()
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
+  set(_platform_suffix "amd64")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  set(_platform_suffix "arm64")
+endif()
+set(BINDINGS_PLATFORM "${_platform_prefix}_${_platform_suffix}")
+
+# Stage two output
+set(BINDINGS_IMAGE_DIR
+    "${MODULE_ROOT}/target/native-build/release/bindings_tests/bindings_tests/lib/${BINDINGS_PLATFORM}"
     CACHE PATH "Directory holding the built shared library")
 set(BINDINGS_INCLUDE_DIR "${MODULE_ROOT}/target/image/static/bindings/include"
     CACHE PATH "Directory holding the generated C++ header")
@@ -39,7 +56,8 @@ find_library(BINDINGS_TESTS_LIBRARY
 if(NOT BINDINGS_TESTS_LIBRARY)
   message(FATAL_ERROR
       "Shared library not found in ${BINDINGS_IMAGE_DIR}. "
-      "Run `mvn verify -Pnative` first.")
+      "Run scripts/build-native.bat or scripts/build-native.sh first, which runs "
+      "both the Maven build and the release CMake build.")
 endif()
 
 add_executable(test_bindings_cpp test_bindings.cpp)
