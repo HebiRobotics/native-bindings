@@ -48,6 +48,31 @@ public final class TestOverloads$CEntries {
     }
 
     @CEntryPoint(
+            name = "__bindings_tests_Overloads_gain"
+    )
+    public static double bindings_tests_Overloads_gain(IsolateThread _isolate, boolean invert,
+            double scale) {
+        try {
+            return TestOverloads.gain(invert, scale);
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Overloads_echoIndex"
+    )
+    public static int bindings_tests_Overloads_echoIndex(IsolateThread _isolate, int index) {
+        try {
+            return TestOverloads.echoIndex(index);
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
             name = "__bindings_tests_Overloads_answer"
     )
     public static int bindings_tests_Overloads_answer(IsolateThread _isolate, int multiplier) {

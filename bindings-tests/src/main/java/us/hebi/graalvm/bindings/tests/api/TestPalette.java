@@ -26,6 +26,13 @@ public class TestPalette {
         Blue
     }
 
+    @CLibEnum("Marker")
+    @CLibComment("A second enum in the same class. Each one gets its own generated type.")
+    public enum Marker {
+        Dot,
+        Cross
+    }
+
     @CLibMethod(flags = Noexcept)
     @CLibComment("Cycles Red to Green to Blue and back to Red.")
     public static Color next(Color color) {
@@ -44,6 +51,12 @@ public class TestPalette {
     @CLibMethod(flags = Noexcept)
     public static int ordinalOf(Color color) {
         return color.ordinal();
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Takes both enums at once, so the two generated types have to coexist in one signature.")
+    public static String describe(Color color, Marker marker) {
+        return color.name() + " " + marker.name();
     }
 
     @CLibMethod(flags = Noexcept)

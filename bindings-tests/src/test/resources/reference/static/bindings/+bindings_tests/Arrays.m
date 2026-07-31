@@ -4,10 +4,21 @@ classdef (Sealed) Arrays
     methods(Static)
 
         function result = sumFloat64(values, count)
+            % A const input buffer. Besides the const in the C header, this is what makes the
+            %   C++ generator add a std::vector<double> overload next to the raw pointer one.
+            %
+            %   Inputs:
+            %       values
+            %       count
             result = bindings_tests_native('bindings_tests_Arrays_sumFloat64', values, count);
         end
 
         function result = sumInt32(values, count)
+            % Const on a non-double pointer, which gets the const but no vector overload.
+            %
+            %   Inputs:
+            %       values
+            %       count
             result = bindings_tests_native('bindings_tests_Arrays_sumInt32', values, count);
         end
 
@@ -23,7 +34,9 @@ classdef (Sealed) Arrays
 
         function cumulativeSum(source, target, count)
             % Writes the running total of source into target. Both buffers must hold at
-            %   least count elements. Passing the same buffer for both is supported.
+            %   least count elements. Passing the same buffer for both is supported. One const
+            %   and one mutable pointer in the same signature, so only the source picks up the
+            %   vector overload.
             %
             %   Inputs:
             %       source

@@ -19,6 +19,15 @@ classdef (Sealed) Palette
             result = bindings_tests_native('bindings_tests_Palette_ordinalOf', bindings_tests.Color.toNativeValue(color));
         end
 
+        function result = describe(color, marker)
+            % Takes both enums at once, so the two generated types have to coexist in one signature.
+            %
+            %   Inputs:
+            %       color
+            %       marker
+            result = bindings_tests_native('bindings_tests_Palette_describe', bindings_tests.Color.toNativeValue(color), bindings_tests.Marker.toNativeValue(marker));
+        end
+
         function result = fromOrdinal(ordinal)
             % Returns the enum with the given ordinal, or Red if it is out of range.
             %

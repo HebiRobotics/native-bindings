@@ -42,7 +42,7 @@ classdef (Sealed) Strings
         end
 
         function result = join(values, count, separator)
-            % Joins a char* array with a separator. Checks char** parameter handling.
+            % Joins a char* array with a separator. Checks const char** parameter handling.
             %
             %   Inputs:
             %       values

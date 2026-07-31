@@ -209,6 +209,10 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Palette.nameOf(bindings_tests.Color.Green), 'Green');
             testCase.verifyEqual(bindings_tests.Palette.ordinalOf(bindings_tests.Color.Blue), 2);
 
+            % Two enums declared in the same class, used in the same signature.
+            testCase.verifyEqual(bindings_tests.Palette.describe( ...
+                bindings_tests.Color.Red, bindings_tests.Marker.Cross), 'Red Cross');
+
             testCase.verifyEqual(bindings_tests.Palette.fromOrdinal(1), green);
             testCase.verifyEqual(bindings_tests.Palette.fromOrdinal(99), red);
         end
@@ -269,6 +273,17 @@ classdef BindingsTest < matlab.unittest.TestCase
             % single form that sums whatever it is given. C takes (sum, factor).
             testCase.verifyEqual(bindings_tests.Overloads.total([1 2 3], 2), 12);
             testCase.verifyEqual(bindings_tests.Overloads.total(6, 2), 12);
+
+            % Defaults are emitted as nargin guards, including the boolean
+            % and the scientific notation double.
+            testCase.verifyEqual(bindings_tests.Overloads.gain(), 1e-3);
+            testCase.verifyEqual(bindings_tests.Overloads.gain(true), -1e-3);
+            testCase.verifyEqual(bindings_tests.Overloads.gain(false, 2.0), 2.0);
+
+            % The matlabOverload subtracts one in the postBody and adds it back
+            % in the postCall, so MATLAB sees its own one based indexing while
+            % the C ABI stays zero based.
+            testCase.verifyEqual(bindings_tests.Overloads.echoIndex(3), 3);
 
             % 42 * multiplier everywhere except C++, where the hand-written
             % cppBody returns 21 * multiplier

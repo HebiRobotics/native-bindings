@@ -103,10 +103,7 @@ static void test_counter(void) {
 static void test_strings(void) {
     /* This file is UTF-8. The literals below must survive the round trip byte for byte. */
     const char* utf8Input = "na\xc3\xaf" "ve caf\xc3\xa9"; /* naive cafe with diacritics */
-    char* joinValues[3];
-    char a[] = "a";
-    char b[] = "b";
-    char c[] = "c";
+    const char* joinValues[3];
     const char* result;
 
     result = bindings_tests_Strings_echo("hello");
@@ -131,9 +128,9 @@ static void test_strings(void) {
 
     assert(bindings_tests_Strings_nullString() == NULL);
 
-    joinValues[0] = a;
-    joinValues[1] = b;
-    joinValues[2] = c;
+    joinValues[0] = "a";
+    joinValues[1] = "b";
+    joinValues[2] = "c";
     result = bindings_tests_Strings_join(joinValues, (size_t) 3, "-");
     assert(strcmp(result, "a-b-c") == 0);
 
@@ -304,6 +301,10 @@ static void test_palette(void) {
     assert(strcmp(bindings_tests_Palette_nameOf(bindings_tests_Color_Green), "Green") == 0);
     assert(bindings_tests_Palette_ordinalOf(bindings_tests_Color_Blue) == 2);
 
+    /* Two enums declared in the same class, used in the same signature. */
+    assert(strcmp(bindings_tests_Palette_describe(bindings_tests_Color_Red,
+                                                  bindings_tests_Marker_Cross), "Red Cross") == 0);
+
     assert(bindings_tests_Palette_fromOrdinal(1) == bindings_tests_Color_Green);
     assert(bindings_tests_Palette_fromOrdinal(99) == bindings_tests_Color_Red);
 
@@ -379,6 +380,14 @@ static void test_overloads(void) {
 
     /* C takes the pre-summed total, the wrappers get a collection overload. */
     assert(bindings_tests_Overloads_total(6, 2) == 12);
+
+    /* A boolean default and a scientific notation double default. C has neither, so
+       it is the only language that has to pass both explicitly. */
+    assert(bindings_tests_Overloads_gain(0, 2.0) == 2.0);
+    assert(bindings_tests_Overloads_gain(1, 2.0) == -2.0);
+
+    /* C is the zero based baseline that the MATLAB postBody and postCall convert around. */
+    assert(bindings_tests_Overloads_echoIndex(3) == 3);
 
     assert(bindings_tests_Overloads_answer(2) == 84);
 

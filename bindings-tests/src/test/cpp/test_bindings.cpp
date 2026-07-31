@@ -111,10 +111,7 @@ static void testStrings() {
   // suite is what actually checks that the pointer is null.
   CHECK(bt::strings::nullString().empty());
 
-  char a[] = "a";
-  char b[] = "b";
-  char c[] = "c";
-  char* values[] = {a, b, c};
+  const char* values[] = {"a", "b", "c"};
   CHECK(bt::strings::join(values, 3, "-") == "a-b-c");
 
   // 200 characters, which forces the 128 byte scratch buffer to grow.
@@ -128,6 +125,9 @@ static void testStrings() {
 static void testArrays() {
   double values[] = {1.0, 2.0, 3.5};
   CHECK(bt::arrays::sumFloat64(values, 3) == 6.5);
+
+  // The const on the parameter gets a std::vector overload next to the pointer one.
+  CHECK(bt::arrays::sumFloat64(std::vector<double>{1.0, 2.0, 3.5}, 3) == 6.5);
 
   int ints[] = {1, 2, 3};
   CHECK(bt::arrays::sumInt32(ints, 3) == 6);
@@ -145,6 +145,11 @@ static void testArrays() {
   CHECK(target[1] == 3.0);
   CHECK(target[2] == 6.0);
   CHECK(target[3] == 10.0);
+
+  // Only the const source picks up the vector overload, the target stays a pointer.
+  double target2[4] = {0.0, 0.0, 0.0, 0.0};
+  bt::arrays::cumulativeSum(std::vector<double>{1.0, 2.0, 3.0, 4.0}, target2, 4);
+  CHECK(target2[3] == 10.0);
 
   double reversed[] = {1.0, 2.0, 3.0, 4.0};
   bt::arrays::reverseFloat64(reversed, 4);
@@ -239,6 +244,9 @@ static void testPalette() {
   CHECK(bt::palette::nameOf(bt::Color::Green) == "Green");
   CHECK(bt::palette::ordinalOf(bt::Color::Blue) == 2);
 
+  // Two enums declared in the same class, used in the same signature.
+  CHECK(bt::palette::describe(bt::Color::Red, bt::Marker::Cross) == "Red Cross");
+
   CHECK(bt::palette::fromOrdinal(1) == bt::Color::Green);
   CHECK(bt::palette::fromOrdinal(99) == bt::Color::Red);
 }
@@ -308,6 +316,14 @@ static void testOverloads() {
   // The C++ overload takes a vector and sums it in the generated body. The whole
   // prologue lives in 'body' rather than 'postBody', which the generator does not emit.
   CHECK(bt::overloads::total(std::vector<int>{1, 2, 3}, 2) == 12);
+
+  // The defaults are rendered as 'bool invert = false' and 'double scale = 1e-3'.
+  CHECK(bt::overloads::gain() == 1e-3);
+  CHECK(bt::overloads::gain(true) == -1e-3);
+  CHECK(bt::overloads::gain(false, 2.0) == 2.0);
+
+  // C++ gets neither postBody nor postCall, so it sees the raw zero based index.
+  CHECK(bt::overloads::echoIndex(3) == 3);
 
   // C++ is the one language where the result legitimately differs: the
   // hand-written cppBody returns 21 * multiplier and never calls the library,

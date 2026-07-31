@@ -46,6 +46,19 @@ public final class TestPalette$CEntries {
     }
 
     @CEntryPoint(
+            name = "__bindings_tests_Palette_describe"
+    )
+    public static CCharPointer bindings_tests_Palette_describe(IsolateThread _isolate, int color,
+            int marker) {
+        try {
+            return CTypes.toTempCharPointer(TestPalette.describe(Color$$CEnum.toJava(color), Marker$$CEnum.toJava(marker)));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
             name = "__bindings_tests_Palette_fromOrdinal"
     )
     public static int bindings_tests_Palette_fromOrdinal(IsolateThread _isolate, int ordinal) {

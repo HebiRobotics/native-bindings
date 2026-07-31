@@ -1,5 +1,6 @@
 package us.hebi.graalvm.bindings.tests.api;
 
+import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
@@ -24,7 +25,11 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 public class TestArrays {
 
     @CLibMethod(flags = Noexcept)
-    public static double sumFloat64(CDoublePointer values, @CSizeType int count) {
+    @CLibComment("""
+            A const input buffer. Besides the const in the C header, this is what makes the
+            C++ generator add a std::vector<double> overload next to the raw pointer one.
+            """)
+    public static double sumFloat64(@CConst CDoublePointer values, @CSizeType int count) {
         double sum = 0;
         for (int i = 0; i < count; i++) {
             sum += values.read(i);
@@ -33,7 +38,8 @@ public class TestArrays {
     }
 
     @CLibMethod(flags = Noexcept)
-    public static int sumInt32(CIntPointer values, @CSizeType int count) {
+    @CLibComment("Const on a non-double pointer, which gets the const but no vector overload.")
+    public static int sumInt32(@CConst CIntPointer values, @CSizeType int count) {
         int sum = 0;
         for (int i = 0; i < count; i++) {
             sum += values.read(i);
@@ -52,9 +58,11 @@ public class TestArrays {
     @CLibMethod(flags = Noexcept)
     @CLibComment("""
             Writes the running total of source into target. Both buffers must hold at
-            least count elements. Passing the same buffer for both is supported.
+            least count elements. Passing the same buffer for both is supported. One const
+            and one mutable pointer in the same signature, so only the source picks up the
+            vector overload.
             """)
-    public static void cumulativeSum(CDoublePointer source, CDoublePointer target, @CSizeType int count) {
+    public static void cumulativeSum(@CConst CDoublePointer source, CDoublePointer target, @CSizeType int count) {
         double sum = 0;
         for (int i = 0; i < count; i++) {
             sum += source.read(i);

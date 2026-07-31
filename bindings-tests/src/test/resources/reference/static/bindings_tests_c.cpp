@@ -154,20 +154,20 @@ bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr 
 }
 
 // ==== Arrays ====
-double __bindings_tests_Arrays_sumFloat64(graal_isolatethread_t* isolate, double* values, long long count);
-double bindings_tests_Arrays_sumFloat64(double* values, size_t count) {
+double __bindings_tests_Arrays_sumFloat64(graal_isolatethread_t* isolate, const double* values, long long count);
+double bindings_tests_Arrays_sumFloat64(const double* values, size_t count) {
     return __bindings_tests_Arrays_sumFloat64(isolate::global(), values, static_cast<long long>(count));
 }
-int __bindings_tests_Arrays_sumInt32(graal_isolatethread_t* isolate, int* values, long long count);
-int bindings_tests_Arrays_sumInt32(int* values, size_t count) {
+int __bindings_tests_Arrays_sumInt32(graal_isolatethread_t* isolate, const int* values, long long count);
+int bindings_tests_Arrays_sumInt32(const int* values, size_t count) {
     return __bindings_tests_Arrays_sumInt32(isolate::global(), values, static_cast<long long>(count));
 }
 void __bindings_tests_Arrays_fillFloat64(graal_isolatethread_t* isolate, double* target, long long count, double value);
 void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value) {
     __bindings_tests_Arrays_fillFloat64(isolate::global(), target, static_cast<long long>(count), value);
 }
-void __bindings_tests_Arrays_cumulativeSum(graal_isolatethread_t* isolate, double* source, double* target, long long count);
-void bindings_tests_Arrays_cumulativeSum(double* source, double* target, size_t count) {
+void __bindings_tests_Arrays_cumulativeSum(graal_isolatethread_t* isolate, const double* source, double* target, long long count);
+void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count) {
     __bindings_tests_Arrays_cumulativeSum(isolate::global(), source, target, static_cast<long long>(count));
 }
 void __bindings_tests_Arrays_reverseFloat64(graal_isolatethread_t* isolate, double* values, long long count);
@@ -320,6 +320,14 @@ int __bindings_tests_Overloads_total(graal_isolatethread_t* isolate, int sum, in
 int bindings_tests_Overloads_total(int sum, int factor) {
     return __bindings_tests_Overloads_total(isolate::global(), sum, factor);
 }
+double __bindings_tests_Overloads_gain(graal_isolatethread_t* isolate, int invert, double scale);
+double bindings_tests_Overloads_gain(int invert, double scale) {
+    return __bindings_tests_Overloads_gain(isolate::global(), invert, scale);
+}
+int __bindings_tests_Overloads_echoIndex(graal_isolatethread_t* isolate, int index);
+int bindings_tests_Overloads_echoIndex(int index) {
+    return __bindings_tests_Overloads_echoIndex(isolate::global(), index);
+}
 int __bindings_tests_Overloads_answer(graal_isolatethread_t* isolate, int multiplier);
 int bindings_tests_Overloads_answer(int multiplier) {
     return __bindings_tests_Overloads_answer(isolate::global(), multiplier);
@@ -341,6 +349,10 @@ const char* bindings_tests_Palette_nameOf(bindings_tests_Color color) {
 int __bindings_tests_Palette_ordinalOf(graal_isolatethread_t* isolate, bindings_tests_Color color);
 int bindings_tests_Palette_ordinalOf(bindings_tests_Color color) {
     return __bindings_tests_Palette_ordinalOf(isolate::global(), color);
+}
+const char* __bindings_tests_Palette_describe(graal_isolatethread_t* isolate, bindings_tests_Color color, bindings_tests_Marker marker);
+const char* bindings_tests_Palette_describe(bindings_tests_Color color, bindings_tests_Marker marker) {
+    return __bindings_tests_Palette_describe(isolate::global(), color, marker);
 }
 bindings_tests_Color __bindings_tests_Palette_fromOrdinal(graal_isolatethread_t* isolate, int ordinal);
 bindings_tests_Color bindings_tests_Palette_fromOrdinal(int ordinal) {
@@ -372,8 +384,8 @@ const char* __bindings_tests_Strings_nullString(graal_isolatethread_t* isolate);
 const char* bindings_tests_Strings_nullString() {
     return __bindings_tests_Strings_nullString(isolate::global());
 }
-const char* __bindings_tests_Strings_join(graal_isolatethread_t* isolate, char** values, long long count, const char* separator);
-const char* bindings_tests_Strings_join(char** values, size_t count, const char* separator) {
+const char* __bindings_tests_Strings_join(graal_isolatethread_t* isolate, const char** values, long long count, const char* separator);
+const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator) {
     return __bindings_tests_Strings_join(isolate::global(), values, static_cast<long long>(count), separator);
 }
 const char* __bindings_tests_Strings_repeat(graal_isolatethread_t* isolate, const char* value, long long times);

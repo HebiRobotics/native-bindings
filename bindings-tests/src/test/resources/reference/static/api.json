@@ -410,7 +410,7 @@
         "dataType": "FLOAT64"
       },
       "parameters": [{
-        "isConst": false,
+        "isConst": true,
         "paramName": "values",
         "lowerUnderscoreParamName": "values",
         "dataType": "FLOAT64_POINTER"
@@ -421,6 +421,7 @@
         "dataType": "SIZE_T"
       }],
       "isConstructor": false,
+      "documentation": "A const input buffer. Besides the const in the C header, this is what makes the\nC++ generator add a std::vector<double> overload next to the raw pointer one.\n",
       "flags": ["Noexcept"]
     }, {
       "name": "sumInt32",
@@ -432,7 +433,7 @@
         "dataType": "INT32"
       },
       "parameters": [{
-        "isConst": false,
+        "isConst": true,
         "paramName": "values",
         "lowerUnderscoreParamName": "values",
         "dataType": "INT32_POINTER"
@@ -443,6 +444,7 @@
         "dataType": "SIZE_T"
       }],
       "isConstructor": false,
+      "documentation": "Const on a non-double pointer, which gets the const but no vector overload.",
       "flags": ["Noexcept"]
     }, {
       "name": "fillFloat64",
@@ -482,7 +484,7 @@
         "dataType": "VOID"
       },
       "parameters": [{
-        "isConst": false,
+        "isConst": true,
         "paramName": "source",
         "lowerUnderscoreParamName": "source",
         "dataType": "FLOAT64_POINTER"
@@ -498,7 +500,7 @@
         "dataType": "SIZE_T"
       }],
       "isConstructor": false,
-      "documentation": "Writes the running total of source into target. Both buffers must hold at\nleast count elements. Passing the same buffer for both is supported.\n",
+      "documentation": "Writes the running total of source into target. Both buffers must hold at\nleast count elements. Passing the same buffer for both is supported. One const\nand one mutable pointer in the same signature, so only the source picks up the\nvector overload.\n",
       "flags": ["Noexcept"]
     }, {
       "name": "reverseFloat64",
@@ -1217,6 +1219,56 @@
       "documentation": "Takes a pre-summed total. Each language gets a wrapper that sums a collection for you.",
       "flags": ["Noexcept"]
     }, {
+      "name": "gain",
+      "lowerUnderscoreName": "gain",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_gain",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "invert",
+        "lowerUnderscoreParamName": "invert",
+        "defaultValue": "false",
+        "dataType": "BOOL"
+      }, {
+        "isConst": false,
+        "paramName": "scale",
+        "lowerUnderscoreParamName": "scale",
+        "defaultValue": "1e-3",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": false,
+      "documentation": "A boolean default and a double default in scientific notation. Each wrapper has\nto render both in its own syntax, which is where they tend to go wrong.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "echoIndex",
+      "lowerUnderscoreName": "echo_index",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_echoIndex",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "pythonOverload": {
+        "postBody": "index = max(index, 0)"
+      },
+      "matlabOverload": {
+        "postBody": "index = index - 1;",
+        "postCall": "result = result + 1;"
+      },
+      "documentation": "Returns the index unchanged. MATLAB converts to zero based indexing on the way\nin and back to one based on the way out, so it sees the value it passed in.\nPython clamps negatives instead, which matches C for every valid index.\n",
+      "flags": ["Noexcept"]
+    }, {
       "name": "answer",
       "lowerUnderscoreName": "answer",
       "isStatic": true,
@@ -1318,6 +1370,33 @@
         "dataType": "ENUM"
       }],
       "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "describe",
+      "lowerUnderscoreName": "describe",
+      "isStatic": true,
+      "cName": "bindings_tests_Palette_describe",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "color",
+        "lowerUnderscoreParamName": "color",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "dataType": "ENUM"
+      }, {
+        "isConst": false,
+        "paramName": "marker",
+        "lowerUnderscoreParamName": "marker",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Marker",
+        "dataType": "ENUM"
+      }],
+      "isConstructor": false,
+      "documentation": "Takes both enums at once, so the two generated types have to coexist in one signature.",
       "flags": ["Noexcept"]
     }, {
       "name": "fromOrdinal",
@@ -1461,7 +1540,7 @@
         "dataType": "CHAR_POINTER"
       },
       "parameters": [{
-        "isConst": false,
+        "isConst": true,
         "paramName": "values",
         "lowerUnderscoreParamName": "values",
         "dataType": "CHAR_POINTER_POINTER"
@@ -1478,7 +1557,7 @@
         "dataType": "CHAR_POINTER"
       }],
       "isConstructor": false,
-      "documentation": "Joins a char* array with a separator. Checks char** parameter handling.",
+      "documentation": "Joins a char* array with a separator. Checks const char** parameter handling.",
       "flags": ["Noexcept"]
     }, {
       "name": "repeat",
@@ -1521,6 +1600,19 @@
       "name": "Blue",
       "cName": "bindings_tests_Color_Blue",
       "cValue": 2
+    }]
+  }, {
+    "name": "Marker",
+    "cPrefix": "bindings_tests",
+    "cName": "bindings_tests_Marker",
+    "values": [{
+      "name": "Dot",
+      "cName": "bindings_tests_Marker_Dot",
+      "cValue": 0
+    }, {
+      "name": "Cross",
+      "cName": "bindings_tests_Marker_Cross",
+      "cValue": 1
     }]
   }],
   "enableGraphics": false,

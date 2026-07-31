@@ -52,6 +52,16 @@ static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bin
 _Static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bindings_tests_Color enum");
 #endif
 
+typedef enum bindings_tests_Marker {
+  bindings_tests_Marker_Dot = 0,
+  bindings_tests_Marker_Cross = 1
+} bindings_tests_Marker;
+#if defined(_MSC_VER) || defined(__cplusplus)
+static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for bindings_tests_Marker enum");
+#else
+_Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for bindings_tests_Marker enum");
+#endif
+
 
 // ==== Counter ====
 DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(int start);
@@ -86,10 +96,10 @@ DLL_PUBLIC int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
 DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr ptr);
 
 // ==== Arrays ====
-DLL_PUBLIC double bindings_tests_Arrays_sumFloat64(double* values, size_t count);
-DLL_PUBLIC int bindings_tests_Arrays_sumInt32(int* values, size_t count);
+DLL_PUBLIC double bindings_tests_Arrays_sumFloat64(const double* values, size_t count);
+DLL_PUBLIC int bindings_tests_Arrays_sumInt32(const int* values, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
-DLL_PUBLIC void bindings_tests_Arrays_cumulativeSum(double* source, double* target, size_t count);
+DLL_PUBLIC void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
 DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y);
 DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
@@ -134,6 +144,8 @@ DLL_PUBLIC size_t bindings_tests_Math_maxSize();
 DLL_PUBLIC int bindings_tests_Overloads_scale(int value, int factor);
 DLL_PUBLIC const char* bindings_tests_Overloads_greet(const char* name, const char* greeting);
 DLL_PUBLIC int bindings_tests_Overloads_total(int sum, int factor);
+DLL_PUBLIC double bindings_tests_Overloads_gain(int invert, double scale);
+DLL_PUBLIC int bindings_tests_Overloads_echoIndex(int index);
 DLL_PUBLIC int bindings_tests_Overloads_answer(int multiplier);
 DLL_PUBLIC int bindings_tests_Overloads_renamed();
 
@@ -141,6 +153,7 @@ DLL_PUBLIC int bindings_tests_Overloads_renamed();
 DLL_PUBLIC bindings_tests_Color bindings_tests_Palette_next(bindings_tests_Color color);
 DLL_PUBLIC const char* bindings_tests_Palette_nameOf(bindings_tests_Color color);
 DLL_PUBLIC int bindings_tests_Palette_ordinalOf(bindings_tests_Color color);
+DLL_PUBLIC const char* bindings_tests_Palette_describe(bindings_tests_Color color, bindings_tests_Marker marker);
 DLL_PUBLIC bindings_tests_Color bindings_tests_Palette_fromOrdinal(int ordinal);
 
 // ==== Strings ====
@@ -150,7 +163,7 @@ DLL_PUBLIC size_t bindings_tests_Strings_utf8Length(const char* value);
 DLL_PUBLIC size_t bindings_tests_Strings_utf16Length(const char* value);
 DLL_PUBLIC const char* bindings_tests_Strings_empty();
 DLL_PUBLIC const char* bindings_tests_Strings_nullString();
-DLL_PUBLIC const char* bindings_tests_Strings_join(char** values, size_t count, const char* separator);
+DLL_PUBLIC const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 DLL_PUBLIC const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 DLL_PUBLIC void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);

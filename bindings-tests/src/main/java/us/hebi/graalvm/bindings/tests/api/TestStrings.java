@@ -1,6 +1,7 @@
 package us.hebi.graalvm.bindings.tests.api;
 
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
+import org.graalvm.nativeimage.c.type.CConst;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
@@ -60,8 +61,8 @@ public class TestStrings {
     }
 
     @CLibMethod(flags = Noexcept)
-    @CLibComment("Joins a char* array with a separator. Checks char** parameter handling.")
-    public static String join(CCharPointerPointer values,
+    @CLibComment("Joins a char* array with a separator. Checks const char** parameter handling.")
+    public static String join(@CConst CCharPointerPointer values,
                              @CLibComment("number of entries in values") @CSizeType int count,
                              String separator) {
         StringBuilder sb = new StringBuilder();

@@ -255,6 +255,11 @@ class PaletteTest(unittest.TestCase):
         self.assertEqual("Green", bindings_tests.Palette.name_of(Color.GREEN))
         self.assertEqual(2, bindings_tests.Palette.ordinal_of(Color.BLUE))
 
+    def test_describe_uses_both_enums(self):
+        # Two enums declared in the same class, used in the same signature
+        self.assertEqual("Red Cross", bindings_tests.Palette.describe(
+            bindings_tests.Color.RED, bindings_tests.Marker.CROSS))
+
     def test_from_ordinal(self):
         Color = bindings_tests.Color
         self.assertEqual(Color.GREEN, bindings_tests.Palette.from_ordinal(1))
@@ -324,11 +329,27 @@ class OverloadsTest(unittest.TestCase):
     def test_hidden_is_absent(self):
         self.assertFalse(hasattr(bindings_tests.Overloads, "hidden"))
 
+    def test_ignored_class_is_absent(self):
+        # TestIgnored is annotated with ignore = true, so the whole class is gone
+        self.assertFalse(hasattr(bindings_tests, "Ignored"))
+
     def test_total(self):
         # The pythonOverload replaces the signature rather than adding to it, so the
         # pre-summed (sum, factor) form only exists in C. Here it takes a collection.
         self.assertEqual(12, bindings_tests.Overloads.total([1, 2, 3], 2))
         self.assertEqual(6, bindings_tests.Overloads.total([1, 2, 3]))
+
+    def test_gain_defaults(self):
+        # Rendered as 'invert: bool = False, scale: float = 1e-3'
+        self.assertEqual(1e-3, bindings_tests.Overloads.gain())
+        self.assertEqual(-1e-3, bindings_tests.Overloads.gain(True))
+        self.assertEqual(2.0, bindings_tests.Overloads.gain(False, 2.0))
+
+    def test_echo_index(self):
+        # The pythonOverload only sets a postBody, which clamps negatives right
+        # before the call. Valid indices pass through exactly as they do in C.
+        self.assertEqual(3, bindings_tests.Overloads.echo_index(3))
+        self.assertEqual(0, bindings_tests.Overloads.echo_index(-5))
 
     def test_answer(self):
         # 42 * multiplier everywhere except C++, where the hand-written cppBody
