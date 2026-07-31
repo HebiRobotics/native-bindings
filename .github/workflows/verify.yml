@@ -1,0 +1,37 @@
+name: verify
+
+# Fast gate on every change. Runs the annotation processor and compares its
+# output against the checked-in reference files. No GraalVM and no native image, so
+# this should finish in about a minute.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and compare against the reference files
+        run: mvn -B verify
+
+      - name: Upload the generated output
+        # Makes the diff inspectable without reproducing the build locally
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-bindings
+          path: |
+            bindings-tests/target/image/static
+            bindings-tests/target/generated-sources/annotations
+          if-no-files-found: warn

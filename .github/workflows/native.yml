@@ -1,0 +1,115 @@
+name: native
+
+# Builds the GraalVM shared library and runs the per-language runtime suites
+# against it. Much slower than verify.yml, which is why the reference file gate
+# lives in its own workflow.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native:
+    # Adding windows-latest and macos-latest to the list below is all that is
+    # needed to fan this job out across platforms. Every step already keys off
+    # matrix.os rather than assuming Linux.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      MODULE_DIR: bindings-tests
+      BINDINGS_DIR: bindings-tests/target/image/static/bindings
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM 21
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          cache: 'maven'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the shared library and the bindings
+        run: mvn -B verify -Pnative
+
+      # The Python and MATLAB wrappers look for the library under
+      # <bindings>/lib/<platform>/, so put a copy where they expect it.
+      - name: Stage the shared library for the wrappers
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            windows-*) platform=win_amd64;   file=bindings_tests.dll ;;
+            macos-*)   platform=osx_arm64;   file=libbindings_tests.dylib ;;
+            *)         platform=linux_amd64; file=libbindings_tests.so ;;
+          esac
+          mkdir -p "$BINDINGS_DIR/lib/$platform"
+          cp "$MODULE_DIR/target/image/$file" "$BINDINGS_DIR/lib/$platform/$file"
+
+      # ---- C ----
+
+      - name: Configure and build the C suite
+        run: |
+          cmake -S $MODULE_DIR/src/test/c -B $MODULE_DIR/target/ctest-c
+          cmake --build $MODULE_DIR/target/ctest-c --config Release
+        shell: bash
+
+      - name: Run the C suite
+        run: ctest --test-dir $MODULE_DIR/target/ctest-c --build-config Release --output-on-failure
+        shell: bash
+
+      # ---- C++ ----
+
+      - name: Configure and build the C++ suite
+        run: |
+          cmake -S $MODULE_DIR/src/test/cpp -B $MODULE_DIR/target/ctest-cpp
+          cmake --build $MODULE_DIR/target/ctest-cpp --config Release
+        shell: bash
+
+      - name: Run the C++ suite
+        run: ctest --test-dir $MODULE_DIR/target/ctest-cpp --build-config Release --output-on-failure
+        shell: bash
+
+      # ---- Python ----
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the Python test dependencies
+        # numpy is only needed for the array bindings, which convert sequences
+        # into contiguous buffers
+        run: python -m pip install --upgrade pip numpy
+
+      - name: Run the Python suite
+        working-directory: bindings-tests
+        run: python -m unittest discover -s src/test/python -v
+
+      # ---- MATLAB ----
+      # Guarded so that a missing or unavailable license does not fail the run.
+
+      - name: Set up MATLAB
+        id: setup-matlab
+        continue-on-error: true
+        uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2024b
+
+      - name: Run the MATLAB suite
+        if: steps.setup-matlab.outcome == 'success'
+        continue-on-error: true
+        uses: matlab-actions/run-tests@v2
+        with:
+          source-folder: bindings-tests/src/test/matlab
+          select-by-folder: bindings-tests/src/test/matlab
+
+      - name: Report a skipped MATLAB run
+        if: steps.setup-matlab.outcome != 'success'
+        run: echo "MATLAB is not available on this runner, so the MATLAB suite was skipped."
