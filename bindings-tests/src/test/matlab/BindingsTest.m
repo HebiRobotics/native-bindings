@@ -39,8 +39,8 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Math.negate(true), 0);
             testCase.verifyEqual(bindings_tests.Math.negate(false), 1);
 
-            % TODO: re-enable with NativeMath.nextChar once CHAR16 works as a return type
-            % testCase.verifyEqual(bindings_tests.Math.nextChar(double('A')), double('B'));
+            % A Java char crosses as a uint16 code unit, so compare numerically
+            testCase.verifyEqual(double(bindings_tests.Math.nextChar(double('A'))), double('B'));
 
             testCase.verifyEqual(bindings_tests.Math.addInt8(100, 20), 120);
             testCase.verifyEqual(bindings_tests.Math.addInt16(30000, 700), 30700);
@@ -227,12 +227,12 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Overloads.greet('Bob'), 'Hello, Bob');
             testCase.verifyEqual(bindings_tests.Overloads.greet('Bob', 'Hi'), 'Hi, Bob');
 
-            % TODO: re-enable with NativeOverloads.originalName once
-            % @CLibMethod(name = ...) renames only the exported symbol
-            % testCase.verifyEqual(bindings_tests.Overloads.renamed(), 7);
+            testCase.verifyEqual(bindings_tests.Overloads.renamed(), 7);
 
-            % The ignored hidden() must not appear anywhere
+            % Declared as originalName in Java but exported as renamed, and the
+            % ignored hidden() must not appear anywhere.
             names = methods('bindings_tests.Overloads');
+            testCase.verifyFalse(ismember('originalName', names));
             testCase.verifyFalse(ismember('hidden', names));
 
             % The MATLAB overload replaces the signature entirely, so there is a

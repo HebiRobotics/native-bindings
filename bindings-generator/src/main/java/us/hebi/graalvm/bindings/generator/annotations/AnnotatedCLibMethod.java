@@ -44,11 +44,24 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         }
     }
 
+    /**
+     * @return the name this method is exported under, which the annotation may override
+     */
     public String getMethodName() {
         return getAnnotation()
                 .map(CLibMethod::name)
                 .filter(not(Strings::isNullOrEmpty))
-                .orElse(String.valueOf(element.getSimpleName()));
+                .orElse(getJavaMethodName());
+    }
+
+    /**
+     * @return the name of the Java method itself, which the annotation cannot change
+     * <p>
+     * Generated entry points have to call this rather than {@link #getMethodName()},
+     * otherwise an exported rename would emit a call to a method that does not exist.
+     */
+    public String getJavaMethodName() {
+        return String.valueOf(element.getSimpleName());
     }
 
     public boolean shouldIgnore() {

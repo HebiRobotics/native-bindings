@@ -36,8 +36,7 @@ static void test_math(void) {
     assert(bindings_tests_Math_negate(1) == 0);
     assert(bindings_tests_Math_negate(0) != 0);
 
-    /* TODO: re-enable with NativeMath.nextChar once CHAR16 works as a return type.
-       assert(bindings_tests_Math_nextChar('A') == 'B'); */
+    assert(bindings_tests_Math_nextChar('A') == 'B');
 
     assert(bindings_tests_Math_addInt8(100, 20) == 120);
     assert(bindings_tests_Math_addInt16(30000, 700) == 30700);
@@ -326,14 +325,13 @@ static void test_overloads(void) {
 
     assert(bindings_tests_Overloads_answer(2) == 84);
 
-    /* TODO: re-enable with NativeOverloads.originalName once @CLibMethod(name = ...)
-       renames only the exported symbol and not the emitted Java call.
-       assert(bindings_tests_Overloads_renamed() == 7); */
+    /* Declared as originalName in Java, exported as renamed. */
+    assert(bindings_tests_Overloads_renamed() == 7);
 
     /*
-     * There must be no symbol for the ignored hidden() method. Absence is checked
-     * by the reference file test in the Java module, since C cannot assert it at
-     * runtime.
+     * There must be no symbol named bindings_tests_Overloads_originalName and no
+     * symbol for the ignored hidden() method. Absence is checked by the reference
+     * file test in the Java module, since C cannot assert it at runtime.
      */
 
     printf("overloads ok\n");

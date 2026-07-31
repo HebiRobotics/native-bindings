@@ -73,20 +73,11 @@ public class NativeOverloads {
         return 42 * multiplier;
     }
 
-    /*
-     * TODO: re-enable once @CLibMethod(name = ...) works.
-     *
-     * CEntryPointGenerator uses AnnotatedCLibMethod.getMethodName() both for the exported
-     * symbol and for the Java call it emits, so overriding the name produces an entry
-     * point that invokes a method which does not exist. The override is only a no-op when
-     * it already matches the Java name, which makes it useless as written.
-     *
-     * @CLibMethod(flags = Noexcept, name = "renamed")
-     * @CLibComment("Declared as originalName in Java but exported as renamed.")
-     * public static int originalName() {
-     *     return 7;
-     * }
-     */
+    @CLibMethod(flags = Noexcept, name = "renamed")
+    @CLibComment("Declared as originalName in Java but exported as renamed.")
+    public static int originalName() {
+        return 7;
+    }
 
     @CLibMethod(ignore = true)
     @CLibComment("Must not appear anywhere in the generated output.")

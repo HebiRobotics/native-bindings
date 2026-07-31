@@ -86,7 +86,6 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
     }
 
     private void processElement(TypeElement type, ProcessingEnvironment environment) {
-        hasProcessedElements = true;
         processingEnv.getMessager().printMessage(NOTE, "Processing " + type.getSimpleName());
         if (type.getAnnotation(CLibClass.class) == null) {
             return;
@@ -102,6 +101,10 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         for (AbstractGenerator generator : generators) {
             generator.process(apiClass, processingEnv);
         }
+
+        // Set the flag after processing so that the postRound skips finish() and avoids
+        // masking the error with a second exception.
+        hasProcessedElements = true;
 
         // TODO:
         //  Allow inner classes. It gets stuck in an infinite loop without error.

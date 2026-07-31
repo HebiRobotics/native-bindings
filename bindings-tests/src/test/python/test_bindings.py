@@ -43,12 +43,10 @@ class MathTest(unittest.TestCase):
         self.assertEqual(False, bindings_tests.Math.negate(True))
         self.assertEqual(True, bindings_tests.Math.negate(False))
 
-    # TODO: re-enable with NativeMath.nextChar once CHAR16 works as a return type.
-    # A Java char maps to a 16 bit integer, so the wrapper would take and return
-    # a code unit rather than a one character string.
-    #
-    # def test_char(self):
-    #     self.assertEqual(ord("B"), bindings_tests.Math.next_char(ord("A")))
+    def test_char(self):
+        # A Java char maps to a 16 bit integer, so the wrapper takes and returns
+        # a code unit rather than a one character string.
+        self.assertEqual(ord("B"), bindings_tests.Math.next_char(ord("A")))
 
     def test_integers(self):
         self.assertEqual(120, bindings_tests.Math.add_int8(100, 20))
@@ -277,12 +275,10 @@ class OverloadsTest(unittest.TestCase):
         self.assertEqual("Hello, Bob", bindings_tests.Overloads.greet("Bob"))
         self.assertEqual("Hi, Bob", bindings_tests.Overloads.greet("Bob", "Hi"))
 
-    # TODO: re-enable with NativeOverloads.originalName once @CLibMethod(name = ...)
-    # renames only the exported symbol and not the emitted Java call.
-    #
-    # def test_renamed(self):
-    #     self.assertEqual(7, bindings_tests.Overloads.renamed())
-    #     self.assertFalse(hasattr(bindings_tests.Overloads, "original_name"))
+    def test_renamed(self):
+        self.assertEqual(7, bindings_tests.Overloads.renamed())
+        self.assertFalse(hasattr(bindings_tests.Overloads, "original_name"))
+        self.assertFalse(hasattr(bindings_tests.Overloads, "originalName"))
 
     def test_hidden_is_absent(self):
         self.assertFalse(hasattr(bindings_tests.Overloads, "hidden"))

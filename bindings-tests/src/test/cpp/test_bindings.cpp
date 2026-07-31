@@ -36,8 +36,7 @@ static void testMath() {
   CHECK(bt::math::negate(true) == false);
   CHECK(bt::math::negate(false) == true);
 
-  // TODO: re-enable with NativeMath.nextChar once CHAR16 works as a return type.
-  // CHECK(bt::math::nextChar('A') == 'B');
+  CHECK(bt::math::nextChar('A') == 'B');
 
   CHECK(bt::math::addInt8(100, 20) == 120);
   CHECK(bt::math::addInt16(30000, 700) == 30700);
@@ -255,12 +254,9 @@ static void testOverloads() {
   CHECK(bt::overloads::greet("Bob") == "Hello, Bob");
   CHECK(bt::overloads::greet("Bob", "Hi") == "Hi, Bob");
 
-  // TODO: re-enable with NativeOverloads.originalName once @CLibMethod(name = ...)
-  // renames only the exported symbol and not the emitted Java call.
-  // CHECK(bt::overloads::renamed() == 7);
-  //
-  // The ignored hidden() must not exist. Referencing it would fail to compile, so
-  // absence is checked by the reference file test in the Java module.
+  CHECK(bt::overloads::renamed() == 7);
+  // originalName and hidden must not exist. Referencing either would fail to
+  // compile, so absence is checked by the reference file test in the Java module.
 
   // The plain form takes a pre-summed total, same as the C ABI.
   CHECK(bt::overloads::total(6, 2) == 12);

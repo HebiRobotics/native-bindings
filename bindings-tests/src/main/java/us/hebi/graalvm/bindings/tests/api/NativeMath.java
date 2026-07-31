@@ -24,20 +24,11 @@ public class NativeMath {
         return !value;
     }
 
-    /*
-     * TODO: re-enable once CHAR16 is supported as an output type.
-     *
-     * A Java char maps to DataType.CHAR16 (an unsigned 2 byte UTF-16 code unit). It is
-     * accepted as a parameter, but CEntryPointGenerator throws
-     * "Unsupported output type: CHAR16" when it appears as a return type. Disabled here
-     * so the rest of the matrix can be established first.
-     *
-     * @CLibMethod(flags = Noexcept)
-     * @CLibComment("Returns the next UTF-16 code unit. 'A' becomes 'B'.")
-     * public static char nextChar(char value) {
-     *     return (char) (value + 1);
-     * }
-     */
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Returns the next UTF-16 code unit. 'A' becomes 'B'.")
+    public static char nextChar(char value) {
+        return (char) (value + 1);
+    }
 
     @CLibMethod(flags = Noexcept)
     public static byte addInt8(byte a, byte b) {

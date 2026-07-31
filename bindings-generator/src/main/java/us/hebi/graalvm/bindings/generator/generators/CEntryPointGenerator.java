@@ -64,11 +64,11 @@ public class CEntryPointGenerator extends AbstractGenerator {
 
             // Instance methods pass themselves as the first argument
             if (method.isStatic()) {
-                invocation.add("$T.$N(", apiClass.getJavaType(), method.getMethodName());
+                invocation.add("$T.$N(", apiClass.getJavaType(), method.getJavaMethodName());
                 invocationClose.add(")");
             } else {
                 builder.addParameter(ObjectHandle.class, "_obj");
-                invocation.add("$N(_obj).$N(", getInstanceMethod, method.getMethodName());
+                invocation.add("$N(_obj).$N(", getInstanceMethod, method.getJavaMethodName());
                 invocationClose.add(")");
             }
 

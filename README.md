@@ -196,14 +196,6 @@ are documented rather than fixed so that the extraction stayed behaviour preserv
   `cls` has to be written into the annotation.
 - **MATLAB echoes non-const pointer parameters as extra outputs**, while the MEX
   dispatch only ever fills the first one.
-- **`@CLibMethod(name = ...)` does not work.** `CEntryPointGenerator` uses the overridden
-  name for both the exported symbol and the Java call it emits, so any rename produces an
-  entry point that calls a method which does not exist. It is a no-op when it already
-  matches the Java name. `NativeOverloads.originalName` is commented out until the
-  generator distinguishes the two.
-- **A Java `char` cannot be returned.** `CHAR16` works as a parameter, but
-  `CEntryPointGenerator` throws `Unsupported output type: CHAR16` when it appears as a
-  return type. `NativeMath.nextChar` is commented out until this is handled.
 - **Structs are not supported.** There is no by-value struct mapping, and `@CExternalEnums`
   is declared but never read by the processor.
 - **Only leaf classes may declare constructors**, and an abstract parent shares its
