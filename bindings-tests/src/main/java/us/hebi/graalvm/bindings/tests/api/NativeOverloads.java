@@ -42,10 +42,9 @@ public class NativeOverloads {
                     body = "int sum = 0; for (int v : values) { sum += v; }",
                     call = "sum, factor"
             ),
-            // Static methods are emitted as @classmethod but the parameter list is copied
-            // verbatim, so the leading 'cls' has to be written out here.
+            // The receiver (self or cls) is prepended by the generator
             pythonOverload = @CLibMethod.MethodOverload(
-                    parameters = "cls, values, factor = 1",
+                    parameters = "values, factor = 1",
                     body = "total = sum(values)",
                     call = "total, factor"
             ),

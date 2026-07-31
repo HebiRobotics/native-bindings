@@ -1136,7 +1136,7 @@
         "call": "sum, factor"
       }],
       "pythonOverload": {
-        "parameters": "cls, values, factor = 1",
+        "parameters": "values, factor = 1",
         "body": "total = sum(values)",
         "call": "total, factor"
       },

@@ -365,8 +365,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
                 """;
 
-
-
         // Create a __repr__ method for text display, e.g., Axis(min={self.min}, max={self.max})
         List<String> getProp = new ArrayList<>();
         for (var getter : GeneratorUtil.getGetters(lib, apiClass.getType())) {
@@ -428,10 +426,11 @@ public class PythonBindingsGenerator extends BindingGenerator {
             funcName = method.getLowerUnderscoreName();
         }
 
-        // Resolve overloads
+        // An overload replaces the entire parameter list, so the receiver (self / cls) has to be prepended here
         var overload = method.getPythonOverload();
+        var receiver = getReceiverName(method);
         var parameters = overload.tryGetParameters()
-                .map(string -> method.getIsStatic() ? string : "self, " + string)
+                .map(string -> receiver + ", " + string)
                 .map(indent)
                 .orElseGet(() -> joiner.join(paramLists.externalInput));
         var callArgs = overload.tryGetCall()
@@ -441,7 +440,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var body = overload.tryGetBody().map(indent).orElse("");
         var conversions = indent.apply(paramLists.inputConversions);
         var postBody = overload.tryGetPostBody().map(indent).orElse("");
-        var numpy = isUsingNumpy(body,conversions,postBody) ? indent.apply("np = _require_numpy()\n") : "";
+        var numpy = isUsingNumpy(body, conversions, postBody) ? indent.apply("np = _require_numpy()\n") : "";
 
         // C call and type conversion
         var returnTemplate = indent.apply(getReturnTemplate(apiClass, method)
@@ -607,6 +606,10 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return block.toString();
     }
 
+    static String getReceiverName(MethodDescription method) {
+        return method.getIsConstructor() || !method.getIsStatic() ? "self" : "cls";
+    }
+
     /**
      * Builds the external (Python signature) and internal (C call) parameter lists,
      * plus any input conversion code needed.
@@ -622,7 +625,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
             // First parameter: self or cls
             if (desc.getIsStatic()) {
-                externalInput.add(isConstructor ? "self" : "cls");
+                externalInput.add(getReceiverName(desc));
             } else {
                 externalInput.add("self");
                 internalInput.add("self.%%REF_FIELD%%");
