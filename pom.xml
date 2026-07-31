@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>us.hebi.graalvm</groupId>
+    <artifactId>bindings-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>GraalVM Native Bindings</name>
+    <description>
+        Annotation processor that generates a C ABI and idiomatic C/C++/Python/MATLAB bindings
+        for Java code compiled with GraalVM native-image.
+    </description>
+
+    <modules>
+        <module>bindings-runtime</module>
+        <module>bindings-generator</module>
+        <module>bindings-tests</module>
+    </modules>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+
+        <!-- JDK 21+ requires explicit opt-in for annotation processing -->
+        <maven.compiler.proc>full</maven.compiler.proc>
+
+        <graalvm.version>24.0.2</graalvm.version>
+        <glue.version>1.2.1</glue.version>
+        <graalvm.tools.version>0.11.5</graalvm.tools.version>
+        <quickbuf.version>1.4</quickbuf.version>
+        <protoc.version>3.19.4</protoc.version>
+        <javapoet.version>1.13.0</javapoet.version>
+        <guava.version>33.4.0-jre</guava.version>
+        <auto.common.version>1.2.2</auto.common.version>
+        <auto.service.version>1.1.1</auto.service.version>
+        <st4.version>4.3.4</st4.version>
+        <junit.version>4.13.2</junit.version>
+        <truth.version>1.4.4</truth.version>
+        <compile.testing.version>0.21.0</compile.testing.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+
+            <dependency>
+                <groupId>us.hebi.graalvm</groupId>
+                <artifactId>bindings-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>us.hebi.graalvm</groupId>
+                <artifactId>bindings-generator</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.graalvm.nativeimage</groupId>
+                <artifactId>native-image-base</artifactId>
+                <version>${graalvm.version}</version>
+            </dependency>
+
+            <!-- Compatibility shims for ByteBuffer covariant returns and direct buffer addresses -->
+            <dependency>
+                <groupId>us.hebi.glue</groupId>
+                <artifactId>glue</artifactId>
+                <version>${glue.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>us.hebi.quickbuf</groupId>
+                <artifactId>quickbuf-runtime</artifactId>
+                <version>${quickbuf.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.squareup</groupId>
+                <artifactId>javapoet</artifactId>
+                <version>${javapoet.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.auto</groupId>
+                <artifactId>auto-common</artifactId>
+                <version>${auto.common.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.auto.service</groupId>
+                <artifactId>auto-service</artifactId>
+                <version>${auto.service.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>ST4</artifactId>
+                <version>${st4.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.truth</groupId>
+                <artifactId>truth</artifactId>
+                <version>${truth.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.testing.compile</groupId>
+                <artifactId>compile-testing</artifactId>
+                <version>${compile.testing.version}</version>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>com.github.os72</groupId>
+                    <artifactId>protoc-jar-maven-plugin</artifactId>
+                    <version>3.11.4</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+</project>

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>us.hebi.graalvm</groupId>
+        <artifactId>bindings-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bindings-tests</artifactId>
+    <name>GraalVM Native Bindings :: Tests</name>
+    <description>
+        A small annotated API that exercises every supported binding feature, the reference
+        file comparison that guards the generated output, and the per-language tests that
+        run against the compiled shared library.
+    </description>
+
+    <properties>
+        <!-- Name and namespace of the generated library. Changing these invalidates every reference file. -->
+        <lib.name>bindings_tests</lib.name>
+        <lib.namespace>bindings.tests</lib.namespace>
+        <lib.version>1.2.3</lib.version>
+        <lib.build>42</lib.build>
+
+        <!-- The processor writes '<outputDir>/bindings/...' and escapes to '<outputDir>' for build files -->
+        <bindings.outputDir>${project.build.directory}/image/static</bindings.outputDir>
+    </properties>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>us.hebi.graalvm</groupId>
+            <artifactId>bindings-runtime</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.graalvm.nativeimage</groupId>
+            <artifactId>native-image-base</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.truth</groupId>
+            <artifactId>truth</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.testing.compile</groupId>
+            <artifactId>compile-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Only needed by the negative-case tests that drive the processor directly -->
+        <dependency>
+            <groupId>us.hebi.graalvm</groupId>
+            <artifactId>bindings-generator</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+
+                    <!-- Runs the annotation processor over the annotated API in src/main/java -->
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>us.hebi.graalvm</groupId>
+                                    <artifactId>bindings-generator</artifactId>
+                                    <version>${project.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                            <compilerArgs>
+                                <arg>-Abindings.outputDir=${bindings.outputDir}</arg>
+                                <arg>-Abindings.libName=${lib.name}</arg>
+                                <arg>-Abindings.namespace=${lib.namespace}</arg>
+                                <arg>-Abindings.libVersion=${lib.version}</arg>
+                                <arg>-Abindings.libBuild=${lib.build}</arg>
+                                <arg>-Abindings.enableGraphics=false</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+
+                    <!-- The tests are not annotated, and re-running the processor here would
+                         overwrite the output we are about to compare against. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <bindings.generatedDir>${bindings.outputDir}</bindings.generatedDir>
+                        <bindings.generatedSourcesDir>${project.build.directory}/generated-sources/annotations</bindings.generatedSourcesDir>
+                        <bindings.referenceDir>${project.basedir}/src/test/resources/reference</bindings.referenceDir>
+                        <bindings.libName>${lib.name}</bindings.libName>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+
+    <profiles>
+
+        <!--
+            Builds the annotated API into a shared library and runs the per-language tests
+            against it. Requires a GraalVM JDK and a working native toolchain, so it is kept
+            out of the default build: 'mvn verify' alone only checks the generated sources.
+        -->
+        <profile>
+            <id>native</id>
+            <properties>
+                <outputDir>${project.build.directory}/image</outputDir>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${graalvm.tools.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-shared-library</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>${lib.name}</imageName>
+                            <outputDirectory>${outputDir}</outputDirectory>
+                            <sharedLibrary>true</sharedLibrary>
+                            <fallback>false</fallback>
+                            <skipNativeTests>true</skipNativeTests>
+                            <useArgFile>true</useArgFile>
+                            <buildArgs>
+                                <buildArg>-O1</buildArg>
+                                <buildArg>-H:TempDirectory=${project.build.directory}/native-tmp</buildArg>
+                                <!-- The debug flag must not be folded into the image heap at build time -->
+                                <buildArg>--initialize-at-run-time=us.hebi.graalvm.bindings.runtime.Debug</buildArg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+    </profiles>
+
+</project>

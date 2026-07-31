@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>us.hebi.graalvm</groupId>
+        <artifactId>bindings-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bindings-generator</artifactId>
+    <name>GraalVM Native Bindings :: Generator</name>
+    <description>
+        Annotation processor that generates the C entry points as well as the
+        C/C++/Python/MATLAB bindings for annotated libraries.
+    </description>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>us.hebi.graalvm</groupId>
+            <artifactId>bindings-runtime</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>us.hebi.quickbuf</groupId>
+            <artifactId>quickbuf-runtime</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.squareup</groupId>
+            <artifactId>javapoet</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.auto</groupId>
+            <artifactId>auto-common</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.google.auto.service</groupId>
+            <artifactId>auto-service</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.antlr</groupId>
+            <artifactId>ST4</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.graalvm.nativeimage</groupId>
+            <artifactId>native-image-base</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <!-- Calls protoc.exe and generate messages -->
+            <plugin>
+                <groupId>com.github.os72</groupId>
+                <artifactId>protoc-jar-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <protocArtifact>com.google.protobuf:protoc:${protoc.version}</protocArtifact>
+
+                            <inputDirectories>
+                                <include>src/main/protobuf/</include>
+                            </inputDirectories>
+
+                            <!-- plugin configuration, options, etc. -->
+                            <outputTargets>
+                                <outputTarget>
+                                    <pluginArtifact>us.hebi.quickbuf:protoc-gen-quickbuf:${quickbuf.version}</pluginArtifact>
+                                    <type>quickbuf</type>
+                                    <outputOptions>
+                                        indent=4,input_order=number,output_order=number,java8_optional=true,allocation=lazy
+                                    </outputOptions>
+                                </outputTarget>
+                            </outputTargets>
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>

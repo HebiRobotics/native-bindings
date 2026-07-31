@@ -1,0 +1,157 @@
+syntax = "proto2";
+
+option optimize_for = LITE_RUNTIME;
+
+option java_package = "us.hebi.graalvm.bindings.model";
+option java_generate_equals_and_hash = true;
+option java_multiple_files = true;
+
+package hebi.api.proto;
+
+message LibraryDescription {
+
+  optional string name = 1 [default = "hebi"];
+  optional string version = 2 [default = "0.0.0"]; // major.minor.patch semantic version
+  optional string build = 3 [default = "0"];
+
+  optional string c_prefix = 5; // prefix for all C methods to ensure uniqueness
+  repeated string namespace = 8;
+
+  repeated ClassDescription classes = 10;
+  repeated EnumDescription enums = 11;
+  repeated TypeDef typedefs = 15;
+
+  optional bool enable_graphics = 14 [default = false];
+
+}
+
+message EnumDescription {
+  optional string name = 1; // simple name
+  optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
+  optional string c_name = 3; // fully qualified C name
+  repeated EnumValueDescription values = 5;
+}
+
+message EnumValueDescription {
+  optional string name = 1; // simple name
+  optional string c_name = 2; // fully qualified C name
+  optional int32 c_value = 4; // mapped integer value
+}
+
+message TypeDef {
+  optional string name = 1;
+  optional string c_definition = 2;
+  optional string cpp_definition = 3;
+  optional string python_definition = 4;
+}
+
+enum DataType {
+  UNSPECIFIED = 0;
+
+  // Primitives (Fixed Width)
+  VOID = 1;      // Java void -> C void
+  BOOL = 2;      // Java boolean -> C int (signed 4-byte)
+  CHAR16 = 3;    // Java char -> C short (unsigned 2-byte, UTF-16)
+  INT8 = 4;      // Java byte -> C char (signed 1-byte)
+  INT16 = 5;     // Java short -> C short (signed 2-byte)
+  INT32 = 6;     // Java int -> C int (signed 4-byte)
+  INT64 = 7;     // Java long -> C long long int (signed 8-byte, prevents Win 32-bit long bug)
+  FLOAT32 = 8;   // Java float -> C float (4-byte)
+  FLOAT64 = 9;   // Java double -> C double (8-byte)
+
+  // Platform Dependent (Variable Width)
+  SIZE_T = 30;   // C size_t (4-byte on x86, 8-byte on x64). Always bridge via INT64 to Java.
+
+  // Pointers (GraalVM C-API types)
+  VOID_POINTER = 10;          // GraalVM VoidPointer -> void*
+  CHAR_POINTER = 11;          // GraalVM CCharPointer -> char* (C-String / UTF-8)
+  CHAR_POINTER_POINTER = 12;  // GraalVM CCharPointerPointer -> char** (String Array)
+  INT16_POINTER = 14;         // GraalVM CShortPointer -> short*
+  INT32_POINTER = 15;         // GraalVM CIntPointer -> int*
+  INT64_POINTER = 16;         // GraalVM CLongPointer -> long long int*
+  FLOAT32_POINTER = 17;       // GraalVM CFloatPointer -> float*
+  FLOAT64_POINTER = 18;       // GraalVM CDoublePointer -> double*
+
+  // Meta / High-Level Types
+  TYPEDEF = 40;               // C type alias (e.g. 'my_type_t')
+  ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
+  OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
+  VOID_WITH_ERROR_CODE = 43;  // void method that passes error codes through the binary interface
+  // STRUCT = 44;             // TODO: support structs?
+
+}
+
+message TypeDescription {
+
+  optional DataType data_type = 21 [default = UNSPECIFIED];
+  optional bool is_const = 1 [default = false];
+
+  optional string c_prefix = 9; // "namespace" prefix for the type definition in C
+  optional string type_name = 12; // simple name of the api class or enum
+
+  optional string param_name = 4 [default = ""]; // name of the parameter, empty if a return type
+  optional string lower_underscore_param_name = 5 [default = ""]; // name in lower_underscore_casing
+
+  optional string default_value = 15;
+
+  optional string comment = 16;
+
+}
+
+message ClassDescription {
+
+  optional TypeDescription type = 1;
+  optional string isolate_name = 2; // specifies an isolated memory region for this class
+
+  optional bool instantiable = 4 [default = true]; // whether the class can be instanced / released
+
+  optional string c_destructor_name = 5 [default = "release"]; // destructor name if applicable
+
+  optional TypeDescription parent = 7;
+  optional MethodDescription to_parent_cast_method = 8;
+  repeated TypeDescription children = 9;
+
+  repeated MethodDescription methods = 10; // list of all methods
+
+}
+
+enum MethodFlag {
+  Const = 1; // the method does not change any internal state
+  Noexcept = 2; // the method is guaranteed to never throw exceptions
+}
+
+message MethodDescription {
+
+  required string name = 1; // name in camelCase
+  required string lower_underscore_name = 2; // name in lower_underscore_casing
+  optional string c_name = 4; // full name of the corresponding C method
+
+  optional TypeDescription return_type = 5;
+  repeated TypeDescription parameters = 6;
+
+  repeated MethodFlag flags = 100;
+  optional bool is_static = 3 [default = false];
+  optional bool is_constructor = 7 [default = false];
+  optional string property_name = 8;
+
+  optional string documentation = 15;
+  optional string throws_on = 16;
+
+  optional string cpp_body = 13;
+  repeated MethodOverload cpp_overloads = 10;
+  optional MethodOverload python_overload = 11;
+  optional MethodOverload matlab_overload = 12;
+
+  optional bool is_last_error_provider = 120 [default = false];
+
+}
+
+message MethodOverload {
+
+  optional string parameters = 1;
+  optional string body = 2 [default = ""];
+  optional string post_body = 3 [default = ""];
+  optional string call = 4;
+  optional string post_call = 5 [default = ""];
+
+}
