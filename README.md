@@ -200,10 +200,11 @@ rather than failing halfway through the native build.
 `build-native.bat` / `build-native.sh` run the native build in two stages.
 
 Stage one is `mvn clean verify -Pnative`. It points native-image at
-`scripts/graal/compiler-<os>`, a wrapper around the platform C compiler that builds the
-usual shared library and additionally writes a static library plus `libs.cmake` and
-`opts.cmake` into `bindings-tests/target/image/static/`. Extra arguments are passed
-through to Maven, so `./scripts/build-native.sh -o` builds offline.
+`compiler-<os>`, a wrapper around the platform C compiler that builds the usual shared
+library and additionally writes a static library plus `libs.cmake` and `opts.cmake` into
+`bindings-tests/target/image/static/`. The processor generates that wrapper into the same
+directory during the compile phase, so there is nothing to vendor or keep in sync. Extra
+arguments are passed through to Maven, so `./scripts/build-native.sh -o` builds offline.
 
 Stage two is CMake over that directory, using the `CMakeLists.txt` the processor
 generated next to the static library:

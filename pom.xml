@@ -157,7 +157,7 @@
     <!--
         Platform specific properties for the native build. 'native.compiler' points native-image
         at the wrapper script that produces the static library and the cmake fragments that stage
-        two needs. 'native.platform' is the directory name the generated wrappers look under.
+        two needs. The scripts are generated with the bindings.
     -->
     <profiles>
 
@@ -170,7 +170,7 @@
             </activation>
             <properties>
                 <native.platform>win_amd64</native.platform>
-                <native.compiler>${main.basedir}/scripts/graal/compiler-windows.bat</native.compiler>
+                <native.compiler>${bindings.outputDir}/compiler-windows.bat</native.compiler>
             </properties>
         </profile>
 
@@ -184,7 +184,7 @@
             <properties>
                 <!-- Overridden by platform-osx-arm64 below on Apple Silicon -->
                 <native.platform>osx_amd64</native.platform>
-                <native.compiler>${main.basedir}/scripts/graal/compiler-osx.sh</native.compiler>
+                <native.compiler>${bindings.outputDir}/compiler-osx.sh</native.compiler>
             </properties>
         </profile>
 
@@ -212,7 +212,7 @@
             <properties>
                 <!-- TODO: no linux_aarch64 variant yet. The test matrix only covers x86_64 Linux. -->
                 <native.platform>linux_amd64</native.platform>
-                <native.compiler>${main.basedir}/scripts/graal/compiler-linux.sh</native.compiler>
+                <native.compiler>${bindings.outputDir}/compiler-linux.sh</native.compiler>
             </properties>
         </profile>
 

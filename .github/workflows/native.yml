@@ -56,8 +56,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # Stage one. native-image runs through scripts/graal/compiler-<os>, which also emits
-      # the static library and the cmake fragments into target/image/static.
+      # Stage one. native-image runs through the generated target/image/static/compiler-<os>,
+      # which also emits the static library and the cmake fragments into target/image/static.
       - name: Build the shared library and the bindings
         run: mvn -B clean verify -Pnative
 

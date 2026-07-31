@@ -157,11 +157,17 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         if (outputDir != null) {
             var path = Paths.get(outputDir, "bindings", dir, name).normalize();
             Files.createDirectories(path.getParent());
-            return Files.newBufferedWriter(path,
+            var writer = Files.newBufferedWriter(path,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING
             );
+            // native-image executes the generated compiler wrapper directly, and the default
+            // 0644 would fail with 'Permission denied'. No-op on Windows.
+            if (name.endsWith(".sh")) {
+                path.toFile().setExecutable(true, false);
+            }
+            return writer;
         } else {
             processingEnv.getMessager().printMessage(ERROR, "Missing compiler option: -A" + propName);
         }

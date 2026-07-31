@@ -32,9 +32,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem Stage one. native-image runs through scripts\graal\compiler-windows.bat, which builds
-rem the usual shared library and additionally emits the static library, libs.cmake and
-rem opts.cmake next to the generated CMakeLists.txt in target\image\static.
+rem Stage one. native-image runs through the generated target\image\static\compiler-windows.bat,
+rem which builds the usual shared library and additionally emits the static library, libs.cmake
+rem and opts.cmake next to the generated CMakeLists.txt in target\image\static.
 echo.
 echo ==^> Building the shared library ^(this takes a few minutes^)
 call mvn -B -f "%REPO_ROOT%\pom.xml" clean verify -Pnative %*

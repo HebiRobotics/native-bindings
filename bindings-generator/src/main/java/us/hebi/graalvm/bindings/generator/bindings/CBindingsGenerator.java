@@ -48,6 +48,15 @@ public class CBindingsGenerator extends BindingGenerator {
         filer.createFile("..", lib.getName() + "_static.cmake", this::writeCMakeStatic);
         filer.createFile("..", "CMakeLists.txt", this::writeCMakeLists);
         filer.createFile("..", "mex.cmake", writer -> writer.write(loadContent("c/mex.cmake")));
+
+        // Wrappers around the platform C compiler that native-image is pointed at with
+        // --native-compiler-path. They intercept the link step to additionally emit the static
+        // library and the cmake fragments that the second stage needs. Emitted here so that a
+        // consuming project does not have to vendor them. Loaded raw: the batch file is full of
+        // '%%' variables that must not be treated as template tokens.
+        for (var script : List.of("compiler-windows.bat", "compiler-linux.sh", "compiler-osx.sh")) {
+            filer.createFile("..", script, writer -> writer.write(loadContent("c/" + script)));
+        }
     }
 
     private static String getInternalQualifiedCType(TypeDescription type) {

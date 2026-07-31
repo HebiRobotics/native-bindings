@@ -10,9 +10,9 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# Stage one. native-image runs through scripts/graal/compiler-<os>, which builds the
-# usual shared library and additionally emits the static library, libs.cmake and
-# opts.cmake next to the generated CMakeLists.txt in target/image/static.
+# Stage one. native-image runs through the generated target/image/static/compiler-<os>,
+# which builds the usual shared library and additionally emits the static library,
+# libs.cmake and opts.cmake next to the generated CMakeLists.txt in target/image/static.
 step "Building the shared library (this takes a few minutes)"
 "$MVN" -B -f "$REPO_ROOT/pom.xml" clean verify -Pnative "$@"
 
