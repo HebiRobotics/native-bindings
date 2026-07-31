@@ -1,0 +1,575 @@
+{
+  "_schemaVersion": "1.0.0",
+  "bindings_tests.Arrays.cumulativeSum": {
+    "inputs": [{
+        "kind": "required",
+        "name": "source",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "target",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.fillFloat64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "target",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "value",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.reverseFloat64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.sumFloat64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.sumInt32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokeOnce": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "userData",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokeTimes": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "userData",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "times",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Circle": {
+    "inputs": [{
+        "kind": "required",
+        "name": "radius",
+        "type": ["numeric"]
+      }, {
+        "kind": "namevalue",
+        "name": "name",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Circle"]
+      }]
+  },
+  "bindings_tests.Circle.area": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Circle"
+      }]
+  },
+  "bindings_tests.Circle.sideCount": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Circle"
+      }]
+  },
+  "bindings_tests.Counter": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "start",
+        "type": ["numeric"]
+      }, {
+        "kind": "namevalue",
+        "name": "value",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Counter"]
+      }]
+  },
+  "bindings_tests.Counter.add": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Counter"
+      }, {
+        "kind": "required",
+        "name": "amount",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Counter.getClosedCount": {
+    "inputs": []
+  },
+  "bindings_tests.Counter.increment": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Counter"
+      }]
+  },
+  "bindings_tests.Counter.isClosed": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Counter"
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["logical"]
+      }]
+  },
+  "bindings_tests.Counter.resetClosedCount": {
+    "inputs": []
+  },
+  "bindings_tests.Errors.clearLastError": {
+    "inputs": []
+  },
+  "bindings_tests.Errors.divideInt32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Errors.failingBool": {
+    "inputs": [{
+        "kind": "required",
+        "name": "shouldFail",
+        "type": ["logical"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["logical"]
+      }]
+  },
+  "bindings_tests.Errors.failingFloat64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "shouldFail",
+        "type": ["logical"]
+      }]
+  },
+  "bindings_tests.Errors.failingString": {
+    "inputs": [{
+        "kind": "required",
+        "name": "shouldFail",
+        "type": ["logical"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Errors.getLastError": {
+    "inputs": [],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Errors.neverThrows": {
+    "inputs": []
+  },
+  "bindings_tests.Errors.requireNonNegative": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Isolated.alwaysFails": {
+    "inputs": []
+  },
+  "bindings_tests.Isolated.getCounter": {
+    "inputs": []
+  },
+  "bindings_tests.Isolated.getLastError": {
+    "inputs": [],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Isolated.increment": {
+    "inputs": []
+  },
+  "bindings_tests.Isolated.reset": {
+    "inputs": []
+  },
+  "bindings_tests.Math.addFloat32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addFloat64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addInt16": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addInt32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addInt64": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addInt8": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.addSize": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Math.maxInt32": {
+    "inputs": []
+  },
+  "bindings_tests.Math.maxSize": {
+    "inputs": []
+  },
+  "bindings_tests.Math.negate": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["logical"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["logical"]
+      }]
+  },
+  "bindings_tests.Math.nextChar": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["any"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["any"]
+      }]
+  },
+  "bindings_tests.Math.sizeToInt32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Overloads.answer": {
+    "inputs": [{
+        "kind": "required",
+        "name": "multiplier",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Overloads.greet": {
+    "inputs": [{
+        "kind": "required",
+        "name": "name",
+        "type": ["char"]
+      }, {
+        "kind": "ordered",
+        "name": "greeting",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Overloads.renamed": {
+    "inputs": []
+  },
+  "bindings_tests.Overloads.scale": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "value",
+        "type": ["numeric"]
+      }, {
+        "kind": "ordered",
+        "name": "factor",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Overloads.total": {
+    "inputs": [{
+        "kind": "required",
+        "name": "sum",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "factor",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Palette.fromOrdinal": {
+    "inputs": [{
+        "kind": "required",
+        "name": "ordinal",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }]
+  },
+  "bindings_tests.Palette.nameOf": {
+    "inputs": [{
+        "kind": "required",
+        "name": "color",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Palette.next": {
+    "inputs": [{
+        "kind": "required",
+        "name": "color",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }]
+  },
+  "bindings_tests.Palette.ordinalOf": {
+    "inputs": [{
+        "kind": "required",
+        "name": "color",
+        "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
+      }]
+  },
+  "bindings_tests.Shape.area": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Shape"
+      }]
+  },
+  "bindings_tests.Shape.sideCount": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Shape"
+      }]
+  },
+  "bindings_tests.Square": {
+    "inputs": [{
+        "kind": "required",
+        "name": "side",
+        "type": ["numeric"]
+      }, {
+        "kind": "namevalue",
+        "name": "name",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Square"]
+      }]
+  },
+  "bindings_tests.Square.area": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Square"
+      }]
+  },
+  "bindings_tests.Square.sideCount": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Square"
+      }]
+  },
+  "bindings_tests.Strings.concat": {
+    "inputs": [{
+        "kind": "required",
+        "name": "a",
+        "type": ["char"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.echo": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.empty": {
+    "inputs": [],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.join": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["cell"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "separator",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.nullString": {
+    "inputs": [],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.repeat": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["char"]
+      }, {
+        "kind": "required",
+        "name": "times",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.utf16Length": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["char"]
+      }]
+  },
+  "bindings_tests.Strings.utf8Length": {
+    "inputs": [{
+        "kind": "required",
+        "name": "value",
+        "type": ["char"]
+      }]
+  }
+}

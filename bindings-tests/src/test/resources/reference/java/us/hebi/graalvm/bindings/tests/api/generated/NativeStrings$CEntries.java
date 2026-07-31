@@ -1,0 +1,114 @@
+package us.hebi.graalvm.bindings.tests.api.generated;
+
+import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CCharPointerPointer;
+import org.graalvm.word.WordFactory;
+import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
+import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.tests.api.NativeStrings;
+
+public final class NativeStrings$CEntries {
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_echo"
+    )
+    public static CCharPointer bindings_tests_Strings_echo(IsolateThread _isolate,
+            CCharPointer value) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.echo(CTypes.utf8ToJavaString(value)));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_concat"
+    )
+    public static CCharPointer bindings_tests_Strings_concat(IsolateThread _isolate, CCharPointer a,
+            CCharPointer b) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.concat(CTypes.utf8ToJavaString(a), CTypes.utf8ToJavaString(b)));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_utf8Length"
+    )
+    public static long bindings_tests_Strings_utf8Length(IsolateThread _isolate,
+            CCharPointer value) {
+        try {
+            return NativeStrings.utf8Length(CTypes.utf8ToJavaString(value));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_utf16Length"
+    )
+    public static long bindings_tests_Strings_utf16Length(IsolateThread _isolate,
+            CCharPointer value) {
+        try {
+            return NativeStrings.utf16Length(CTypes.utf8ToJavaString(value));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_empty"
+    )
+    public static CCharPointer bindings_tests_Strings_empty(IsolateThread _isolate) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.empty());
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_nullString"
+    )
+    public static CCharPointer bindings_tests_Strings_nullString(IsolateThread _isolate) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.nullString());
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_join"
+    )
+    public static CCharPointer bindings_tests_Strings_join(IsolateThread _isolate,
+            CCharPointerPointer values, long count, CCharPointer separator) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.join(values, CTypes.capSizeToInt(count), CTypes.utf8ToJavaString(separator)));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Strings_repeat"
+    )
+    public static CCharPointer bindings_tests_Strings_repeat(IsolateThread _isolate,
+            CCharPointer value, long times) {
+        try {
+            return CTypes.toTempCharPointer(NativeStrings.repeat(CTypes.utf8ToJavaString(value), CTypes.capSizeToInt(times)));
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return WordFactory.nullPointer();
+        }
+    }
+}

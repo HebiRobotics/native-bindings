@@ -1,0 +1,1464 @@
+{
+  "name": "bindings_tests",
+  "version": "1.2.3",
+  "build": "42",
+  "cPrefix": "bindings_tests",
+  "namespace": ["bindings", "tests"],
+  "classes": [{
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Counter",
+      "comment": "A mutable counter, used to check handle creation and release.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "cDestructorName": "bindings_tests_Counter_release",
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_Counter_create",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Counter",
+        "comment": "A mutable counter, used to check handle creation and release.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "start",
+        "lowerUnderscoreParamName": "start",
+        "defaultValue": "0",
+        "dataType": "INT32"
+      }],
+      "isConstructor": true,
+      "documentation": "Creates a counter starting at the given value, or at zero by default."
+    }, {
+      "name": "getValue",
+      "lowerUnderscoreName": "get_value",
+      "isStatic": false,
+      "cName": "bindings_tests_Counter_getValue",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "propertyName": "value",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "setValue",
+      "lowerUnderscoreName": "set_value",
+      "isStatic": false,
+      "cName": "bindings_tests_Counter_setValue",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "propertyName": "value",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "increment",
+      "lowerUnderscoreName": "increment",
+      "isStatic": false,
+      "cName": "bindings_tests_Counter_increment",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "add",
+      "lowerUnderscoreName": "add",
+      "isStatic": false,
+      "cName": "bindings_tests_Counter_add",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "amount",
+        "lowerUnderscoreParamName": "amount",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "isClosed",
+      "lowerUnderscoreName": "is_closed",
+      "isStatic": false,
+      "cName": "bindings_tests_Counter_isClosed",
+      "returnType": {
+        "isConst": false,
+        "dataType": "BOOL"
+      },
+      "isConstructor": false,
+      "documentation": "Returns true once close() has run. Only observable before the handle is released.",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "getClosedCount",
+      "lowerUnderscoreName": "get_closed_count",
+      "isStatic": true,
+      "cName": "bindings_tests_Counter_getClosedCount",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "documentation": "Total number of counters that have been released so far in this isolate.\nIncrements exactly once per released handle, so tests can verify that the\ngenerated destructor ran.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "resetClosedCount",
+      "lowerUnderscoreName": "reset_closed_count",
+      "isStatic": true,
+      "cName": "bindings_tests_Counter_resetClosedCount",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "documentation": "Resets the released counter, so tests do not depend on execution order.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Shape",
+      "comment": "Base class for the shape hierarchy.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "cDestructorName": "bindings_tests_Shape_release",
+    "children": [{
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Circle",
+      "comment": "A circle. Inherits name and area from Shape.",
+      "dataType": "OBJECT_HANDLE"
+    }, {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Square",
+      "comment": "A square. Inherits name and area from Shape.",
+      "dataType": "OBJECT_HANDLE"
+    }],
+    "methods": [{
+      "name": "getName",
+      "lowerUnderscoreName": "get_name",
+      "isStatic": false,
+      "cName": "bindings_tests_Shape_getName",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "isConstructor": false,
+      "propertyName": "name",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "setName",
+      "lowerUnderscoreName": "set_name",
+      "isStatic": false,
+      "cName": "bindings_tests_Shape_setName",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "name",
+        "lowerUnderscoreParamName": "name",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "propertyName": "name",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "area",
+      "lowerUnderscoreName": "area",
+      "isStatic": false,
+      "cName": "bindings_tests_Shape_area",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "isConstructor": false,
+      "documentation": "Area of the shape. Dispatches to the concrete subclass.",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "sideCount",
+      "lowerUnderscoreName": "side_count",
+      "isStatic": false,
+      "cName": "bindings_tests_Shape_sideCount",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "documentation": "Number of sides. Zero for shapes without straight edges.",
+      "flags": ["Noexcept", "Const"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Circle",
+      "comment": "A circle. Inherits name and area from Shape.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "parent": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Shape",
+      "comment": "Base class for the shape hierarchy.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "toParentCastMethod": {
+      "name": "Circle_to_Shape",
+      "lowerUnderscoreName": "Circle_to_Shape",
+      "isStatic": true,
+      "cName": "bindings_tests_Circle_to_Shape",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Shape",
+        "comment": "Base class for the shape hierarchy.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "ptr",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Circle",
+        "comment": "A circle. Inherits name and area from Shape.",
+        "dataType": "OBJECT_HANDLE"
+      }]
+    },
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_Circle_create",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Circle",
+        "comment": "A circle. Inherits name and area from Shape.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "radius",
+        "lowerUnderscoreParamName": "radius",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": true
+    }, {
+      "name": "getRadius",
+      "lowerUnderscoreName": "get_radius",
+      "isStatic": false,
+      "cName": "bindings_tests_Circle_getRadius",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "isConstructor": false,
+      "propertyName": "radius",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "area",
+      "lowerUnderscoreName": "area",
+      "isStatic": false,
+      "cName": "bindings_tests_Circle_area",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "sideCount",
+      "lowerUnderscoreName": "side_count",
+      "isStatic": false,
+      "cName": "bindings_tests_Circle_sideCount",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept", "Const"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Square",
+      "comment": "A square. Inherits name and area from Shape.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "parent": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Shape",
+      "comment": "Base class for the shape hierarchy.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "toParentCastMethod": {
+      "name": "Square_to_Shape",
+      "lowerUnderscoreName": "Square_to_Shape",
+      "isStatic": true,
+      "cName": "bindings_tests_Square_to_Shape",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Shape",
+        "comment": "Base class for the shape hierarchy.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "ptr",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Square",
+        "comment": "A square. Inherits name and area from Shape.",
+        "dataType": "OBJECT_HANDLE"
+      }]
+    },
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_Square_create",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Square",
+        "comment": "A square. Inherits name and area from Shape.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "side",
+        "lowerUnderscoreParamName": "side",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": true
+    }, {
+      "name": "getSide",
+      "lowerUnderscoreName": "get_side",
+      "isStatic": false,
+      "cName": "bindings_tests_Square_getSide",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "isConstructor": false,
+      "propertyName": "side",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "area",
+      "lowerUnderscoreName": "area",
+      "isStatic": false,
+      "cName": "bindings_tests_Square_area",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "sideCount",
+      "lowerUnderscoreName": "side_count",
+      "isStatic": false,
+      "cName": "bindings_tests_Square_sideCount",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept", "Const"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Arrays",
+      "comment": "Bulk array operations over caller-owned buffers.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Arrays_release",
+    "methods": [{
+      "name": "sumFloat64",
+      "lowerUnderscoreName": "sum_float64",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_sumFloat64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "sumInt32",
+      "lowerUnderscoreName": "sum_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_sumInt32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "dataType": "INT32_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "fillFloat64",
+      "lowerUnderscoreName": "fill_float64",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_fillFloat64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "target",
+        "lowerUnderscoreParamName": "target",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }, {
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": false,
+      "documentation": "Writes value into every element of target. Checks output buffer handling.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "cumulativeSum",
+      "lowerUnderscoreName": "cumulative_sum",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_cumulativeSum",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "source",
+        "lowerUnderscoreParamName": "source",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "target",
+        "lowerUnderscoreParamName": "target",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Writes the running total of source into target. Both buffers must hold at\nleast count elements. Passing the same buffer for both is supported.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "reverseFloat64",
+      "lowerUnderscoreName": "reverse_float64",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_reverseFloat64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Reverses the buffer in place.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Callbacks",
+      "comment": "Synchronous callbacks into caller-provided function pointers.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Callbacks_release",
+    "methods": [{
+      "name": "invokeTimes",
+      "lowerUnderscoreName": "invoke_times",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeTimes",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "typeName": "IndexCallbackFunction",
+        "dataType": "TYPEDEF"
+      }, {
+        "isConst": false,
+        "paramName": "userData",
+        "lowerUnderscoreParamName": "user_data",
+        "dataType": "VOID_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "times",
+        "lowerUnderscoreParamName": "times",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Invokes the callback exactly 'times' times with indices 0 to times-1, then\nreturns. A null function pointer is ignored, and a non-positive count does\nnothing.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokeOnce",
+      "lowerUnderscoreName": "invoke_once",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeOnce",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "typeName": "IndexCallbackFunction",
+        "dataType": "TYPEDEF"
+      }, {
+        "isConst": false,
+        "paramName": "userData",
+        "lowerUnderscoreParamName": "user_data",
+        "dataType": "VOID_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "documentation": "Invokes the callback once with the given index. Returns after it completes.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Errors",
+      "comment": "Deliberate failures, used to check error propagation.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Errors_release",
+    "methods": [{
+      "name": "requireNonNegative",
+      "lowerUnderscoreName": "require_non_negative",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_requireNonNegative",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID_WITH_ERROR_CODE"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "documentation": "Throws when value is negative, otherwise does nothing.",
+      "throwsOn": "value is negative"
+    }, {
+      "name": "divideInt32",
+      "lowerUnderscoreName": "divide_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_divideInt32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "INT32"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "documentation": "Integer division. Returns 0 through the ABI when it throws.",
+      "throwsOn": "divisor is zero"
+    }, {
+      "name": "failingFloat64",
+      "lowerUnderscoreName": "failing_float64",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_failingFloat64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "shouldFail",
+        "lowerUnderscoreParamName": "should_fail",
+        "dataType": "BOOL"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns 0.0 through the ABI when it throws.",
+      "throwsOn": "shouldFail is true"
+    }, {
+      "name": "failingBool",
+      "lowerUnderscoreName": "failing_bool",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_failingBool",
+      "returnType": {
+        "isConst": false,
+        "dataType": "BOOL"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "shouldFail",
+        "lowerUnderscoreParamName": "should_fail",
+        "dataType": "BOOL"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns false through the ABI when it throws.",
+      "throwsOn": "shouldFail is true"
+    }, {
+      "name": "failingString",
+      "lowerUnderscoreName": "failing_string",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_failingString",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "shouldFail",
+        "lowerUnderscoreParamName": "should_fail",
+        "dataType": "BOOL"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns a null pointer through the ABI when it throws.",
+      "throwsOn": "shouldFail is true"
+    }, {
+      "name": "neverThrows",
+      "lowerUnderscoreName": "never_throws",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_neverThrows",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "documentation": "Marked noexcept, so no status code is generated for it.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "clearLastError",
+      "lowerUnderscoreName": "clear_last_error",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_clearLastError",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "documentation": "Clears the last error for the calling thread.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getLastError",
+      "lowerUnderscoreName": "get_last_error",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_getLastError",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "isConstructor": false,
+      "documentation": "Message of the last exception thrown on the calling thread, or an empty\nstring if there has not been one. The language wrappers call this to turn\na failed call into a native exception.\n",
+      "flags": ["Noexcept"],
+      "isLastErrorProvider": true
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Isolated",
+      "comment": "State confined to a second isolate.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "isolateName": "secondary",
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Isolated_release",
+    "methods": [{
+      "name": "increment",
+      "lowerUnderscoreName": "increment",
+      "isStatic": true,
+      "cName": "bindings_tests_Isolated_increment",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getCounter",
+      "lowerUnderscoreName": "get_counter",
+      "isStatic": true,
+      "cName": "bindings_tests_Isolated_getCounter",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "reset",
+      "lowerUnderscoreName": "reset",
+      "isStatic": true,
+      "cName": "bindings_tests_Isolated_reset",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID"
+      },
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "alwaysFails",
+      "lowerUnderscoreName": "always_fails",
+      "isStatic": true,
+      "cName": "bindings_tests_Isolated_alwaysFails",
+      "returnType": {
+        "isConst": false,
+        "dataType": "VOID_WITH_ERROR_CODE"
+      },
+      "isConstructor": false,
+      "documentation": "Always throws, so the secondary isolate's error path is exercised too.",
+      "throwsOn": "always"
+    }, {
+      "name": "getLastError",
+      "lowerUnderscoreName": "get_last_error",
+      "isStatic": true,
+      "cName": "bindings_tests_Isolated_getLastError",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "isConstructor": false,
+      "documentation": "Last error for the calling thread within the secondary isolate.",
+      "flags": ["Noexcept"],
+      "isLastErrorProvider": true
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Math",
+      "comment": "Stateless arithmetic used to check primitive type mapping.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Math_release",
+    "methods": [{
+      "name": "negate",
+      "lowerUnderscoreName": "negate",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_negate",
+      "returnType": {
+        "isConst": false,
+        "dataType": "BOOL"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "BOOL"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "nextChar",
+      "lowerUnderscoreName": "next_char",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_nextChar",
+      "returnType": {
+        "isConst": false,
+        "dataType": "CHAR16"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "CHAR16"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns the next UTF-16 code unit. 'A' becomes 'B'.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addInt8",
+      "lowerUnderscoreName": "add_int8",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addInt8",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT8"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "INT8"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "INT8"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addInt16",
+      "lowerUnderscoreName": "add_int16",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addInt16",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT16"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "INT16"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "INT16"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addInt32",
+      "lowerUnderscoreName": "add_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addInt32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "INT32"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addInt64",
+      "lowerUnderscoreName": "add_int64",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addInt64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "INT64"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "INT64"
+      }],
+      "isConstructor": false,
+      "documentation": "Uses values above 2^32 to catch platforms that truncate long to 32 bit.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addFloat32",
+      "lowerUnderscoreName": "add_float32",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addFloat32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "FLOAT32"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "FLOAT32"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addFloat64",
+      "lowerUnderscoreName": "add_float64",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addFloat64",
+      "returnType": {
+        "isConst": false,
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "FLOAT64"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "FLOAT64"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addSize",
+      "lowerUnderscoreName": "add_size",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_addSize",
+      "returnType": {
+        "isConst": false,
+        "dataType": "SIZE_T"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "SIZE_T"
+      }, {
+        "isConst": false,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "size_t in and size_t out. Bridged through int64 on the Java side.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "sizeToInt32",
+      "lowerUnderscoreName": "size_to_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_sizeToInt32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Takes a size_t that is capped to a 32 bit Java int on the way in.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "maxInt32",
+      "lowerUnderscoreName": "max_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_maxInt32",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "documentation": "Returns Integer.MAX_VALUE, so callers can check the 31 bit cap.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "maxSize",
+      "lowerUnderscoreName": "max_size",
+      "isStatic": true,
+      "cName": "bindings_tests_Math_maxSize",
+      "returnType": {
+        "isConst": false,
+        "dataType": "SIZE_T"
+      },
+      "isConstructor": false,
+      "documentation": "Returns Long.MAX_VALUE as a size_t, so callers can check the 63 bit cap.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Overloads",
+      "comment": "Default arguments and language specific convenience overloads.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Overloads_release",
+    "methods": [{
+      "name": "scale",
+      "lowerUnderscoreName": "scale",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_scale",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "defaultValue": "1",
+        "dataType": "INT32"
+      }, {
+        "isConst": false,
+        "paramName": "factor",
+        "lowerUnderscoreParamName": "factor",
+        "defaultValue": "10",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "documentation": "Both parameters have defaults, so wrappers may call this with no arguments.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "greet",
+      "lowerUnderscoreName": "greet",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_greet",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "name",
+        "lowerUnderscoreParamName": "name",
+        "dataType": "CHAR_POINTER"
+      }, {
+        "isConst": true,
+        "paramName": "greeting",
+        "lowerUnderscoreParamName": "greeting",
+        "defaultValue": "\"Hello\"",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "documentation": "A trailing default only, which is the common case.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "total",
+      "lowerUnderscoreName": "total",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_total",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "sum",
+        "lowerUnderscoreParamName": "sum",
+        "dataType": "INT32"
+      }, {
+        "isConst": false,
+        "paramName": "factor",
+        "lowerUnderscoreParamName": "factor",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "cppOverloads": [{
+        "parameters": "const std::vector<int>& values, int factor",
+        "body": "int sum = 0; for (int v : values) { sum += v; }",
+        "call": "sum, factor"
+      }],
+      "pythonOverload": {
+        "parameters": "cls, values, factor = 1",
+        "body": "total = sum(values)",
+        "call": "total, factor"
+      },
+      "matlabOverload": {
+        "parameters": "values, factor",
+        "body": "if nargin < 2, factor = 1; end",
+        "call": "sum(values), factor"
+      },
+      "documentation": "Takes a pre-summed total. Each language gets a wrapper that sums a collection for you.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "answer",
+      "lowerUnderscoreName": "answer",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_answer",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "multiplier",
+        "lowerUnderscoreParamName": "multiplier",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "cppBody": "return 21 * multiplier;",
+      "documentation": "The C++ wrapper body is hand written and never calls into the library, so\nthis is the one method where the C++ result may legitimately differ from\nthe others. Kept deliberately obvious.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "renamed",
+      "lowerUnderscoreName": "renamed",
+      "isStatic": true,
+      "cName": "bindings_tests_Overloads_renamed",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "isConstructor": false,
+      "documentation": "Declared as originalName in Java but exported as renamed.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Palette",
+      "comment": "Enum round trips.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Palette_release",
+    "methods": [{
+      "name": "next",
+      "lowerUnderscoreName": "next",
+      "isStatic": true,
+      "cName": "bindings_tests_Palette_next",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "comment": "A named color. Values are ordinals, starting at zero.",
+        "dataType": "ENUM"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "color",
+        "lowerUnderscoreParamName": "color",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "dataType": "ENUM"
+      }],
+      "isConstructor": false,
+      "documentation": "Cycles Red to Green to Blue and back to Red.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "nameOf",
+      "lowerUnderscoreName": "name_of",
+      "isStatic": true,
+      "cName": "bindings_tests_Palette_nameOf",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "color",
+        "lowerUnderscoreParamName": "color",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "dataType": "ENUM"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "ordinalOf",
+      "lowerUnderscoreName": "ordinal_of",
+      "isStatic": true,
+      "cName": "bindings_tests_Palette_ordinalOf",
+      "returnType": {
+        "isConst": false,
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "color",
+        "lowerUnderscoreParamName": "color",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "dataType": "ENUM"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "fromOrdinal",
+      "lowerUnderscoreName": "from_ordinal",
+      "isStatic": true,
+      "cName": "bindings_tests_Palette_fromOrdinal",
+      "returnType": {
+        "isConst": false,
+        "cPrefix": "bindings_tests_",
+        "typeName": "Color",
+        "comment": "A named color. Values are ordinals, starting at zero.",
+        "dataType": "ENUM"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "ordinal",
+        "lowerUnderscoreParamName": "ordinal",
+        "dataType": "INT32"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns the enum with the given ordinal, or Red if it is out of range.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "isConst": false,
+      "cPrefix": "bindings_tests_",
+      "typeName": "Strings",
+      "comment": "String conversion, including non-ASCII round trips.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Strings_release",
+    "methods": [{
+      "name": "echo",
+      "lowerUnderscoreName": "echo",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_echo",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns the input unchanged. Round trips UTF-8 through Java's UTF-16.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "concat",
+      "lowerUnderscoreName": "concat",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_concat",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "CHAR_POINTER"
+      }, {
+        "isConst": true,
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "flags": ["Noexcept"]
+    }, {
+      "name": "utf8Length",
+      "lowerUnderscoreName": "utf8_length",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_utf8Length",
+      "returnType": {
+        "isConst": false,
+        "dataType": "SIZE_T"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "documentation": "Length in UTF-8 bytes, which differs from the Java String length for non-ASCII input.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "utf16Length",
+      "lowerUnderscoreName": "utf16_length",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_utf16Length",
+      "returnType": {
+        "isConst": false,
+        "dataType": "SIZE_T"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "documentation": "Number of UTF-16 code units, i.e. the Java String length.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "empty",
+      "lowerUnderscoreName": "empty",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_empty",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "isConstructor": false,
+      "documentation": "Returns an empty string, which must not be confused with a null pointer.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "nullString",
+      "lowerUnderscoreName": "null_string",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_nullString",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "isConstructor": false,
+      "documentation": "Returns a null pointer rather than an empty string.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "join",
+      "lowerUnderscoreName": "join",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_join",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": false,
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "dataType": "CHAR_POINTER_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "comment": "number of entries in values",
+        "dataType": "SIZE_T"
+      }, {
+        "isConst": true,
+        "paramName": "separator",
+        "lowerUnderscoreParamName": "separator",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": false,
+      "documentation": "Joins a char* array with a separator. Checks char** parameter handling.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "repeat",
+      "lowerUnderscoreName": "repeat",
+      "isStatic": true,
+      "cName": "bindings_tests_Strings_repeat",
+      "returnType": {
+        "isConst": true,
+        "dataType": "CHAR_POINTER"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "value",
+        "lowerUnderscoreParamName": "value",
+        "dataType": "CHAR_POINTER"
+      }, {
+        "isConst": false,
+        "paramName": "times",
+        "lowerUnderscoreParamName": "times",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": false,
+      "documentation": "Returns a string longer than the initial scratch buffer, forcing it to grow.",
+      "flags": ["Noexcept"]
+    }]
+  }],
+  "enums": [{
+    "name": "Color",
+    "cPrefix": "bindings_tests",
+    "cName": "bindings_tests_Color",
+    "values": [{
+      "name": "Red",
+      "cName": "bindings_tests_Color_Red",
+      "cValue": 0
+    }, {
+      "name": "Green",
+      "cName": "bindings_tests_Color_Green",
+      "cValue": 1
+    }, {
+      "name": "Blue",
+      "cName": "bindings_tests_Color_Blue",
+      "cValue": 2
+    }]
+  }],
+  "enableGraphics": false,
+  "typedefs": [{
+    "name": "IndexCallbackFunction",
+    "cDefinition": "#ifndef MATLAB\ntypedef void (*IndexCallbackFunction)(void* userData, int index);\n#else\ntypedef void* IndexCallbackFunction; // Callbacks are not supported\n#endif\n",
+    "cppDefinition": "using IndexCallbackFunction = void (*)(void* userData, int index);",
+    "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
+  }]
+}
