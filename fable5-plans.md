@@ -13,8 +13,9 @@ Three design questions were settled before writing this:
 
 Sections are ordered by topic, not by priority. See **Sequencing** at the end.
 
-**Item 3 is implemented.** Item 7 was attempted and reverted, see its notes. Items 8 and 9
-cover static packaging and belong together. Everything else is still a proposal.
+**Item 3 is implemented.** Item 7 was attempted and reverted, see its notes. Everything
+else is still a proposal. **Read *Reading the items together* before picking anything up**,
+it records the cross-item constraints and the order they imply.
 
 ---
 
@@ -775,8 +776,9 @@ and run with no shared library present at all, which is the property the whole p
 exists to provide.
 
 **Effort:** medium, and low risk now that size and zlib are both settled. The packaging is
-mechanical. Sequence it after item 9, which removes the `graal_*` collision, and after item
-6, because the migration decides which library ships this way first.
+mechanical. Its only hard gate is item 9, which removes the `graal_*` collision. It does not
+depend on item 6, because the static consumer is a separate library, see *Reading the items
+together*.
 
 ---
 
@@ -891,19 +893,96 @@ behaviour would just relocate the trap.
 
 ---
 
+## 10. Converging the four generators
+
+Item 5 names this as a prerequisite for adding a fifth language, but it is not really about
+item 5. Every generator added multiplies the cost of every future change to the descriptor
+model, and items 1, 2 and 4 each add a per-language branch, so the refactor gets more
+expensive the longer it waits.
+
+The seam is the `ParameterLists` shape in the Python and MATLAB generators, deliberately
+left unmerged because the bodies diverge for real reasons. The realistic goal is a shared
+*shape*, not shared code: same field names, same construction order, a documented contract
+for what each stage may assume. `CppBindingsGenerator.ClassScope` and `MethodParams` are
+the pattern to follow, since they were introduced for exactly this reason.
+
+Do not attempt this before items 1 and 4 land. Both add per-language branches, and
+converging on a shape that predates them means converging twice.
+
+**Effort:** medium, and entirely reference-file verifiable. A pure refactor must produce an
+empty diff.
+
+---
+
+## Reading the items together
+
+### Two things that do not line up
+
+**The ABI-breaking items sit after the migration.** Items 7 and 9 both rename public C
+symbols. Item 6 migrates `native-charts` onto the annotations. If the migration lands first,
+its consumers get one breaking release for the migration and then two more for the renames.
+Item 7's own text already says it "belongs with the item 6 migration rather than before
+it", which the ordering below now reflects: **all ABI breaks land before or with item 6, as
+one release.**
+
+**Item 8 does not actually depend on item 6.** Item 8 says to sequence it after the
+migration, but the static consumer is a separate algorithms library, not `native-charts`.
+Item 8's real gates are item 9, for the symbol collision, and that library adopting the
+annotations, which is its own migration. `bindings-tests` is enough to build and verify the
+packaging. Treat the item 6 dependency as removed.
+
+### Interactions worth knowing
+
+| Items | Interaction |
+|---|---|
+| 9 into 7 | Both rename library-level symbols. Land as one release or `getLastError` is renamed twice. |
+| 9 into 1 | The MEX dispatch hash table covers every symbol. Renaming after adding callback cases means redoing that work. |
+| 9 into 2 | The Python extension binds C symbols by name, so it should be written against the final names. |
+| 9 into 8 | Removes the duplicate `graal_*` symbols that otherwise make two static images unlinkable. |
+| 4 into 6 | Spans replace several `CArrayConverter` call sites, so less of it needs porting. |
+| 4 into 2 | The extension's buffer-protocol path is the span path. Spans first avoids writing it twice. |
+| 4 into 1 | A callback taking a span cannot be marshalled by the MEX gateway. Item 1's rejection list needs a span case once item 4 lands. |
+| 4 into 5 | Julia passes structs by value natively, so spans work unchanged there. |
+| 1 into 2 | A synchronous callback re-entering Python must hold the GIL. Callbacks first, or the extension's trampoline is reworked. |
+| 1, 4 into 10 | Both add per-language branches. Converging before them means converging twice. |
+| 2 with 8 | A statically linked extension gives a self-contained wheel with no separate shared library. Both also extend the same stage 2 `CMakeLists.txt`, so expect a merge point. |
+| 3 into 5 | Julia is one-based, so `@CLibIndex` is a prerequisite. Already landed. |
+
+Two items are **ABI-neutral** and can therefore slot anywhere: item 1, because the callback
+transport is unchanged and only the typedef's origin moves, and item 4, provided the
+`FLOAT64` struct keeps the name `double_span` so existing consumers see no rename.
+
 ## Sequencing
 
+Grouped, because the ordering constraint is mostly between groups rather than within them.
+
 ```
-3 (@CLibIndex)  DONE
-4 (spans)       medium, shrinks the CArrayConverter surface for item 6
-1 (callbacks)   medium-large, must precede item 2 because of the GIL
-6 (migration)   after 4, so it is migrated once rather than twice
-2 (Python ext)  large, uncertain payoff, benchmark the ctypes fast path first
-5 (languages)   only after the four generators share more structure
-7 (last error)  attempted and reverted, split into three commits before retrying
-9 (isolate API) small, unblocks 8, land with item 7 so the names settle once
-8 (static pkg)  after 9 and 6, mechanical once the collision is gone
+A. Foundation            4 (spans)
+                         additive, unblocks 6, 2 and 5, and shrinks the item 6 port
+
+B. One breaking release  9 (isolate API)      then   7 (last error)
+                         every public rename in a single release, 9 first so 7 is
+                         named once. Retry 7 with its three commit split.
+
+C. Consumer migration    6 (native-charts)
+                         now lands on the final ABI and migrates exactly once
+
+D. Parallelisable        1 (callbacks)   and   8 (static packaging)
+                         independent of each other. 1 is ABI-neutral, 8 needs only 9.
+
+E. Gated on the above    10 (generator convergence)
+                         after 1 and 4, so it converges on the final shape
+
+F. Larger, optional      2 (Python extension)   then   5 (other languages)
+                         2 needs 1, 4 and 9. Benchmark the ctypes fast path first,
+                         it may remove the need. 5 needs 10 and 4.
+
+    3 (@CLibIndex)       DONE
 ```
+
+The one genuine judgement call is **C against D**. If the static consumer is more urgent
+than `native-charts`, item 8 moves ahead of item 6, since it no longer depends on it.
+Nothing else in the order changes.
 
 ## Verification, for every item
 
