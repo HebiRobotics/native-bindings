@@ -125,6 +125,7 @@ Add the runtime to your dependencies and the generator to your processor path:
 | `@CLibLastErrorProvider` | static method | Names the method that returns the last error. One per isolate |
 | `@CDefault` | parameter | Default value, surfaced by the C++, Python and MATLAB wrappers |
 | `@CSizeType` | int or long type use | Maps to `size_t` in C while staying an int or long in Java |
+| `@CLibIndex` | integral type use | Marks an index, so wrappers for one-based languages convert it. Java and C stay zero based |
 
 `@CLibMethod(flags = Noexcept)` means the method cannot throw. Without it, a method is
 assumed to throw: void methods are promoted to an int status code, and every other
@@ -243,7 +244,7 @@ others points at that language's generator rather than at the API.
 
 ### What the test API covers
 
-`bindings-tests/src/main/java/.../api/` holds twelve small classes, each aimed at one
+`bindings-tests/src/main/java/.../api/` holds thirteen small classes, each aimed at one
 part of the feature matrix. Everything is deterministic and synchronous: no UI, no
 threads, no sleeps. Every language suite asserts the same value table, so a divergence
 between languages is immediately visible.
@@ -260,6 +261,7 @@ between languages is immediately visible.
 | `TestOverloads` | Default arguments, per-language overloads, `postBody`, `postCall`, renaming, and `ignore` |
 | `TestIsolated` | A second isolate with its own state and its own error provider |
 | `TestCallbacks` | Synchronous function pointer callbacks |
+| `TestIndices` | `@CLibIndex` conversion, including defaults that shift into the target language |
 | `TestIgnored` | A class level `ignore`, which must produce no output at all |
 
 `ProcessorValidationTest` covers the other half: the cases that are rejected at compile

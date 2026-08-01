@@ -391,6 +391,16 @@ static void test_overloads(void) {
 
     assert(bindings_tests_Overloads_answer(2) == 84);
 
+    /* @CLibIndex is a no-op in C: the ABI is zero based, same as Java. */
+    assert(bindings_tests_Indices_echo(3) == 3);
+    assert(bindings_tests_Indices_countUpTo(3) == 4);
+    assert(bindings_tests_Indices_lastIndexOf(5) == 4);
+    assert(bindings_tests_Indices_offsetFrom(1, 2) == 12);
+    assert(bindings_tests_Indices_offsetFrom(0, 0) == 0);
+    assert(bindings_tests_Indices_fromRow(5) == 5);
+    assert(bindings_tests_Indices_fromRow(0) == 0);
+    assert(bindings_tests_Indices_echoSize((size_t) 3) == (size_t) 3);
+
     /* Declared as originalName in Java, exported as renamed. */
     assert(bindings_tests_Overloads_renamed() == 7);
 

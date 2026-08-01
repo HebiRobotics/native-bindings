@@ -235,6 +235,32 @@ const char* bindings_tests_Errors_getLastError() {
     return __bindings_tests_Errors_getLastError(isolate::global());
 }
 
+// ==== Indices ====
+int __bindings_tests_Indices_echo(graal_isolatethread_t* isolate, int index);
+int bindings_tests_Indices_echo(int index) {
+    return __bindings_tests_Indices_echo(isolate::global(), index);
+}
+int __bindings_tests_Indices_countUpTo(graal_isolatethread_t* isolate, int index);
+int bindings_tests_Indices_countUpTo(int index) {
+    return __bindings_tests_Indices_countUpTo(isolate::global(), index);
+}
+int __bindings_tests_Indices_lastIndexOf(graal_isolatethread_t* isolate, int count);
+int bindings_tests_Indices_lastIndexOf(int count) {
+    return __bindings_tests_Indices_lastIndexOf(isolate::global(), count);
+}
+int __bindings_tests_Indices_offsetFrom(graal_isolatethread_t* isolate, int row, int col);
+int bindings_tests_Indices_offsetFrom(int row, int col) {
+    return __bindings_tests_Indices_offsetFrom(isolate::global(), row, col);
+}
+int __bindings_tests_Indices_fromRow(graal_isolatethread_t* isolate, int row);
+int bindings_tests_Indices_fromRow(int row) {
+    return __bindings_tests_Indices_fromRow(isolate::global(), row);
+}
+long long __bindings_tests_Indices_echoSize(graal_isolatethread_t* isolate, long long index);
+size_t bindings_tests_Indices_echoSize(size_t index) {
+    return __bindings_tests_Indices_echoSize(isolate::global(), static_cast<long long>(index));
+}
+
 // ==== Isolated ====
 void __bindings_tests_Isolated_increment(graal_isolatethread_t* isolate);
 void bindings_tests_Isolated_increment() {

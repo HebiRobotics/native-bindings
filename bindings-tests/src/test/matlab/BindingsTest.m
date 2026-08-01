@@ -290,6 +290,33 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Overloads.answer(2), 84);
         end
 
+        function testIndices(testCase)
+            % MATLAB is the only language where @CLibIndex converts. Every value
+            % here is one based, and the C suite asserts the zero based twin.
+            testCase.verifyEqual(bindings_tests.Indices.echo(4), 4);
+
+            % Index 4 (one based) is index 3 in C, so it counts up to 4.
+            testCase.verifyEqual(bindings_tests.Indices.countUpTo(4), 4);
+
+            % The last index of a 5 element array is 5 when counting from one.
+            testCase.verifyEqual(bindings_tests.Indices.lastIndexOf(5), 5);
+
+            % Row 2, column 3 one based is row 1, column 2 zero based.
+            testCase.verifyEqual(bindings_tests.Indices.offsetFrom(2, 3), 12);
+
+            % The default is shifted into MATLAB's indexing, so omitting an
+            % argument and passing the first index are the same thing.
+            testCase.verifyEqual(bindings_tests.Indices.offsetFrom(), 0);
+            testCase.verifyEqual(bindings_tests.Indices.offsetFrom(1, 1), 0);
+
+            % A non-zero default has to survive the shift. Java defaults to row 5,
+            % which is row 6 counting from one.
+            testCase.verifyEqual(bindings_tests.Indices.fromRow(), 5);
+            testCase.verifyEqual(bindings_tests.Indices.fromRow(6), 5);
+
+            testCase.verifyEqual(bindings_tests.Indices.echoSize(4), 4);
+        end
+
         function testIsolated(testCase)
             % State confined to a second GraalVM isolate. It does not share
             % static fields, the handle registry or the last error slot with the

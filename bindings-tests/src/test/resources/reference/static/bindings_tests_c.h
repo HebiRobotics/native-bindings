@@ -119,6 +119,14 @@ DLL_PUBLIC void bindings_tests_Errors_neverThrows();
 DLL_PUBLIC void bindings_tests_Errors_clearLastError();
 DLL_PUBLIC const char* bindings_tests_Errors_getLastError();
 
+// ==== Indices ====
+DLL_PUBLIC int bindings_tests_Indices_echo(int index);
+DLL_PUBLIC int bindings_tests_Indices_countUpTo(int index);
+DLL_PUBLIC int bindings_tests_Indices_lastIndexOf(int count);
+DLL_PUBLIC int bindings_tests_Indices_offsetFrom(int row, int col);
+DLL_PUBLIC int bindings_tests_Indices_fromRow(int row);
+DLL_PUBLIC size_t bindings_tests_Indices_echoSize(size_t index);
+
 // ==== Isolated ====
 DLL_PUBLIC void bindings_tests_Isolated_increment();
 DLL_PUBLIC int bindings_tests_Isolated_getCounter();

@@ -103,6 +103,14 @@ void bindings_tests_Errors_neverThrows();
 void bindings_tests_Errors_clearLastError();
 const char* bindings_tests_Errors_getLastError();
 
+// ==== Indices ====
+int bindings_tests_Indices_echo(int index);
+int bindings_tests_Indices_countUpTo(int index);
+int bindings_tests_Indices_lastIndexOf(int count);
+int bindings_tests_Indices_offsetFrom(int row, int col);
+int bindings_tests_Indices_fromRow(int row);
+size_t bindings_tests_Indices_echoSize(size_t index);
+
 // ==== Isolated ====
 void bindings_tests_Isolated_increment();
 int bindings_tests_Isolated_getCounter();

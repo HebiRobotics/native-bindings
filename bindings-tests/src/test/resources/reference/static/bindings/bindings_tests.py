@@ -136,6 +136,10 @@ class struct_Errors_(Structure):
     pass
 ErrorsPtr = POINTER(struct_Errors_)
 
+class struct_Indices_(Structure):
+    pass
+IndicesPtr = POINTER(struct_Indices_)
+
 class struct_Isolated_(Structure):
     pass
 IsolatedPtr = POINTER(struct_Isolated_)
@@ -255,6 +259,20 @@ libbindings_tests.bindings_tests_Errors_clearLastError.argtypes = []
 libbindings_tests.bindings_tests_Errors_clearLastError.restype = None
 libbindings_tests.bindings_tests_Errors_getLastError.argtypes = []
 libbindings_tests.bindings_tests_Errors_getLastError.restype = c_char_p
+
+# ==== Indices ====
+libbindings_tests.bindings_tests_Indices_echo.argtypes = [c_int]
+libbindings_tests.bindings_tests_Indices_echo.restype = c_int
+libbindings_tests.bindings_tests_Indices_countUpTo.argtypes = [c_int]
+libbindings_tests.bindings_tests_Indices_countUpTo.restype = c_int
+libbindings_tests.bindings_tests_Indices_lastIndexOf.argtypes = [c_int]
+libbindings_tests.bindings_tests_Indices_lastIndexOf.restype = c_int
+libbindings_tests.bindings_tests_Indices_offsetFrom.argtypes = [c_int, c_int]
+libbindings_tests.bindings_tests_Indices_offsetFrom.restype = c_int
+libbindings_tests.bindings_tests_Indices_fromRow.argtypes = [c_int]
+libbindings_tests.bindings_tests_Indices_fromRow.restype = c_int
+libbindings_tests.bindings_tests_Indices_echoSize.argtypes = [c_size_t]
+libbindings_tests.bindings_tests_Indices_echoSize.restype = c_size_t
 
 # ==== Isolated ====
 libbindings_tests.bindings_tests_Isolated_increment.argtypes = []
@@ -768,6 +786,72 @@ class Errors:
         """
         ptr_ = libbindings_tests.bindings_tests_Errors_getLastError()
         return ptr_.decode("utf-8") if ptr_ is not None else ""
+
+
+class Indices:
+    """Index conversion for languages that count from one."""
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError('Class is not instantiable')
+
+    @classmethod
+    def echo(cls, index: int) -> int:
+        """Returns the index unchanged. Both directions are marked, so a one-based caller
+        passes a value and gets the same value back.
+
+        Args:
+            index:
+        """
+        return libbindings_tests.bindings_tests_Indices_echo(index)
+
+    @classmethod
+    def count_up_to(cls, index: int) -> int:
+        """Index in, plain number out, so only the input converts.
+
+        Args:
+            index:
+        """
+        return libbindings_tests.bindings_tests_Indices_countUpTo(index)
+
+    @classmethod
+    def last_index_of(cls, count: int) -> int:
+        """Plain number in, index out, so only the output converts.
+
+        Args:
+            count:
+        """
+        return libbindings_tests.bindings_tests_Indices_lastIndexOf(count)
+
+    @classmethod
+    def offset_from(cls, row: int = 0, col: int = 0) -> int:
+        """Two indices that default to the first element. The default is written zero based
+        here and each one-based wrapper shifts it, so an omitted argument converts the
+        same way a supplied one does.
+
+        Args:
+            row:
+            col:
+        """
+        return libbindings_tests.bindings_tests_Indices_offsetFrom(row, col)
+
+    @classmethod
+    def from_row(cls, row: int = 5) -> int:
+        """An index whose default is not zero, which is what catches a default that gets
+        converted twice. Omitting the argument has to reach Java as 5 in every language.
+
+        Args:
+            row:
+        """
+        return libbindings_tests.bindings_tests_Indices_fromRow(row)
+
+    @classmethod
+    def echo_size(cls, index: int) -> int:
+        """A size_t index, so the size bridge and the index conversion have to compose.
+
+        Args:
+            index:
+        """
+        return libbindings_tests.bindings_tests_Indices_echoSize(index)
 
 
 class Isolated:

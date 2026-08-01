@@ -12,6 +12,7 @@ import us.hebi.graalvm.bindings.annotations.CDefault;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibEnum;
+import us.hebi.graalvm.bindings.annotations.CLibIndex;
 import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
@@ -107,6 +108,14 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         return false;
     }
 
+    /**
+     * True for a parameter or return value marked with {@link CLibIndex}. The element type
+     * is validated in {@code AnnotatedCLibMethod}, where the message can name the method.
+     */
+    public boolean isIndex() {
+        return mirror.toString().contains(CLibIndex.class.getSimpleName());
+    }
+
     public DataType getDataType() {
         // Handle size first so we don't use primitive int/long
         if (isSizeType()) return DataType.SIZE_T;
@@ -126,6 +135,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
     public TypeDescription toDescription() {
         var desc = TypeDescription.newInstance()
                 .setIsConst(isConst())
+                .setIsIndex(isIndex())
                 .setDataType(getDataType());
 
         getComment().ifPresent(desc::setComment);

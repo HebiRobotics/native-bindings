@@ -54,6 +54,34 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
             checkArgument(!DOUBLE_ARRAY_TYPE.equals(parameter.getJavaType()),
                     "Span parameters must be declared as DoubleSpan, not double[]: %s", executableElement.getSimpleName());
         }
+
+        // One-based languages convert indices by arithmetic, so the type has to be integral
+        checkArgument(!returnType.isIndex() || isIndexType(returnType),
+                "@CLibIndex may only be used on integral types: %s", executableElement.getSimpleName());
+        for (var parameter : getParameters()) {
+            if (!parameter.isIndex()) continue;
+            checkArgument(isIndexType(parameter),
+                    "@CLibIndex may only be used on integral types: %s", executableElement.getSimpleName());
+            // A one-based language shifts the default into its own space, which needs a number
+            parameter.getDefaultValue().ifPresent(value -> checkArgument(isInteger(value),
+                    "@CLibIndex requires an integer @CDefault, got '%s': %s", value, executableElement.getSimpleName()));
+        }
+    }
+
+    private static boolean isIndexType(AnnotatedClibType type) {
+        return switch (type.getDataType()) {
+            case INT8, INT16, INT32, INT64, SIZE_T -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isInteger(String value) {
+        try {
+            Long.parseLong(value.trim());
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private static final TypeName DOUBLE_SPAN_TYPE =

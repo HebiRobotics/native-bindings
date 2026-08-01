@@ -357,6 +357,30 @@ class OverloadsTest(unittest.TestCase):
         self.assertEqual(84, bindings_tests.Overloads.answer(2))
 
 
+class IndicesTest(unittest.TestCase):
+    """@CLibIndex is a no-op in Python: the wrapper is zero based, same as Java."""
+
+    def test_echo(self):
+        self.assertEqual(3, bindings_tests.Indices.echo(3))
+
+    def test_one_sided_conversions(self):
+        self.assertEqual(4, bindings_tests.Indices.count_up_to(3))
+        self.assertEqual(4, bindings_tests.Indices.last_index_of(5))
+
+    def test_defaults(self):
+        self.assertEqual(12, bindings_tests.Indices.offset_from(1, 2))
+        self.assertEqual(0, bindings_tests.Indices.offset_from())
+        self.assertEqual(0, bindings_tests.Indices.offset_from(0, 0))
+
+    def test_non_zero_default(self):
+        # The default is zero based in Python, same as Java
+        self.assertEqual(5, bindings_tests.Indices.from_row())
+        self.assertEqual(2, bindings_tests.Indices.from_row(2))
+
+    def test_size_index(self):
+        self.assertEqual(3, bindings_tests.Indices.echo_size(3))
+
+
 class IsolatedTest(unittest.TestCase):
     """State confined to a second GraalVM isolate.
 

@@ -92,6 +92,10 @@ message TypeDescription {
   optional DataType data_type = 21 [default = UNSPECIFIED];
   optional bool is_const = 1 [default = false];
 
+  // An index into a collection. Java and the C ABI are zero based, so only generators
+  // for one-based languages (MATLAB) emit a conversion.
+  optional bool is_index = 22 [default = false];
+
   optional string c_prefix = 9; // "namespace" prefix for the type definition in C
   optional string type_name = 12; // simple name of the api class or enum
 

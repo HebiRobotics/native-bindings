@@ -350,6 +350,63 @@ std::string getLastError() noexcept;
 
 
 /**
+ * @brief Index conversion for languages that count from one.
+ */
+namespace indices {
+
+/**
+ * @details 
+ * Returns the index unchanged. Both directions are marked, so a one-based caller
+ * passes a value and gets the same value back.
+ *
+ * @param index 
+ */
+int echo(int index) noexcept;
+
+/**
+ * @brief Index in, plain number out, so only the input converts.
+ *
+ * @param index 
+ */
+int countUpTo(int index) noexcept;
+
+/**
+ * @brief Plain number in, index out, so only the output converts.
+ *
+ * @param count 
+ */
+int lastIndexOf(int count) noexcept;
+
+/**
+ * @details 
+ * Two indices that default to the first element. The default is written zero based
+ * here and each one-based wrapper shifts it, so an omitted argument converts the
+ * same way a supplied one does.
+ *
+ * @param row 
+ * @param col 
+ */
+int offsetFrom(int row = 0, int col = 0) noexcept;
+
+/**
+ * @details 
+ * An index whose default is not zero, which is what catches a default that gets
+ * converted twice. Omitting the argument has to reach Java as 5 in every language.
+ *
+ * @param row 
+ */
+int fromRow(int row = 5) noexcept;
+
+/**
+ * @brief A size_t index, so the size bridge and the index conversion have to compose.
+ *
+ * @param index 
+ */
+size_t echoSize(size_t index) noexcept;
+} // namespace indices
+
+
+/**
  * @brief State confined to a second isolate.
  */
 namespace isolated {
@@ -882,6 +939,32 @@ inline std::string errors::getLastError() noexcept {
   static auto bindings_tests_Errors_getLastError = DynamicLookup::instance().getFunc<const char*(*)()>("bindings_tests_Errors_getLastError");
   auto ptr = bindings_tests_Errors_getLastError();
   return !ptr ? std::string() : std::string(ptr); // copy utf8
+}
+
+// Indices
+inline int indices::echo(int index) noexcept {
+  static auto bindings_tests_Indices_echo = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Indices_echo");
+  return bindings_tests_Indices_echo(index);
+}
+inline int indices::countUpTo(int index) noexcept {
+  static auto bindings_tests_Indices_countUpTo = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Indices_countUpTo");
+  return bindings_tests_Indices_countUpTo(index);
+}
+inline int indices::lastIndexOf(int count) noexcept {
+  static auto bindings_tests_Indices_lastIndexOf = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Indices_lastIndexOf");
+  return bindings_tests_Indices_lastIndexOf(count);
+}
+inline int indices::offsetFrom(int row, int col) noexcept {
+  static auto bindings_tests_Indices_offsetFrom = DynamicLookup::instance().getFunc<int(*)(int, int)>("bindings_tests_Indices_offsetFrom");
+  return bindings_tests_Indices_offsetFrom(row, col);
+}
+inline int indices::fromRow(int row) noexcept {
+  static auto bindings_tests_Indices_fromRow = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Indices_fromRow");
+  return bindings_tests_Indices_fromRow(row);
+}
+inline size_t indices::echoSize(size_t index) noexcept {
+  static auto bindings_tests_Indices_echoSize = DynamicLookup::instance().getFunc<size_t(*)(size_t)>("bindings_tests_Indices_echoSize");
+  return bindings_tests_Indices_echoSize(index);
 }
 
 // Isolated

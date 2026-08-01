@@ -129,6 +129,39 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("Span parameters must be declared as DoubleSpan");
     }
 
+    @Test
+    public void rejectsNonIntegralIndexParameter() {
+        assertThat(compile(source("IndexParam", """
+                @CLibClass("IndexParam")
+                public class IndexParam {
+                    @CLibMethod(flags = Noexcept)
+                    public static int at(@CLibIndex double index) { return 0; }
+                }
+                """))).hadErrorContaining("@CLibIndex may only be used on integral types");
+    }
+
+    @Test
+    public void rejectsNonIntegralIndexReturn() {
+        assertThat(compile(source("IndexReturn", """
+                @CLibClass("IndexReturn")
+                public class IndexReturn {
+                    @CLibMethod(flags = Noexcept)
+                    public static @CLibIndex double first() { return 0; }
+                }
+                """))).hadErrorContaining("@CLibIndex may only be used on integral types");
+    }
+
+    @Test
+    public void rejectsNonIntegerIndexDefault() {
+        assertThat(compile(source("IndexDefault", """
+                @CLibClass("IndexDefault")
+                public class IndexDefault {
+                    @CLibMethod(flags = Noexcept)
+                    public static int at(@CLibIndex @CDefault("first") int index) { return 0; }
+                }
+                """))).hadErrorContaining("@CLibIndex requires an integer @CDefault");
+    }
+
     private Compilation compile(JavaFileObject source) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred

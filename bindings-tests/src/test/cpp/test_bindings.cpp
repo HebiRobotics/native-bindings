@@ -325,6 +325,19 @@ static void testOverloads() {
   // C++ gets neither postBody nor postCall, so it sees the raw zero based index.
   CHECK(bt::overloads::echoIndex(3) == 3);
 
+  // @CLibIndex is a no-op in C++: the wrapper is zero based, same as Java.
+  CHECK(bt::indices::echo(3) == 3);
+  CHECK(bt::indices::countUpTo(3) == 4);
+  CHECK(bt::indices::lastIndexOf(5) == 4);
+  CHECK(bt::indices::offsetFrom(1, 2) == 12);
+  CHECK(bt::indices::offsetFrom() == 0);
+
+  // The default is zero based in C++, same as Java
+  CHECK(bt::indices::fromRow() == 5);
+  CHECK(bt::indices::fromRow(2) == 2);
+
+  CHECK(bt::indices::echoSize(3) == static_cast<std::size_t>(3));
+
   // C++ is the one language where the result legitimately differs: the
   // hand-written cppBody returns 21 * multiplier and never calls the library,
   // while every other language gets 42 * multiplier, so answer(2) is 84 there.

@@ -560,6 +560,51 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
 
+        // Indices
+        case /* hash32_fnv1a("bindings_tests_Indices_echo") */ 2992836537: {
+            static auto bindings_tests_Indices_echo = libLoader.getFunc<int(*)(int)>("bindings_tests_Indices_echo");
+            int index = getScalar<int>(prhs[1]);
+            int _value = bindings_tests_Indices_echo(index);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Indices_countUpTo") */ 624477207: {
+            static auto bindings_tests_Indices_countUpTo = libLoader.getFunc<int(*)(int)>("bindings_tests_Indices_countUpTo");
+            int index = getScalar<int>(prhs[1]);
+            int _value = bindings_tests_Indices_countUpTo(index);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Indices_lastIndexOf") */ 1713794949: {
+            static auto bindings_tests_Indices_lastIndexOf = libLoader.getFunc<int(*)(int)>("bindings_tests_Indices_lastIndexOf");
+            int count = getScalar<int>(prhs[1]);
+            int _value = bindings_tests_Indices_lastIndexOf(count);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Indices_offsetFrom") */ 1670565191: {
+            static auto bindings_tests_Indices_offsetFrom = libLoader.getFunc<int(*)(int, int)>("bindings_tests_Indices_offsetFrom");
+            int row = getScalar<int>(prhs[1]);
+            int col = getScalar<int>(prhs[2]);
+            int _value = bindings_tests_Indices_offsetFrom(row, col);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Indices_fromRow") */ 4090672972: {
+            static auto bindings_tests_Indices_fromRow = libLoader.getFunc<int(*)(int)>("bindings_tests_Indices_fromRow");
+            int row = getScalar<int>(prhs[1]);
+            int _value = bindings_tests_Indices_fromRow(row);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Indices_echoSize") */ 4168124296: {
+            static auto bindings_tests_Indices_echoSize = libLoader.getFunc<size_t(*)(size_t)>("bindings_tests_Indices_echoSize");
+            size_t index = getScalar<size_t>(prhs[1]);
+            size_t _value = bindings_tests_Indices_echoSize(index);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+
         // Isolated
         case /* hash32_fnv1a("bindings_tests_Isolated_increment") */ 2513394315: {
             static auto bindings_tests_Isolated_increment = libLoader.getFunc<void(*)()>("bindings_tests_Isolated_increment");

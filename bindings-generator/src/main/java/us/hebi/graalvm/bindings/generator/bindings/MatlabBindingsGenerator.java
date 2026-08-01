@@ -603,6 +603,33 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return value;
     }
 
+    /**
+     * The default value as MATLAB should see it.
+     * <p>
+     * Defaults are stored zero based, like everything else in the descriptor model. An
+     * index default therefore has to shift into MATLAB's own indexing here, so that the
+     * conversion below can subtract unconditionally instead of special casing whether the
+     * argument was supplied. Emitting the default in Java's space and then converting it
+     * would decrement it a second time.
+     */
+    static String getMatlabDefaultValue(TypeDescription param) {
+        var value = convertCDefaultParamString(param);
+        if (!param.getIsIndex()) {
+            return value;
+        }
+        // Guaranteed to parse: the processor rejects a non-integer default on an index
+        return Long.toString(Long.parseLong(value.trim()) + 1);
+    }
+
+    /**
+     * Converts a one-based MATLAB index to the zero-based value the C ABI expects. Applies
+     * to supplied and defaulted arguments alike, because {@link #getMatlabDefaultValue} has
+     * already put the default into the same space.
+     */
+    static String getIndexInputConversion(TypeDescription param) {
+        return "%1$s = %1$s - 1;\n".formatted(param.getParamName());
+    }
+
     static String wrapOutputAssignment(List<String> list) {
         return switch (list.size()) {
             case 0 -> "";
@@ -687,6 +714,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     String result = findUniqueOutputParam(method);
                     internalOutput.add(result);
                     externalOutput.add(result);
+                    if (method.getReturnType().getIsIndex()) {
+                        postCallActions.append("%1$s = %1$s + 1;\n".formatted(result));
+                    }
                     // TODO: add throwing checks for the other types?
                 }
             }
@@ -758,7 +788,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                                 if nargin < %d
                                     %s = %s;
                                 end
-                                """.formatted(argsOffset + i, param.getParamName(), convertCDefaultParamString(param)));
+                                """.formatted(argsOffset + i, param.getParamName(), getMatlabDefaultValue(param)));
                     }
 
                 } else {
@@ -774,11 +804,22 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                                     %1$s = varargin{1};
                                     varargin(1) = [];
                                 end
-                                """.formatted(param.getParamName(), convertCDefaultParamString(param)));
+                                """.formatted(param.getParamName(), getMatlabDefaultValue(param)));
                     }
 
                 }
 
+            }
+
+            // MATLAB counts from one. Index parameters convert here, which is after any
+            // default has been applied and before a user supplied postBody runs. An overload
+            // that replaces the signature or the call site owns the conversion itself.
+            if (!overload.hasParameters() && !overload.hasCall()) {
+                for (var param : method.getParameters()) {
+                    if (param.getIsIndex()) {
+                        preCallActions.append(getIndexInputConversion(param));
+                    }
+                }
             }
 
             // Check if the arguments for the internal call site are overloaded

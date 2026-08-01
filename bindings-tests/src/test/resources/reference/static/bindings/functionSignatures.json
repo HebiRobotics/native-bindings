@@ -256,6 +256,52 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Indices.countUpTo": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Indices.echo": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Indices.echoSize": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Indices.fromRow": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "row",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Indices.lastIndexOf": {
+    "inputs": [{
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Indices.offsetFrom": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "row",
+        "type": ["numeric"]
+      }, {
+        "kind": "ordered",
+        "name": "col",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Isolated.alwaysFails": {
     "inputs": []
   },
