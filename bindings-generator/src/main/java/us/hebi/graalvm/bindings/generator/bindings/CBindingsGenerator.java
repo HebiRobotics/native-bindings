@@ -2,12 +2,11 @@ package us.hebi.graalvm.bindings.generator.bindings;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import org.stringtemplate.v4.ST;
-import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
-import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
 import us.hebi.graalvm.bindings.generator.generators.CEntryPointGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
+import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
+import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
@@ -28,10 +27,6 @@ public class CBindingsGenerator extends BindingGenerator {
 
     @Override
     public void writeTo(Filer filer) throws IOException {
-        // Init
-        features.add(new LibraryInfoFeature(lib));
-        features.add(new CocoaFeature(lib));
-
         // Process all classes
         for (ClassDescription apiClass : lib.getClasses()) {
             process(apiClass);
@@ -84,18 +79,20 @@ public class CBindingsGenerator extends BindingGenerator {
 
         // Define the span struct once, before the first method that uses it
         if (!spanTypedefWritten) {
-            findSpanType(apiClass).ifPresent(spanType -> {
-                typeDefs.append(String.format("""
+            GeneratorUtil.findSpanType(apiClass).ifPresent(spanType -> {
+                typeDefs.append(IndentingTextRenderer.of("""
 
-                        // A (pointer, length) view of a contiguous double buffer, passed and returned
-                        // by value. Inputs are caller-owned and only read during the call. Returned
-                        // spans are library-owned and stay valid until the calling thread's next
-                        // library call, so they have to be copied immediately.
-                        typedef struct {
-                            const double* data;
-                            size_t length;
-                        } %s;
-                        """, TypeMap.toExternalC(spanType, false)));
+                                // A (pointer, length) view of a contiguous double buffer, passed and returned
+                                // by value. Inputs are caller-owned and only read during the call. Returned
+                                // spans are library-owned and stay valid until the calling thread's next
+                                // library call, so they have to be copied immediately.
+                                typedef struct {
+                                    const double* data;
+                                    size_t length;
+                                } %%SPAN_TYPE%%;
+                                """)
+                        .set("SPAN_TYPE", TypeMap.toExternalC(spanType, false))
+                        .render());
                 spanTypedefWritten = true;
             });
         }
@@ -138,26 +135,13 @@ public class CBindingsGenerator extends BindingGenerator {
 
     }
 
-    private static Optional<TypeDescription> findSpanType(ClassDescription apiClass) {
-        for (var method : apiClass.getMethods()) {
-            if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) {
-                return Optional.of(method.getReturnType());
-            }
-            for (var param : method.getParameters()) {
-                if (param.getDataType() == DataType.FLOAT64_SPAN) {
-                    return Optional.of(param);
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
     public static void addParentCastMethod(MethodDescription method, StringBuilder header, StringBuilder cFile) {
-        Function<String, String> replace = input -> input
-                .replaceAll("%%DLL_PUBLIC%%", DLL_PUBLIC)
-                .replaceAll("%%PARENT%%", getQualifiedCType(method.getReturnType()))
-                .replaceAll("%%NAME%%", method.getCName())
-                .replaceAll("%%CHILD%%", getQualifiedCType(method.getParameters().get(0)));
+        Function<String, String> replace = input -> IndentingTextRenderer.of(input)
+                .set("DLL_PUBLIC", DLL_PUBLIC)
+                .set("PARENT", getQualifiedCType(method.getReturnType()))
+                .set("NAME", method.getCName())
+                .set("CHILD", getQualifiedCType(method.getParameters().get(0)))
+                .render();
         header.append(replace.apply("""
                 %%DLL_PUBLIC%%%%PARENT%% %%NAME%%(%%CHILD%% ptr);
                 """));
@@ -170,7 +154,6 @@ public class CBindingsGenerator extends BindingGenerator {
         }
     }
 
-    private static final String IsolateStruct = "graal_isolate_t*";
     private static final String IsolateThreadParam = "graal_isolatethread_t* isolate";
     private static final String DLL_PUBLIC = "DLL_PUBLIC ";
 
@@ -258,14 +241,14 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     private String createIsolateCode(String functionName) {
-        return new ST("""
-                graal_isolatethread_t* <name>() {
-                     static graal_isolate_t* isolate = createIsolate();
-                     static thread_local ThreadHandle thread(isolate);
-                     return thread.ptr;
-                }
-                """)
-                .add("name", functionName)
+        return IndentingTextRenderer.of("""
+                        graal_isolatethread_t* %%NAME%%() {
+                             static graal_isolate_t* isolate = createIsolate();
+                             static thread_local ThreadHandle thread(isolate);
+                             return thread.ptr;
+                        }
+                        """)
+                .set("NAME", functionName)
                 .render();
     }
 
@@ -372,17 +355,18 @@ public class CBindingsGenerator extends BindingGenerator {
             }
 
             // Forward wrapper call. Span returns get filled into a local struct that
-            // gets returned by value
-            out.append(") {\n");
+            // gets returned by value. Seeded with the opening brace so the buffer ends on
+            // a newline, which is what makes the renderer indent the first body line.
+            var body = IndentingTextRenderer.of(") {\n").indent();
             if (spanReturn) {
                 invocation.append(", &result_");
-                out.append(INDENT).append(getQualifiedCType(returnType)).append(" result_;\n")
-                        .append(INDENT).append(invocation).append(");\n")
-                        .append(INDENT).append("return result_;\n");
+                body.addLine(getQualifiedCType(returnType) + " result_;")
+                        .addLine(invocation + ");")
+                        .addLine("return result_;");
             } else {
-                out.append(INDENT).append(invocation).append(");\n");
+                body.addLine(invocation + ");");
             }
-            out.append("}\n");
+            out.append(body.unindent().addLine("}").render());
         }
 
         private static String getInternalName(String cEntryPointName) {
@@ -399,14 +383,10 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     private static final String isolateNamespace = "isolate::";
-    private static String INDENT = "    ";
     private boolean spanTypedefWritten = false;
     StringBuilder typeDefs = new StringBuilder();
-    StringBuilder enumDefs = new StringBuilder();
     StringBuilder header = new StringBuilder();
     StringBuilder cFile = new StringBuilder();
     StringBuilder mFile = new StringBuilder();
-
-    private final List<FeatureGenerator> features = new ArrayList<>();
 
 }

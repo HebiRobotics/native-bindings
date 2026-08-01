@@ -3,7 +3,7 @@ package us.hebi.graalvm.bindings.generator.bindings;
 import com.google.common.base.CaseFormat;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
-import us.hebi.graalvm.bindings.generator.generators.TemplateString;
+import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
@@ -45,7 +45,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         appendClassWrappers(content, apiClasses);
 
         for (FeatureGenerator feature : features) {
-            content.append(TemplateString.of(feature.getPythonWrapper())
+            content.append(IndentingTextRenderer.of(feature.getPythonWrapper())
                     .set("LIB_FIELD", libField)
                     .render());
         }
@@ -54,7 +54,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendLibLoader(StringBuilder content) {
-        content.append(TemplateString.of("""
+        content.append(IndentingTextRenderer.of("""
                         from __future__ import annotations
                         from ctypes import *
                         from enum import IntEnum
@@ -179,7 +179,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     """);
         }
         for (ClassDescription apiClass : apiClasses) {
-            content.append(TemplateString.of("""
+            content.append(IndentingTextRenderer.of("""
                             class struct_%%CLASS_NAME%%_(Structure):
                                 pass
                             %%CPYTHON_TYPE%% = POINTER(struct_%%CLASS_NAME%%_)
@@ -211,7 +211,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     params.add(getCPythonType(parameter));
                 }
 
-                content.append(TemplateString.of("""
+                content.append(IndentingTextRenderer.of("""
                                 %%LIB_FIELD%%.%%CENTRY_NAME%%.argtypes = [%%ARG_TYPES%%]
                                 %%LIB_FIELD%%.%%CENTRY_NAME%%.restype = %%RETURN_TYPE%%
                                 """)
@@ -223,7 +223,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             }
 
             if (apiClass.getInstantiable() && !apiClass.hasParent()) {
-                content.append(TemplateString.of("""
+                content.append(IndentingTextRenderer.of("""
                                 %%LIB_FIELD%%.%%C_DESTRUCTOR%%.argtypes = [%%CPYTHON_TYPE%%]
                                 %%LIB_FIELD%%.%%C_DESTRUCTOR%%.restype = None
                                 """)
@@ -234,7 +234,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             }
 
             if (apiClass.hasParent()) {
-                content.append(TemplateString.of("""
+                content.append(IndentingTextRenderer.of("""
                                 %%LIB_FIELD%%.%%CAST%%.argtypes = [%%CPYTHON_TYPE%%]
                                 %%LIB_FIELD%%.%%CAST%%.restype = %%PARENT_TYPE%%
                                 """)
@@ -307,7 +307,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 boolean needsDummyGetter = getters.add(method.getPropertyName());
                 if (needsDummyGetter) {
                     String propName = getPropertyName(method);
-                    content.append(TemplateString.of("""
+                    content.append(IndentingTextRenderer.of("""
                                 @property
                                 def %%PROP%%(self):
                                     raise AttributeError("Property '%%PROP%%' is write-only")
@@ -319,7 +319,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             content.append(getWrapperMethod(apiClass, method, refField));
         }
 
-        return TemplateString.of(content.toString())
+        return IndentingTextRenderer.of(content.toString())
                 .set("LIB_FIELD", libField)
                 .set("REF_FIELD", refField)
                 .set("CLASS_NAME", className)
@@ -386,7 +386,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 """
                 .replace("%%PROPGET%%", String.join(", ", getProp));
 
-        return TemplateString.of(initMethod + delMethod + reprMethod)
+        return IndentingTextRenderer.of(initMethod + delMethod + reprMethod)
                 .set("SUPER_INIT", superInit)
                 .set("DESTR", apiClass.getCDestructorName())
                 .set("CLASS_PTR", getCPythonType(apiClass.getType()))
@@ -458,7 +458,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var numpy = isUsingNumpy(body, conversions, postBody, returnTemplate) ? indent.apply("np = _require_numpy()\n") : "";
 
         // Build the full method body
-        content.append(TemplateString.of("""
+        content.append(IndentingTextRenderer.of("""
                             def %%METHOD%%(%%PARAMS%%)%%HINT%%:%%DOCS%%
                                 %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%RETURN%%
 
@@ -492,7 +492,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return false;
     }
 
-    private TemplateString getReturnTemplate(ClassDescription apiClass, MethodDescription desc) {
+    private IndentingTextRenderer getReturnTemplate(ClassDescription apiClass, MethodDescription desc) {
         final boolean isConstructor = desc.getIsConstructor();
         final var props = getConstructionProperties(lib, desc);
         String string = switch (desc.getReturnType().getDataType()) {
@@ -542,7 +542,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             default -> "return %%CALL%%";
         };
 
-        return TemplateString.of(string.stripTrailing())
+        return IndentingTextRenderer.of(string.stripTrailing())
                 .set("REASON", getErrorReason(apiClass, desc))
                 .set("RETURN_TYPE", desc.getReturnType().getTypeName());
     }
@@ -708,13 +708,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
             String name = desc.getLowerUnderscoreParamName();
 
             if (pyType.equals("c_char_p")) {
-                out.append(TemplateString.of("""
+                out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, c_char_p):
                             %%NAME%% = c_char_p(%%NAME%%.encode('utf-8') if isinstance(%%NAME%%, str) else %%NAME%%)
                         """).set("NAME", name).render());
 
             } else if (pyType.equals("POINTER(c_char_p)")) {
-                out.append(TemplateString.of("""
+                out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(c_char_p)):
                             encoded_list = [s.encode('utf-8') if isinstance(s, str) else s for s in %%NAME%%]
                             %%NAME%% = (c_char_p * len(encoded_list))(*encoded_list)
@@ -722,7 +722,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
             } else if (pyType.equals("_DoubleSpan")) {
                 // The temporary array keeps the buffer alive until the call returns
-                out.append(TemplateString.of("""
+                out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is None:
                             %%NAME%% = _DoubleSpan(None, 0)
                         elif not isinstance(%%NAME%%, _DoubleSpan):
@@ -732,7 +732,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
             } else if (pyType.startsWith("POINTER(c_")) {
                 String baseType = pyType.substring("POINTER(".length(), pyType.length() - 1);
-                out.append(TemplateString.of("""
+                out.append(IndentingTextRenderer.of("""
                                 if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(%%BASE%%)):
                                     %%NAME%% = np.ascontiguousarray(%%NAME%%, dtype=np.%%NUMPY%%).ctypes.data_as(POINTER(%%BASE%%))
                                 """)

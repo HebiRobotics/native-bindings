@@ -240,8 +240,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         .set("HASH", computeHash.apply(method.getCName()))
                         .set("PRE", pre.toString())
                         .set("POST", post.toString())
-                        .set("TYPES", Joiner.on(", ").join(types))
-                        .set("ARGS", Joiner.on(", ").join(args)));
+                        .set("TYPES", joiner.join(types))
+                        .set("ARGS", joiner.join(args)));
             }
             if (clazz.getInstantiable()) {
                 if (clazz.hasCDestructorName()) {
@@ -338,7 +338,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return switch (options.length) {
             case 0 -> "{}";
             case 1 -> options[0];
-            default -> "{" + Joiner.on(", ").join(Arrays.asList(options)) + "}";
+            default -> "{" + joiner.join(Arrays.asList(options)) + "}";
         };
     }
 
@@ -963,7 +963,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         for (var value : desc.getValues()) {
             choices.add("'" + value.getName() + "'");
         }
-        return Joiner.on(", ").join(choices);
+        return joiner.join(choices);
     }
 
     private String mapToJson(Object obj) {

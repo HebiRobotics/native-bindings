@@ -359,10 +359,10 @@ class Counter:
 
     def __init__(self, start: int = 0, *, value: int = None) -> None:
         """Creates a counter starting at the given value, or at zero by default.
-        
+
         Args:
-            start: 
-        
+            start:
+
         Raises:
             Exception: on internal errors
         """
@@ -522,9 +522,9 @@ class Arrays:
     def sum_float64(cls, values: Sequence[float], count: int) -> float:
         """A const input buffer. Besides the const in the C header, this is what makes the
         C++ generator add a std::vector<double> overload next to the raw pointer one.
-        
+
         Args:
-            values: 
+            values:
             count:
         """
         np = _require_numpy()
@@ -535,9 +535,9 @@ class Arrays:
     @classmethod
     def sum_int32(cls, values: Sequence[int], count: int) -> int:
         """Const on a non-double pointer, which gets the const but no vector overload.
-        
+
         Args:
-            values: 
+            values:
             count:
         """
         np = _require_numpy()
@@ -548,10 +548,10 @@ class Arrays:
     @classmethod
     def fill_float64(cls, target: Sequence[float], count: int, value: float) -> None:
         """Writes value into every element of target. Checks output buffer handling.
-        
+
         Args:
-            target: 
-            count: 
+            target:
+            count:
             value:
         """
         np = _require_numpy()
@@ -565,10 +565,10 @@ class Arrays:
         least count elements. Passing the same buffer for both is supported. One const
         and one mutable pointer in the same signature, so only the source picks up the
         vector overload.
-        
+
         Args:
-            source: 
-            target: 
+            source:
+            target:
             count:
         """
         np = _require_numpy()
@@ -581,9 +581,9 @@ class Arrays:
     @classmethod
     def reverse_float64(cls, values: Sequence[float], count: int) -> None:
         """Reverses the buffer in place.
-        
+
         Args:
-            values: 
+            values:
             count:
         """
         np = _require_numpy()
@@ -594,11 +594,11 @@ class Arrays:
     @classmethod
     def dot_product(cls, x: Sequence[float], y: Sequence[float]) -> float:
         """Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
-        
+
         Args:
-            x: 
-            y: 
-        
+            x:
+            y:
+
         Raises:
             Exception: mismatched lengths
         """
@@ -618,9 +618,9 @@ class Arrays:
     @classmethod
     def add_offset(cls, values: Sequence[float], offset: float) -> Sequence[float]:
         """Returns a new array with the offset added to every element. Checks a span in and an array out.
-        
+
         Args:
-            values: 
+            values:
             offset:
         """
         np = _require_numpy()
@@ -638,7 +638,7 @@ class Arrays:
     def get_sequence(cls, count: int) -> Sequence[float]:
         """Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
         over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
-        
+
         Args:
             count:
         """
@@ -660,10 +660,10 @@ class Callbacks:
         """Invokes the callback exactly 'times' times with indices 0 to times-1, then
         returns. A null function pointer is ignored, and a non-positive count does
         nothing.
-        
+
         Args:
-            func: 
-            user_data: 
+            func:
+            user_data:
             times:
         """
         libbindings_tests.bindings_tests_Callbacks_invokeTimes(func, user_data, times)
@@ -671,10 +671,10 @@ class Callbacks:
     @classmethod
     def invoke_once(cls, func: IndexCallbackFunction, user_data: Any | bytes | None, index: int) -> None:
         """Invokes the callback once with the given index. Returns after it completes.
-        
+
         Args:
-            func: 
-            user_data: 
+            func:
+            user_data:
             index:
         """
         libbindings_tests.bindings_tests_Callbacks_invokeOnce(func, user_data, index)
@@ -689,10 +689,10 @@ class Errors:
     @classmethod
     def require_non_negative(cls, value: int) -> None:
         """Throws when value is negative, otherwise does nothing.
-        
+
         Args:
-            value: 
-        
+            value:
+
         Raises:
             Exception: value is negative
         """
@@ -703,11 +703,11 @@ class Errors:
     @classmethod
     def divide_int32(cls, a: int, b: int) -> int:
         """Integer division. Returns 0 through the ABI when it throws.
-        
+
         Args:
-            a: 
-            b: 
-        
+            a:
+            b:
+
         Raises:
             Exception: divisor is zero
         """
@@ -716,10 +716,10 @@ class Errors:
     @classmethod
     def failing_float64(cls, should_fail: bool) -> float:
         """Returns 0.0 through the ABI when it throws.
-        
+
         Args:
-            should_fail: 
-        
+            should_fail:
+
         Raises:
             Exception: shouldFail is true
         """
@@ -728,10 +728,10 @@ class Errors:
     @classmethod
     def failing_bool(cls, should_fail: bool) -> bool:
         """Returns false through the ABI when it throws.
-        
+
         Args:
-            should_fail: 
-        
+            should_fail:
+
         Raises:
             Exception: shouldFail is true
         """
@@ -740,10 +740,10 @@ class Errors:
     @classmethod
     def failing_string(cls, should_fail: bool) -> str:
         """Returns a null pointer through the ABI when it throws.
-        
+
         Args:
-            should_fail: 
-        
+            should_fail:
+
         Raises:
             Exception: shouldFail is true
         """
@@ -791,7 +791,7 @@ class Isolated:
     @classmethod
     def always_fails(cls) -> None:
         """Always throws, so the secondary isolate's error path is exercised too.
-        
+
         Raises:
             Exception: always
         """
@@ -819,7 +819,7 @@ class Math:
     @classmethod
     def next_char(cls, value: Any) -> Any:
         """Returns the next UTF-16 code unit. 'A' becomes 'B'.
-        
+
         Args:
             value:
         """
@@ -840,9 +840,9 @@ class Math:
     @classmethod
     def add_int64(cls, a: int, b: int) -> int:
         """Uses values above 2^32 to catch platforms that truncate long to 32 bit.
-        
+
         Args:
-            a: 
+            a:
             b:
         """
         return libbindings_tests.bindings_tests_Math_addInt64(a, b)
@@ -858,9 +858,9 @@ class Math:
     @classmethod
     def add_size(cls, a: int, b: int) -> int:
         """size_t in and size_t out. Bridged through int64 on the Java side.
-        
+
         Args:
-            a: 
+            a:
             b:
         """
         return libbindings_tests.bindings_tests_Math_addSize(a, b)
@@ -868,7 +868,7 @@ class Math:
     @classmethod
     def size_to_int32(cls, value: int) -> int:
         """Takes a size_t that is capped to a 32 bit Java int on the way in.
-        
+
         Args:
             value:
         """
@@ -894,9 +894,9 @@ class Overloads:
     @classmethod
     def scale(cls, value: int = 1, factor: int = 10) -> int:
         """Both parameters have defaults, so wrappers may call this with no arguments.
-        
+
         Args:
-            value: 
+            value:
             factor:
         """
         return libbindings_tests.bindings_tests_Overloads_scale(value, factor)
@@ -904,9 +904,9 @@ class Overloads:
     @classmethod
     def greet(cls, name: str, greeting: str = "Hello") -> str:
         """A trailing default only, which is the common case.
-        
+
         Args:
-            name: 
+            name:
             greeting:
         """
         if name is not None and not isinstance(name, c_char_p):
@@ -919,9 +919,9 @@ class Overloads:
     @classmethod
     def total(cls, values, factor = 1) -> int:
         """Takes a pre-summed total. Each language gets a wrapper that sums a collection for you.
-        
+
         Args:
-            sum: 
+            sum:
             factor:
         """
         total = sum(values)
@@ -931,9 +931,9 @@ class Overloads:
     def gain(cls, invert: bool = False, scale: float = 1e-3) -> float:
         """A boolean default and a double default in scientific notation. Each wrapper has
         to render both in its own syntax, which is where they tend to go wrong.
-        
+
         Args:
-            invert: 
+            invert:
             scale:
         """
         return libbindings_tests.bindings_tests_Overloads_gain(invert, scale)
@@ -943,7 +943,7 @@ class Overloads:
         """Returns the index unchanged. MATLAB converts to zero based indexing on the way
         in and back to one based on the way out, so it sees the value it passed in.
         Python clamps negatives instead, which matches C for every valid index.
-        
+
         Args:
             index:
         """
@@ -955,7 +955,7 @@ class Overloads:
         """The C++ wrapper body is hand written and never calls into the library, so
         this is the one method where the C++ result may legitimately differ from
         the others. Kept deliberately obvious.
-        
+
         Args:
             multiplier:
         """
@@ -976,7 +976,7 @@ class Palette:
     @classmethod
     def next(cls, color: Color) -> Color:
         """Cycles Red to Green to Blue and back to Red.
-        
+
         Args:
             color:
         """
@@ -994,9 +994,9 @@ class Palette:
     @classmethod
     def describe(cls, color: Color, marker: Marker) -> str:
         """Takes both enums at once, so the two generated types have to coexist in one signature.
-        
+
         Args:
-            color: 
+            color:
             marker:
         """
         ptr_ = libbindings_tests.bindings_tests_Palette_describe(color, marker)
@@ -1005,7 +1005,7 @@ class Palette:
     @classmethod
     def from_ordinal(cls, ordinal: int) -> Color:
         """Returns the enum with the given ordinal, or Red if it is out of range.
-        
+
         Args:
             ordinal:
         """
@@ -1021,7 +1021,7 @@ class Strings:
     @classmethod
     def echo(cls, value: str) -> str:
         """Returns the input unchanged. Round trips UTF-8 through Java's UTF-16.
-        
+
         Args:
             value:
         """
@@ -1042,7 +1042,7 @@ class Strings:
     @classmethod
     def utf8_length(cls, value: str) -> int:
         """Length in UTF-8 bytes, which differs from the Java String length for non-ASCII input.
-        
+
         Args:
             value:
         """
@@ -1053,7 +1053,7 @@ class Strings:
     @classmethod
     def utf16_length(cls, value: str) -> int:
         """Number of UTF-16 code units, i.e. the Java String length.
-        
+
         Args:
             value:
         """
@@ -1076,9 +1076,9 @@ class Strings:
     @classmethod
     def join(cls, values: Sequence[str], count: int, separator: str) -> str:
         """Joins a char* array with a separator. Checks const char** parameter handling.
-        
+
         Args:
-            values: 
+            values:
             count: number of entries in values
             separator:
         """
@@ -1093,9 +1093,9 @@ class Strings:
     @classmethod
     def repeat(cls, value: str, times: int) -> str:
         """Returns a string longer than the initial scratch buffer, forcing it to grow.
-        
+
         Args:
-            value: 
+            value:
             times:
         """
         if value is not None and not isinstance(value, c_char_p):

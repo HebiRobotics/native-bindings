@@ -30,8 +30,8 @@ public abstract class BindingGenerator {
         ProtoSortUtil.sortClassDescriptions(lib.getClasses());
         this.lib = lib;
         this.features = List.of(
-                new CocoaFeature(lib),
-                new LibraryInfoFeature(lib)
+                new LibraryInfoFeature(lib),
+                new CocoaFeature(lib)
         );
     }
 

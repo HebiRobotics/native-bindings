@@ -18,6 +18,13 @@ import static com.google.common.base.Preconditions.*;
  */
 public class IndentingTextRenderer {
 
+    /**
+     * Wraps an already indented block for %%KEY%% substitution only.
+     */
+    public static IndentingTextRenderer of(String content) {
+        return new IndentingTextRenderer().add(content);
+    }
+
     public IndentingTextRenderer indent() {
         return indentBy(1);
     }

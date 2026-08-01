@@ -136,14 +136,28 @@ public class GeneratorUtil {
      */
     public static boolean usesSpans(LibraryDescription lib) {
         for (ClassDescription apiClass : lib.getClasses()) {
-            for (MethodDescription method : apiClass.getMethods()) {
-                if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) return true;
-                for (TypeDescription param : method.getParameters()) {
-                    if (param.getDataType() == DataType.FLOAT64_SPAN) return true;
+            if (findSpanType(apiClass).isPresent()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The first span used by the class, if any. Generators need the description
+     * itself rather than a boolean when they emit the struct definition, because
+     * the type name is derived from it.
+     */
+    public static Optional<TypeDescription> findSpanType(ClassDescription apiClass) {
+        for (MethodDescription method : apiClass.getMethods()) {
+            if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) {
+                return Optional.of(method.getReturnType());
+            }
+            for (TypeDescription param : method.getParameters()) {
+                if (param.getDataType() == DataType.FLOAT64_SPAN) {
+                    return Optional.of(param);
                 }
             }
         }
-        return false;
+        return Optional.empty();
     }
 
 }
