@@ -43,10 +43,11 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setName(method.getMethodName())
                     .setLowerUnderscoreName(CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getMethodName()))
                     .setCName(method.getCEntryPointName())
-                    .setIsStatic(method.isStatic())
-                    .setReturnType(method.getReturnType().toDescription())
-                    .setIsConstructor(method.isConstructor());
+                    .setReturnType(method.getReturnType().toDescription());
 
+            // Only set to non-standard values
+            if (method.isStatic()) methodDesc.setIsStatic(true);
+            if (method.isConstructor()) methodDesc.setIsConstructor(true);
             if (method.isLastErrorProvider()) methodDesc.setIsLastErrorProvider(true);
 
             method.getPropertyName().ifPresent(methodDesc::setPropertyName);
@@ -119,7 +120,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         for (var namespace : options.getNamespace().split("\\.")) {
             description.getMutableNamespace().next().copyFrom(namespace);
         }
-        description.setEnableGraphics(options.enableGraphics());
+        if (options.enableGraphics()) description.setEnableGraphics(true);
         description.setCPrefix(options.getCPrefix());
 
         // Sort classes by name so the output-diffs are predictable

@@ -134,9 +134,11 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
 
     public TypeDescription toDescription() {
         var desc = TypeDescription.newInstance()
-                .setIsConst(isConst())
-                .setIsIndex(isIndex())
                 .setDataType(getDataType());
+
+        // Only add flags that are not set to the default value
+        if (isConst()) desc.setIsConst(true);
+        if (isIndex()) desc.setIsIndex(true);
 
         getComment().ifPresent(desc::setComment);
         getDefaultValue().ifPresent(desc::setDefaultValue);
