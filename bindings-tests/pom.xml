@@ -187,7 +187,7 @@
                                 <buildArg>--native-compiler-path=${native.compiler}</buildArg>
                                 <buildArg>-H:TempDirectory=${project.build.directory}/native-tmp</buildArg>
                                 <!-- The debug flag must not be folded into the image heap at build time -->
-                                <buildArg>--initialize-at-run-time=us.hebi.graalvm.bindings.runtime.Debug</buildArg>
+                                <buildArg>--initialize-at-run-time=us.hebi.graalvm.bindings.runtime.Configuration</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
