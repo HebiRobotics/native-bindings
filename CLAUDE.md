@@ -1,7 +1,9 @@
 # CLAUDE.md
 
 Guidance for working in this repository. The README covers usage. This file covers the
-things that are easy to get wrong.
+things that are easy to get wrong. The longer form notes live in `.claude/`:
+`architecture.md` for how the pieces fit together, `plans.md` for prospective work items
+and release blockers, and `style.md` for how code here is written.
 
 ## What this is
 
@@ -17,15 +19,20 @@ and `native-generator`) to be open sourced.
 
 ## Reference repositories
 
-These sit next to this one and are **read-only**. Never modify them.
+Reference material is **read-only**. Never modify it. The checkout differs per machine,
+so check what exists before citing paths:
 
-| Path | What it is |
-|---|---|
-| `../native-util`, `../native-generator` | The original implementation this was extracted from |
-| `../native-charts` | The real consumer of the annotations. Generated output in `target/image` |
-| `../hebi-charts-examples` | C++, Python and MATLAB usage examples |
-| `../protocol` | Source of `LibraryDescription.proto` |
-| `../publish-native-charts.yml` | The release CI. The reference for how the two-stage build works |
+- On the machine with the full source repo, `../HEBI-Java` holds everything:
+  `native-util` and `native-generator` (the original implementation), `native-charts`
+  (the real consumer, generated output in `target/image`, demo apps in `src/test/java`),
+  `protocol` (origin of `LibraryDescription.proto`),
+  `.github/workflows/publish-native-charts.yml` (the release CI and the reference for
+  the two-stage build), and `{ARCHITECTURE,CLAUDE,QUESTIONS,fable5-plans}.md` (source
+  repo docs, whose extraction plan item B.1 is superseded by this repo).
+- On the other machine only a small subset of the `native-charts` project is available.
+  Everything not in that subset has to come from this repo's own reference files and
+  the notes in this file. Do not invent paths, and record here anything from the full
+  repo that turns out to be needed.
 
 ## Origin mapping
 
@@ -97,6 +104,48 @@ method that wants equal lengths checks once in Java (`TestArrays.dotProduct`).
 - Double only for now. Other element types are the same mechanical addition.
 - The processor rejects `DoubleSpan` returns (declare `double[]`) and `double[]`
   parameters (declare `DoubleSpan`), covered in `ProcessorValidationTest`.
+
+## Allocation policy
+
+The generated bindings are used in low latency contexts, so **prefer zero allocation in
+steady state**. A call through a wrapper should allocate nothing on the Java heap, nothing
+in the C++ wrapper and nothing in the shim. Setup and failure paths are exempt, because
+neither happens in a hot loop: image startup, isolate creation, the first call on a thread
+that has to grow a scratch buffer, and everything on a throw may allocate freely.
+
+How hard this binds, per language:
+
+- **C** is allocation free today and stays that way. That is the contract the rest is
+  measured against.
+- **Java entry points** allocate nothing per call. The per-thread scratch buffers exist for
+  this reason.
+- **C++** raw pointer and span overloads must be allocation free. The convenience overloads
+  that return `std::vector` or `std::string` allocate by construction, which is fine as long
+  as an allocation free path sits next to each one rather than instead of it.
+- **Python and MATLAB** are best effort. CPython boxes return values and MATLAB allocates
+  mxArrays on every call, so neither can be made allocation free. Avoid gratuitous per call
+  allocation, do not contort a design for it.
+
+A new generated shape is judged against this. If a feature can only be expressed with a per
+call allocation, it needs an allocation free alternative alongside it.
+
+Where the current output does allocate per call, all of it in the string and span return
+paths, and none of it yet fixed:
+
+- `CTypes.toTempDoublePointer` calls `ByteBuffer.asDoubleBuffer()` on every call, which
+  builds a fresh view buffer. The view does not escape, so partial escape analysis may
+  remove it, but that is not a property to rely on. Cache the view next to the `ByteBuffer`.
+- A `double[]` return allocates that array in Java on every call and discards it right after
+  copying it into the scratch buffer. A caller provided output span removes the allocation
+  and the copy together.
+- `CTypes.toTempCString(String)` calls `String.getBytes`, one byte array per call.
+- The C++ span return copies into a fresh `std::vector`, and a string return into a fresh
+  `std::string`.
+- `<lib>_dynamic.hpp` resolves each symbol into a function local `static`, so every call
+  pays a thread safe init guard check. Not an allocation, but the same kind of steady state
+  cost, and linking the static library avoids it.
+
+Nothing in the build checks any of this. See item 11 in `.claude/plans.md`.
 
 ## Verification
 
@@ -185,6 +234,17 @@ Python and MATLAB R2022a at `C:\Program Files\MATLAB\R2022a`. The build scripts 
 - **`@CStruct` interfaces may only contain annotated accessors.** Default or static
   methods fail the image build with "Unexpected method without annotation", which is why
   the span helpers live in the separate `Spans` class.
+- **The static library defaults to the release CRT on MSVC**, in `<lib>_static.cmake` and
+  again on the consumer's target in `target_add_<lib>_static`, both only when the consumer
+  has not chosen already. CMake honours `MSVC_RUNTIME_LIBRARY` only under `CMP0091 NEW`,
+  so a consumer declaring `cmake_minimum_required(VERSION 3.14)` or older gets it silently
+  ignored and still fails with `LNK2038`. Only the C++ compiled libs carry the
+  `/FAILIFMISMATCH` record that forces this (`dumpbin /directives` over `libs.cmake`
+  reports `glass`, `javafx_font`, `prism_d3d` and `sunmscapi` for native-charts, and none
+  at all for native-sdk, which does link and run against the debug CRT). Which ones appear
+  follows what the image reaches rather than whether it has a GUI, `sunmscapi` being the
+  `java.base` crypto provider. The local suites only link the shared library, so nothing
+  here covers this path.
 
 ## Generator gaps the test API exposed
 
@@ -213,6 +273,26 @@ Open:
    and `locate_binary.m`. A configurable version was written and reverted for being too
    large to review. If revisited, keep it to one `%%DOWNLOAD_URL%%` token in the existing
    templates rather than adding a proto field and splitting the cmake template.
+6. A nested `@CLibClass` sends the processor into an infinite loop with no error. Known
+   since the original implementation, the commented-out handling is still in
+   `NativeAnnotationProcessor`. The cheap fix is rejecting nested classes with a compile
+   error, allowing them is a separate investigation.
+7. The generated `compiler-linux.sh` writes its log header with Windows batch syntax
+   (`> %LOG_FILE%` on the first echo), creating a literal file named `%LOG_FILE%` in the
+   working directory. Carried over from the original. One-line fix plus a reference
+   update.
+8. `LibraryDescription.proto` still says `package hebi.api.proto` and
+   `default = "hebi"` for the library name. The package rename only regenerates the
+   model classes. The name default interacts with the omit-what-matches-default
+   encoding: a library actually named `hebi` gets its name omitted from `api.json` and
+   resolved from the default on read, so changing the default changes what older
+   `api.json` files mean. Change it before the format has external consumers, with a
+   reference update.
+9. The MEX target cannot be built in a `Debug` configuration on MSVC. `mex.cmake` adds
+   `/MT` and `/O2` unconditionally, which collides with the configuration's own `/MDd`,
+   `/Od` and `/RTC1`, and cl rejects `/RTC1` with `/O2` outright ("D8016"). The MEX file
+   is always shipped release-built, so the fix is to state that rather than to inherit
+   the configuration flags.
 
 ## Working style
 
@@ -224,3 +304,6 @@ Open:
 - Delegate only wide independent work. Subagents have produced hand-edited reference
   files and `.formatted()` bugs that needed correcting.
 - Prose in docs and comments: no em dashes, no semicolons as sentence connectors.
+- Generated code must be indistinguishable in care from the hand-written source.
+  What makes the author's style distinct is written down in `.claude/style.md`, read it
+  before writing new code.

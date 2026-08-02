@@ -1,4 +1,4 @@
-# fable5-plans.md
+# Plans
 
 Prospective features for the bindings generator. Each section is a standalone work item
 with a recommendation, a design, the files it touches, and the risks. Read `CLAUDE.md`
@@ -10,6 +10,12 @@ Three design questions were settled before writing this:
 - Spans keep the `DoubleSpan` / `IntSpan` naming.
 - Callbacks are synchronous only, and the processor enforces it.
 - The Python C extension auto-selects with a silent ctypes fallback.
+
+A fourth constraint arrived after the first draft and cuts across most of the items:
+**the generated bindings prefer zero allocation in steady state.** Setup and failure paths
+are exempt. The policy itself lives in `CLAUDE.md` under *Allocation policy*. Items that
+change shape because of it carry an **Allocation impact** note below, item 11 is the gate
+that would catch a regression, and the one item it reorders is item 4.
 
 Sections are ordered by topic, not by priority. See **Sequencing** at the end.
 
@@ -105,10 +111,40 @@ message naming the offending method, matching how the span validations already r
 - `bindings-tests`: extend `TestCallbacks`, enable it in `BindingsTest.m`, and drop the
   "not covered in MATLAB" note in the class header
 
+### Allocation impact: prefer a template over `std::function`
+
+The C++ ergonomics above are the part that changes. `const std::function<void(int)>&`
+still requires the caller to build a `std::function`, and that heap allocates whenever the
+captures exceed the small object buffer, which is typically about 16 bytes. A callback
+invoked in a hot loop is exactly where that is least acceptable.
+
+Emit a template overload instead, which is what makes the synchronous contract pay off:
+
+```cpp
+template <typename F>
+void invokeTimes(F&& fn, size_t times);   // passes &fn as userData, trampoline casts back
+```
+
+No type erasure, no allocation, and it collapses into the raw function pointer path after
+inlining. The `std::function` overload is still worth having for call sites that need a
+non-template signature, but the template is the documented hot path and the one the C++
+suite should assert against in item 11.
+
+Python is best effort, but the obvious implementation is the expensive one. Constructing a
+`CFUNCTYPE` per call allocates and is slow. Either cache the wrapper keyed on the callable
+or document build-once-call-many, and keep the keepalive fix either way since that one is
+a correctness bug rather than a performance one.
+
+The MATLAB trampoline allocates mxArrays per invocation through `mexCallMATLAB`. That is
+inherent to MATLAB and out of scope.
+
 ### Risks
 
 - `mexCallMATLAB` longjmps out of the MEX function on error. The trampoline must not hold
-  C++ objects with destructors across it, or it must use `mexCallMATLABWithTrap`.
+  C++ objects with destructors across it, or it must use `mexCallMATLABWithTrap`. Note that
+  the existing RAII helpers in the gateway survive this only because MATLAB's MEX memory
+  manager reclaims `mxCalloc` and `mxCreate*` memory at exit. A trampoline holding anything
+  that is not mx-allocated does not get that safety net. See item 12.
 - The typedef derived from `@CLibCallback` has to reproduce today's `#ifndef MATLAB`
   fallback byte for byte, or every reference file churns.
 
@@ -198,6 +234,24 @@ build.
   all error paths through a single cleanup label.
 - Wheel building and `manylinux` are a distribution problem rather than a code problem, but
   they are why this is a bigger commitment than it looks.
+
+### Allocation impact: raises the ceiling, does not change the priority
+
+The buffer protocol path is strictly better on allocation than ctypes. `PyObject_GetBuffer`
+avoids both the `np.ascontiguousarray` copy and the fresh ctypes pointer object that
+`.ctypes.data_as(...)` builds on every call, and the latter is paid even when the input is
+already contiguous float64.
+
+That does not promote this item. CPython boxes return values and builds argument tuples
+regardless of backend, so Python can never be allocation free and is explicitly best effort
+under the policy. The extension is a latency item, not an allocation policy item, and it
+should not jump the queue on allocation grounds.
+
+What does change is the pre-work. The `ascontiguousarray` fast path was already the first
+thing to do and is now also an allocation fix rather than only a latency fix, so measure
+allocations alongside time. If the fast path plus item 4's output spans close the gap for
+the real workloads, that is a stronger reason to stop there than the original benchmark
+argument was.
 
 **Effort:** large, and the least certain payoff of the six. Land a micro-benchmark and the
 `ascontiguousarray` fast path in the existing ctypes backend first. If that closes the gap
@@ -356,10 +410,131 @@ Python `_DoubleSpan` follow the same shape.
 because that is what forces each hard-coded `FLOAT64_SPAN` into a general form. Once the
 tests pass with exactly two types, the rest are additive rows in a table.
 
+### Allocation impact: this item gains an output span, and it cannot be deferred
+
+Span **input** is already the zero allocation shape and is the model for everything else.
+`DoubleSpan` is a `@CStruct` word type, so the parameter costs nothing in Java, C++ passes
+`.data()` and `.size()` from a vector it already owns, and Python hands over the numpy
+buffer address. `dotProduct` allocates nothing anywhere. Widening the element type keeps
+that property for free.
+
+Span **output** is where every allocation in the feature lives. The processor rejects a
+`DoubleSpan` return and requires `double[]`, and that rule is what forces the cost. One
+call to `addOffset` allocates a Java array, copies it into the per-thread scratch buffer,
+discards the array, then allocates a `std::vector` in C++ or a numpy copy in Python. Three
+allocations for one logical return, and this item as originally written reproduces all
+three across six element types.
+
+So add a **caller provided output span** alongside the `double[]` return:
+
+```java
+@CLibMethod(flags = Noexcept)
+public static int addOffset(DoubleSpan values, double offset, DoubleSpan out) { ... }
+```
+
+Java writes through the pointer and returns the element count written. Nothing is
+allocated on either side of the ABI: C++ writes into a vector the caller already sized,
+Python into a preallocated array, C into whatever it owns. The `double[]` return stays as
+the convenience form, because it is the right default for a caller who does not care. The
+point is that an allocation free path exists next to it, not instead of it.
+
+### Considered and rejected: `double*` return plus an out-parameter length
+
+The alternative shape is to drop the struct from the public header and return the pointer
+with the length travelling separately:
+
+```c
+const double* addOffset(bindings_tests_double_span values, double offset, size_t* length);
+```
+
+Four reasons it loses, the first being the one that motivated asking:
+
+- **It is the shape that breaks the symmetry, not the span.** A span is the same type in
+  both directions. Pointer plus out-length only works for output, because an input length
+  is passed by value while an output length has to be passed by reference. There is a
+  fully classic C form, `(const double*, size_t)` in and `double*` plus `size_t*` out, and
+  the library already has its input half in `sumFloat64`. But that form is not symmetric
+  either, it is just conventionally asymmetric. The span is the only shape where input and
+  output read identically.
+- **It does not change the allocation story at all.** Both forms hand back a pointer into
+  the per-thread scratch buffer that the wrapper has to copy before the next call. The
+  wrapper allocation is caused by the library owning the memory, not by how the length
+  travels. Switching shapes buys nothing on the problem this section exists to solve.
+- **No ABI advantage, and a small disadvantage.** A 16 byte struct return goes in
+  `RAX:RDX` under SysV, so the span is returned in registers. Under the Windows x64
+  convention a 16 byte struct is already returned through a hidden pointer, which is
+  exactly what the explicit `size_t*` would be. So the two are identical on Windows and
+  the struct is better on Linux and macOS.
+- **The struct is atomic.** A caller cannot forget the length or pass null for it.
+
+### The cached buffer idea, and where it actually applies
+
+Returning a reusable buffer rather than a fresh array is the right instinct, and it solves
+a different half of the problem than the output span does:
+
+| Who owns the buffer | Java array per call | Wrapper copy per call |
+|---|---|---|
+| Today, `double[]` return | yes | yes |
+| Library, cached and reused | no | yes, memory dies at the next call |
+| Caller, via an output span | no | no |
+
+So a library-cached buffer fixes the Java side and leaves the wrapper copy, because the
+memory is still only valid until the thread's next call. Only a caller-owned buffer removes
+both. Both are worth having, and the useful part is that **they are the same C shape and the
+same entry point**, differing only in who allocates. The convenience overload can point the
+mutable span at the library's cached buffer and the explicit one at the caller's, so this
+costs one entry point, not two.
+
+For the Java-side type, use the mutable span rather than a `DoubleBuffer`. A `DoubleBuffer`
+works for the library-cached case, but it cannot wrap a caller-supplied raw pointer without
+allocating a view object per call, which is the same trap as `asDoubleBuffer` above. The
+mutable span is a word type and works for both owners, with `Spans.write(out, i, v)`
+mirroring the existing `Spans.read`.
+
+One convention has to be decided rather than discovered: what a caller-provided buffer that
+is too small does. Returning the required count without writing, so a zero-length span is
+also the size query, is the smallest rule that covers both cases. Write it down once.
+
+**This has to land with the element widening, not after it.** Today's struct is
+`const double* data`. An output span needs `double* data`, so it is a second struct per
+element type. The ABI is identical, so it costs nothing at the linker and the layout
+question does not arise, but it is a header change and a `TypeMap` change in the same
+places item 4 already touches. Doing it as a follow-up means churning every reference file
+a second time over the same lines.
+
+Consequences for the plan above:
+
+- The struct count doubles, six element types by two constnesses. That makes the
+  `usesSpans(lib)` change from point 5 mandatory rather than a nicety: emit only the
+  structs a library actually uses, or every header carries twelve definitions.
+- Naming. `double_span` keeps its name and its `const` for compatibility, and the mutable
+  one needs a distinct name because C cannot express pointee constness through a by-value
+  struct otherwise. `double_span_mut` reads badly next to `double_span`. Prefer
+  `mutable_double_span`, or revisit the pair as `const_double_span` / `double_span` if the
+  compatibility constraint on the existing name is worth spending.
+- The processor validation grows a case: an output span parameter on a method that also
+  declares an array return is almost certainly a mistake, so reject it.
+
+Two fixes in the existing scratch buffer path belong with this item, since it is the only
+item that touches them:
+
+- `CTypes.toTempDoublePointer` calls `ByteBuffer.asDoubleBuffer()` on every call, which
+  builds a fresh view object. The view does not escape so partial escape analysis may
+  remove it, but that is not a property to design around. Cache the view next to the
+  `ByteBuffer`.
+- One `ThreadLocal` per element type is six thread local lookups and six independently
+  grown buffers. Use one holder object per thread carrying the buffer and its typed views,
+  so a thread that only ever touches doubles still allocates once.
+
 ### Files
 
 `LibraryDescription.proto`, `TypeMap.java`, `GeneratorUtil.java`, all four generators,
 `bindings-runtime/types/*`, `hebi_structs.h`, and `TestArrays` for coverage.
+
+Plus, for the output span: a mutable `@CStruct` interface per element type next to the
+const one, its row in `hebi_structs.h`, the `usesSpans` change from point 5 promoted to
+mandatory, the `CTypes` scratch buffer holder, and the `AnnotatedCLibMethod` validation
+rejecting an output span on a method that also returns an array.
 
 ### Risks
 
@@ -443,6 +618,25 @@ from item 4. Rust
 second, and only as a thin safe layer over `bindgen`. Treat PHP and browser JavaScript as
 out of scope.
 
+### Allocation impact: Rust gains, Node loses
+
+The ranking shifts, though not enough to change the recommendation.
+
+**Rust** moves up. `&[f64]` maps onto a span with no copy and no wrapper type, `Drop` is
+deterministic, and its audience cares about exactly this property. The "low leverage"
+argument against it was that `bindgen` already produces working bindings, but an
+allocation free safe layer is more than `bindgen` gives you, so the generator earns more
+than it did before.
+
+**Julia** stays first on audience grounds, but with a caveat the original entry missed. Its
+GC means an idiomatic Julia wrapper allocates a fresh `Vector` per array return, the same
+shape as the C++ and Python wrappers. A Julia generator needs item 4's output span form to
+be first class rather than an afterthought, so the dependency on item 4 is stronger than
+"spans work unchanged there".
+
+**TypeScript / Node** drops further. N-API allocates per call on top of an addon build per
+platform, and the async idiom already fought the synchronous callback contract.
+
 **The difficulty common to all of them.** Every generator added multiplies the cost of
 every future change to the descriptor model. Before adding a fifth language, the four
 existing generators should share more than they do now. The `ParameterLists` shape in the
@@ -525,6 +719,50 @@ note.
 
 **Effort:** small to medium, and mostly mechanical. The risk is concentrated in
 `CArrayConverter` and in whatever the output diff turns up.
+
+### Step 1 happened (2026-08-02), findings
+
+The mechanical migration was done in the source repo against the locally installed
+`0.1.0-SNAPSHOT`: imports and `MethodFlag` static imports renamed in 61 files across
+`native-charts` and `native-sdk`, both poms switched to `bindings-runtime` plus
+`bindings-generator` with `-Abindings.*` options, `native-util` kept as a dependency
+for `CArrayConverter`/`CDoubleArray`, `--native-compiler-path` still pointing at the
+checked-in scripts. No DoubleSpan, no `@CLibIndex`, the `MATLAB_FIX_INDEX` overloads
+kept as they are. Tests pass. The generated-output diff against the pre-migration
+baseline decomposes fully:
+
+- C header, C shim, Python module, cmake files, `locate_binary.m`, `graal_isolate.h`:
+  identical apart from trailing whitespace and the build number.
+- `hebi_charts.hpp` and `hebi_charts_dynamic.hpp`: pure block moves, verified by
+  sorting the diff lines (the LibraryInfo before Cocoa reorder).
+- `api.json`: field order plus the omit-defaults encoding. Class and method sets
+  verified identical after normalization.
+- MEX gateway `.cpp`: additive span helper block plus `operator char**()`, inert for a
+  span-free library.
+- The one real API change: `Runtime.m` `runOnUiThread` no longer echoes `userData` as
+  a MATLAB output. The census above says non-const pointer echo does not affect
+  hebi-charts, and it is wrong: `runOnUiThread(func, userData)` has a non-const
+  `void*` and MATLAB callers that captured the return now break. Needs a release note.
+
+Gaps this surfaced in this repo:
+
+1. **The mocks lost their assertion helpers.** The old `CDoublePointerMock` had
+   `checkEquals(delta, values...)` and `printTransformValues()`, used by the
+   native-sdk tests. The migrated tests keep importing the old mock from `native-util`
+   as a workaround. Port `checkEquals` to the runtime mocks (skip
+   `printTransformValues`, it is robotics-specific debug output).
+2. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
+   them in 16 places to match the hand-written `hebi.h` ABI. Add a `Test*` class that
+   pins both before the native-sdk migration.
+3. **`bindings-tests/pom.xml` initializes a class that does not exist**:
+   `--initialize-at-run-time=...runtime.Debug` should say `Configuration`.
+4. `-Dhebi.includeDir` in the native-charts pom is vestigial (no include dir, no
+   `CContext` consumer there). It is real in native-sdk (`NativeHeaders`), which must
+   keep it or adopt the `SpanDirectives` resource-extraction pattern when it migrates.
+5. The clang parser (`ClangUtil`, dropped here by design) remains the only way to
+   regenerate native-sdk's `NativeEnums`/`NativeStructs` from `hebi.h`. It lives only
+   in the source repo's `native-generator`, which is now unused there. Decide where
+   that dev tool goes before deleting the old module.
 
 ---
 
@@ -616,6 +854,27 @@ Two ways forward:
    check after, or add a status out-param to the C ABI. Both are real ABI and performance
    changes and belong in their own pass.
 
+### Allocation impact: the finding above puts `getLastError` in the hot loop
+
+The error path itself is exempt from the policy, so nothing about `setLastError` or the
+exception plumbing changes. What does change is a consequence of the finding that stopped
+this item.
+
+Because a throwing method with a value return does not throw in any wrapper, a caller who
+wants to detect failure has to poll `getLastError` after every such call. That moves an
+error accessor into steady state. The C++ wrapper returns `std::string`, so polling costs
+an allocation per call, and the Python one costs a `.decode("utf-8")`.
+
+Whichever of the two ways forward is taken, the accessor needs an allocation free form:
+
+- Under option 1, keeping it exposed in every language, add a cheap predicate next to the
+  string accessor. `bool hasLastError()` returning a flag, or a `const char*` overload that
+  the caller only converts when it is non-null, makes the common "no error" case free.
+- Under option 2, making every throwing method throw, the polling disappears and the
+  question goes away. That is the better answer on allocation grounds as well as on
+  ergonomics, which is worth recording since the original text treats the two as evenly
+  matched.
+
 ### Suggested split
 
 - **Commit 1**: generated accessor plus C emission, with `@CLibLastErrorProvider` still in
@@ -683,6 +942,18 @@ does want a static package.
 3. **The consumer compiles the shim.** `<lib>_c.cpp` needs C++ only for the
    `static thread_local ThreadHandle` that detaches isolate threads on exit. It uses no STL,
    so the C++ ABI surface is `__cxa_thread_atexit` and static init guards, nothing more.
+4. **Intel Mac static link fails on zlib symbols (reported 2026-08-02).** Linking the
+   hand-packaged static bundle into the Core repo fails on osx_amd64 with undefined
+   `_crc32`, `_deflate`, ... referenced from
+   `Core/third_party/hebi/ndk/lib/osx_amd64/libzip.a` (`CRC32.o`, `zip_util.o`).
+   GraalVM's static `libzip.a` expects the system zlib, so `-lz` is missing from that
+   link line. This is exactly what `syslibs.txt` and `libs.cmake` exist to record, which
+   is why the issue lives here rather than in HEBI-Java: verify the osx wrapper captures
+   `-lz` and the other system `-l` flags the same way the Linux wrapper does, add a
+   linux/osx x86_64 leg to whatever CI consumes the static package, and until the
+   package format ships, document `-lz` as a required system lib for macOS consumers.
+   Alternative worth one look: if the image build can prove `java.util.zip` unreachable
+   for the algorithms library, `libzip.a` drops out entirely.
 
 ### Package layout
 
@@ -766,6 +1037,21 @@ order.
   which, and point at the `src/` escape hatch for the other.
 - **macOS specifics.** `libtool -static` warns on duplicate members, and the ObjC shim has
   to be compiled and merged too, which means `enable_language(OBJC)` in the package step.
+
+### Allocation impact: this is now a latency item too
+
+`<lib>_dynamic.hpp` resolves each symbol into a function local `static`, so every wrapper
+call pays a thread safe initialisation guard check and an indirect call through a variable
+the compiler cannot see through. That is not an allocation, but it is the same class of
+steady state cost the policy is aimed at, and it is unavoidable as long as the consumer
+binds at runtime.
+
+Linking the static package removes it entirely. The symbol is a direct call, and the
+toolchain can inline through the shim into the entry point. So this item is no longer only
+about packaging convenience for a second consumer. It is the fastest available calling
+path, which matters to the same users the allocation policy exists for, and item 11's C++
+allocation harness should link the static package for that reason rather than the shared
+library.
 
 ### Verification
 
@@ -909,10 +1195,207 @@ the pattern to follow, since they were introduced for exactly this reason.
 Do not attempt this before items 1 and 4 land. Both add per-language branches, and
 converging on a shape that predates them means converging twice.
 
+### Allocation impact: the shared shape has to carry it
+
+Whether a parameter is a caller owned buffer, and whether a return allocates in the
+wrapper, are currently decided independently inside each generator. Item 4 adds an output
+span and item 1 adds a callback, and both are exactly the kind of thing where one generator
+quietly emits the allocating form because nobody wrote the rule down.
+
+Put both properties on the shared shape: "the caller owns this buffer" and "this return
+allocates in the wrapper". Then each generator reads a decision rather than making one, and
+item 11 has something to assert against per method instead of per hand-picked test case.
+
 **Effort:** medium, and entirely reference-file verifiable. A pure refactor must produce an
 empty diff.
 
 ---
+
+## 11. An allocation gate
+
+The allocation policy has no enforcement. The reference file check compares text, so it
+cannot see that a generated wrapper allocates, and every language suite asserts values
+rather than behaviour. Without a gate the policy decays into a comment.
+
+### C++, which is the cheap and strong half
+
+Override global `operator new` and `operator delete` in the C++ test binary, count calls,
+and assert the counter does not move across a hot loop:
+
+```cpp
+size_t before = alloc_count;
+for (int i = 0; i < 1000; i++) {
+    total += bt::arrays::dotProduct({x.data(), x.size()}, {y.data(), y.size()});
+}
+CHECK(alloc_count == before);
+```
+
+This is a real gate rather than a proxy. It catches a `std::vector` return sneaking into a
+path that is supposed to be allocation free, it catches `std::function` in the item 1
+callback, and it needs no tooling beyond the suite that already exists. Warm up first, so
+the dynamic loader's one time symbol resolution does not land inside the measured loop, or
+link the static package per item 8 and avoid the question.
+
+Cover one method per allocation free shape rather than every method: a primitive call, a
+handle call, a span in, an output span, a raw pointer buffer, and a callback. The
+convenience overloads that return `std::vector` or `std::string` are asserted to allocate,
+which documents the split and catches an accidental reversal.
+
+### Java, which needs a decision first
+
+`bindings-tests` has no way to measure this today. `GeneratedBindingsTest` only compares
+files, and nothing drives the generated `$CEntries` from the JVM. The mock word types
+(`CDoublePointerMock`, `DoubleSpanMock`) allocate by construction, so a JVM mode assertion
+would measure the mock rather than the real path.
+
+Three options, in order of preference:
+
+1. **Measure in the image.** Most faithful, since it is the code that ships. Needs a
+   native-image allocation counter and a test entry point that runs the loop inside the
+   image, which is new machinery in a repo that currently has no in-image test harness.
+2. **Measure in JVM mode with real word types.** Would need the mocks replaced by something
+   allocation free, which is a change to `bindings-runtime` for the benefit of a test.
+3. **Assert on the generated source instead.** Cheap and immediate: check that no entry
+   point for a method without a String or array return contains a `new` expression, or more
+   simply that the set of `CTypes` helpers it calls is on an allowlist. Catches the
+   generator regressing, not the runtime helpers.
+
+Option 3 is worth doing first regardless, because it costs almost nothing and covers the
+generator, which is what actually changes. Options 1 and 2 both want a decision from the
+author before anyone writes code.
+
+C needs nothing. It never allocates and the header has no place to hide one.
+
+**Effort:** small for the C++ half, and it should land with item 4 so the output span has
+something asserting its whole point. The Java half is a separate decision.
+
+---
+
+## 12. The MEX gateway, as reviewed
+
+Not a feature. A record of what the gateway does well and the four things worth changing,
+so the callback work in item 1 does not have to rediscover them.
+
+### What is right, and should not be touched
+
+- **The perfect hash dispatch.** Hashing the raw `mxChar` data with a build time chosen
+  seed avoids `mxArrayToString`, which would allocate on every call just to pick a branch.
+  The seed search guaranteeing no collisions in the known set is what turns the `switch`
+  into a single compare. This is the right design and the alternative, a string comparison
+  chain, is both slower and allocating.
+- **`MatlabArray` zero-copies on a class ID match** and only allocates a converted copy on
+  mismatch, mirroring `calllib`. Correct for a careless caller, free for a careful one,
+  which is the right default.
+- **`static` function pointers per case** mean one `dlsym` per symbol per session rather
+  than per call, and `LibLoader` and `getLibraryPath` as function local statics give
+  load-once-per-session for free.
+- The RAII helpers are the right shape even though MATLAB's MEX memory manager would
+  reclaim the memory anyway.
+
+### Worth changing
+
+1. **`getScalar` does not validate, and nothing upstream does either.** `getPtr` checks for
+   uint64, `MatlabArray` checks for complex, `charsToUtf8String` checks for char, but a
+   scalar parameter goes straight through `mxGetScalar`, which is undefined on an empty
+   array and returns an unpredictable value on a struct or a cell.
+
+   The reflex is that this is redundant because the `.m` wrappers already check. They do
+   not. `Math.negate(value)` passes its argument straight to the gateway, and a grep over
+   the generated package finds exactly one type check in total, `isnumeric` on a pointer in
+   `Shape.m`. So `bindings_tests.Math.negate(struct('a', 1))` is an ordinary user typo that
+   reaches `mxGetScalar` on a struct and comes back with garbage. **This is the only input
+   path reachable from the public API where a wrong type produces a wrong answer instead of
+   an error**, which makes it the one worth fixing.
+
+   Fix it in the gateway rather than in the `.m` wrappers. One place instead of one per
+   method, it cannot be bypassed, it does not raise the R2018b version floor the way an
+   `arguments` block would, and the cost is a `mxGetClassID` compare against an interpreter
+   dispatch that already costs microseconds. The generator knows the parameter name, so the
+   error message can name it and read as well as a `validateattributes` message would.
+2. **`nrhs` is never checked against the arity of the selected case.** Every case indexes
+   `prhs[1]` and up directly, so too few arguments reads out of bounds. Unlike the above
+   this is **not** reachable from user code: a `private` subfolder is enforced by MATLAB,
+   not conventional, so only functions in `+%%LIB_NAME%%/` can call the gateway at all, and
+   the generated wrappers always pass the right count. It guards against a generator bug,
+   not a user error. Worth adding because the generator knows the arity and it is one line
+   per case, but it is hygiene rather than the fix that matters.
+3. **The `uint32` raw hash entry path is dead code.** The generated `.m` files pass the name
+   string, so every MATLAB call builds a char array and runs FNV-1a over it. Wiring the
+   literal hash into the `.m` files would skip both. The tradeoff is worth stating before
+   anyone does it: embedded hashes mean the seed search rewrites every `.m` file whenever a
+   method is added, and worse, a stale `.m` against a new MEX would fail by hashing to a
+   different function rather than by raising "not found". Names fail loudly, hashes can fail
+   silently. **Recommendation: keep the names and delete the raw hash path**, unless a
+   MATLAB profile shows the hashing actually matters, which for a dozen ASCII characters is
+   unlikely.
+4. **`createMexScalar` casts every return to double**, so an `int64` or `size_t` return
+   above 2^53 loses precision silently. Pointers already avoid this via the separate uint64
+   path. The comment acknowledges the limit, so this is a known tradeoff rather than an
+   oversight, but it deserves a line in the known gaps list because it is invisible at the
+   call site.
+
+### On allocation
+
+The gateway is about as lean as MATLAB permits. Dispatch is allocation free by design, input
+is zero-copy on a class match, and output is one `mxCreate*` per return, which is
+unavoidable because MATLAB owns its arrays. Nothing here needs to change for the policy,
+and MATLAB stays best effort.
+
+The one thing to carry into item 1: the RAII helpers survive a `mexErrMsgIdAndTxt` longjmp
+only because MATLAB reclaims `mxCalloc` and `mxCreate*` memory at MEX exit, not because the
+destructors run. They do not run. A callback trampoline holding anything that is not
+mx-allocated leaks, which is why item 1's risk list names `mexCallMATLABWithTrap`.
+
+**Effort:** small. Items 1 and 2 are the only ones worth doing on their own, and both are
+one generated line per case.
+
+---
+
+## Before open sourcing
+
+Release blockers, separate from the feature items above. None of these is large, and
+none should wait until a release is imminent. Assessed 2026-08-02 against the source
+repo (`../HEBI-Java`, see its `fable5-plans.md` Part A for the full evaluation).
+
+1. **License.** The README says `TODO`. Nothing else can ship first.
+2. **Download URL option.** CLAUDE.md gap 5. The generated loaders point every consumer
+   at `files.hebi.us`. The reverted attempt showed the wrong shape, the right one is a
+   single `%%DOWNLOAD_URL%%` token.
+3. **Nested class rejection.** CLAUDE.md gap 6. First external users will annotate an
+   inner class within a week, and today that hangs the compile with no message.
+4. **`compiler-linux.sh` log header.** CLAUDE.md gap 7. One line of Windows batch syntax
+   in a generated shell script reads as carelessness to exactly the audience this
+   project wants.
+5. **Proto remnants.** CLAUDE.md gap 8. `package hebi.api.proto` and the `"hebi"` name
+   default should change before `api.json` has external consumers, not after.
+6. **Decide which documents ship.** Mostly handled: the root now carries only `README.md`
+   and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved to
+   `../HEBI-Java/docs/charts-blog-notes.md`. What remains is the call on `.claude/` itself,
+   which is internal working material that a public repo would be judged by rather than by
+   the code. Either keep it out of the published tree or move an edited
+   `.claude/architecture.md` to `docs/` as the one piece worth publishing.
+7. **Origin note in the README.** One sentence on the extraction from a robotics
+   codebase in production since 2015, once the source history reference is public
+   somewhere. Provenance is the strongest answer to the AI-generated dismissal, and it
+   is currently invisible.
+8. **CI that verifies exactly what the README claims.** This is the one recurring gap
+   found in a 2026-08-02 survey of the author's three published extractions: MFL's
+   workflow triggers on branches that no longer exist so the badge lies,
+   QuickBuffers claims Java 6 to 20 but tests only JDK 8 with `continue-on-error`,
+   and reachability-annotations has no CI at all. Each repo now has a
+   `fable5-findings.md` with agent-executable fixes. For this repo the rule is set
+   before release: the CI matrix mirrors the compatibility claim one to one, required
+   jobs never use `continue-on-error`, and action versions stay current. The author
+   has said CI is outside their expertise, so this is standing work for an agent, not
+   for the author.
+9. **Changelog from the first tag.** QuickBuffers reached 19 tags with no changelog
+   and reconstructing one later is expensive. MFL's hand-written per-fix changelog
+   with issue links and contributor credits is the house model, start it at 0.1.
+10. **Hygiene a machine can hold.** The survey found license headers naming the wrong
+    project in two of three repos, a README link to a file that does not exist, and
+    build mechanics invisible to IDEs. Before release: verify the license-plugin
+    project names per module, run a link check over the README, and keep all code
+    generation visible to IDE and grep.
 
 ## Reading the items together
 
@@ -947,18 +1430,25 @@ packaging. Treat the item 6 dependency as removed.
 | 1, 4 into 10 | Both add per-language branches. Converging before them means converging twice. |
 | 2 with 8 | A statically linked extension gives a self-contained wheel with no separate shared library. Both also extend the same stage 2 `CMakeLists.txt`, so expect a merge point. |
 | 3 into 5 | Julia is one-based, so `@CLibIndex` is a prerequisite. Already landed. |
+| 4 into 11 | The output span is the reason the gate exists. Land the C++ half with item 4 or nothing asserts it. |
+| 8 into 11 | The gate should link the static package, so loader symbol resolution stays out of the measured loop. |
+| 12 into 1 | The gateway review records the longjmp and validation constraints the callback trampoline runs into. |
+| 10 into 11 | Once the shared shape carries "allocates", the gate can assert per method instead of per hand-picked case. |
 
 Two items are **ABI-neutral** and can therefore slot anywhere: item 1, because the callback
 transport is unchanged and only the typedef's origin moves, and item 4, provided the
-`FLOAT64` struct keeps the name `double_span` so existing consumers see no rename.
+`FLOAT64` struct keeps the name `double_span` so existing consumers see no rename. The
+output span added under *Allocation impact* preserves that, because it is a new struct
+rather than a change to the existing one.
 
 ## Sequencing
 
 Grouped, because the ordering constraint is mostly between groups rather than within them.
 
 ```
-A. Foundation            4 (spans)
-                         additive, unblocks 6, 2 and 5, and shrinks the item 6 port
+A. Foundation            4 (spans, now with the output span)   with   11 (C++ gate)
+                         additive, unblocks 6, 2 and 5, and shrinks the item 6 port.
+                         The gate lands with it or nothing asserts the output span.
 
 B. One breaking release  9 (isolate API)      then   7 (last error)
                          every public rename in a single release, 9 first so 7 is
@@ -978,11 +1468,16 @@ F. Larger, optional      2 (Python extension)   then   5 (other languages)
                          it may remove the need. 5 needs 10 and 4.
 
     3 (@CLibIndex)       DONE
+    12 (MEX review)      unblocked, slots anywhere. Its two worthwhile fixes are
+                         one generated line per case and depend on nothing.
 ```
 
 The one genuine judgement call is **C against D**. If the static consumer is more urgent
 than `native-charts`, item 8 moves ahead of item 6, since it no longer depends on it.
 Nothing else in the order changes.
+
+The allocation policy did not reorder the groups. It grew item 4, which was already first,
+and added item 11 next to it.
 
 ## Verification, for every item
 
@@ -1004,6 +1499,8 @@ Every item above must add to `bindings-tests`:
 - annotated API coverage in `bindings-tests/src/main/java/.../api/`
 - assertions in all four language suites, asserting the same value table
 - rejection cases in `ProcessorValidationTest` for anything the processor must refuse
+- once item 11 exists, a case in the C++ allocation harness for any new call shape that
+  claims to be allocation free, and a deliberate one for any that is not
 
 New annotations also need a row in the README feature table and, if they carry a trap, an
 entry in the `CLAUDE.md` bitten list.
