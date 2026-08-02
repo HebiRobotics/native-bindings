@@ -135,8 +135,16 @@ endif ()
 # UTILITY METHODS TO SIMPLIFY TESTING
 ###############################################################################
 function(target_add_bindings_tests_static target_name)
+    include(${CMAKE_CURRENT_FUNCTION_LIST_DIR}/opts.cmake) # defines GRAALVM_OPTS
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/bindings/include)
     target_link_libraries(${target_name} PRIVATE bindings_tests_static)
+    target_link_options(${target_name} PRIVATE ${GRAALVM_OPTS})
+    if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+        # The static libraries default to the release CRT, so the consumer has to match.
+        # Requires the calling project to declare cmake_minimum_required(VERSION 3.15) or
+        # newer, otherwise CMake ignores the property and the link fails with LNK2038.
+        set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    endif()
 endfunction()
 
 function(target_add_bindings_tests_shared target_name)

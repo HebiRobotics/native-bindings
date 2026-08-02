@@ -135,8 +135,14 @@ endif ()
 # UTILITY METHODS TO SIMPLIFY TESTING
 ###############################################################################
 function(target_add_<libName>_static target_name)
+    include(${CMAKE_CURRENT_FUNCTION_LIST_DIR}/opts.cmake) # defines GRAALVM_OPTS
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/bindings/include)
     target_link_libraries(${target_name} PRIVATE <libName>_static)
+    target_link_options(${target_name} PRIVATE ${GRAALVM_OPTS})
+    if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+        # Match the static libs. Silently ignored unless the caller declares 3.15 or newer.
+        set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    endif()
 endfunction()
 
 function(target_add_<libName>_shared target_name)
