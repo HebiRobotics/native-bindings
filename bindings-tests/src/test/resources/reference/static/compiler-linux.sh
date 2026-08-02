@@ -25,7 +25,7 @@ LOG_PATH="${OUTPUT_PATH}/reports"
 LOG_FILE="${LOG_PATH}/compiler_commands.txt"
 mkdir -p ${LOG_PATH}
 
-echo "=====================================================" > %LOG_FILE%
+echo "=====================================================" > ${LOG_FILE}
 echo "Working directory: ${PWD}" >> ${LOG_FILE}
 echo "Output path: ${OUTPUT_PATH}" >> ${LOG_FILE}
 echo "Library name: ${LIB_NAME}" >> ${LOG_FILE}
