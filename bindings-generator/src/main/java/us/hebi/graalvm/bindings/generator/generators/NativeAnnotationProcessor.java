@@ -17,7 +17,6 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedOptions;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -42,7 +41,6 @@ import static javax.tools.Diagnostic.Kind.*;
  * @since 04 Nov 2015
  */
 @AutoService(Processor.class)
-@SupportedSourceVersion(SourceVersion.RELEASE_17)
 @SupportedOptions({
         EnvProcessor.OPTION_OUTPUT_DIR,
         EnvProcessor.OPTION_LIB_NAME,
@@ -53,6 +51,12 @@ import static javax.tools.Diagnostic.Kind.*;
         EnvProcessor.OPTION_ENABLE_GRAPHICS
 })
 public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        // no version-specific behavior, so support whatever the running compiler does
+        return SourceVersion.latestSupported();
+    }
 
     @Override
     protected Iterable<? extends Step> steps() {
