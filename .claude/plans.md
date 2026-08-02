@@ -261,9 +261,8 @@ for the real workloads, stop there.
 
 ## 3. `@CLibIndex` for language-specific index conversion (IMPLEMENTED)
 
-This one has landed. The section is kept because item 5 and the item 6 leftovers
-depend on it. See
-*What shipped* below.
+This one has landed, and the motivating `NativeGridWindow` swap below is done too.
+The section is kept because item 5 depends on it. See *What shipped* below.
 
 **Motivating case.** `NativeGridWindow` in `native-charts` has four methods that each carry
 a hand-copied `MATLAB_FIX_INDEX` block in a `matlabOverload`:
@@ -344,7 +343,7 @@ not a valid one-based index, now reaches Java as `-1` instead of being absorbed.
 Overload precedence, as implemented: a `matlabOverload` that sets `parameters` or `call`
 owns the signature and gets no generated conversion. One that sets only `postBody` gets
 both, generated conversion first. That is recorded in the `CLAUDE.md` bitten list because
-it is a live double-conversion hazard for the `@CLibIndex` swap left open in item 6.
+it is a live double-conversion hazard for any future swap of a hand-written conversion.
 
 ### Decided: the index width is the author's choice, including `size_t`
 
@@ -655,29 +654,29 @@ pinned by a reference harness there (`GeneratedBindingsTest`), `native-generator
 `native-util` deleted, the clang parser moved into native-sdk's test sources, and the
 `CArrayConverter` bulk copies ported into `bindings-runtime` with the `Unsafe` fast
 path on `us.hebi:glue` (the `Transform` overload stayed behind as a private helper in
-native-charts). Source-repo follow-ups live in `../HEBI-Java/.claude/docs/plans.md`
+native-charts). Source-repo follow-ups live in `../HEBI-Java/.claude/plans.md`
 under the B.1 status note.
+
+The `@CLibIndex` swap landed 2026-08-03: `NativeGridWindow` annotates row/col, the
+`MATLAB_FIX_INDEX` overloads are deleted, and the source repo's reference harness
+pins the regenerated wrapper.
 
 Still open, in this repo's court:
 
-1. **The `@CLibIndex` swap.** The four `MATLAB_FIX_INDEX` overloads in
-   `NativeGridWindow` are still hand-written. Delete them while adding `@CLibIndex`,
-   or the conversion happens twice: a `matlabOverload` that sets only `postBody` does
-   not suppress the generated conversion.
-2. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
+1. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
    them in 16 places to match the hand-written `hebi.h` ABI. Add a `Test*` class that
    pins both.
-3. **Port `checkEquals` to the runtime mocks.** The old mock helpers were not
+2. **Port `checkEquals` to the runtime mocks.** The old mock helpers were not
    extracted, so the native-sdk tests carry a local copy per test class.
 
 Release notes owed when the migrated library ships:
 
 - `Runtime.m` `runOnUiThread` no longer echoes `userData` as a MATLAB output. Callers
   that captured the return break.
-- Once the `@CLibIndex` swap lands: the hand-written clamp absorbed an explicit MATLAB
-  `0`, the generated conversion does not, so `addLineChart(0, 0)` reaches Java as
-  `-1, -1`. Zero was never a valid one-based index, so silent absorption becomes a
-  detectable error.
+- The `@CLibIndex` swap: the hand-written clamp absorbed an explicit MATLAB `0`, the
+  generated conversion does not, so `addLineChart(0, 0)` now reaches Java as `-1, -1`.
+  Zero was never a valid one-based index, so silent absorption becomes a detectable
+  error.
 
 ---
 
@@ -1271,7 +1270,7 @@ one generated line per case.
 
 Release blockers, separate from the feature items above. None of these is large, and
 none should wait until a release is imminent. Assessed 2026-08-02 against the source
-repo (`../HEBI-Java`, see its `.claude/docs/plans.md` Part A for the full evaluation).
+repo (`../HEBI-Java`, see its `.claude/plans.md` Part A for the full evaluation).
 
 1. **License.** The README says `TODO`. Nothing else can ship first.
 2. **Download URL option.** CLAUDE.md gap 5. The generated loaders point every consumer
@@ -1377,7 +1376,7 @@ E. Larger, optional      2 (Python extension)   then   5 (other languages)
                          it may remove the need. 5 needs 10 and 4.
 
     3 (@CLibIndex)       DONE
-    6 (migration)        DONE, its three leftovers are small and slot anywhere
+    6 (migration)        DONE, its two leftovers are small and slot anywhere
     12 (MEX review)      unblocked, slots anywhere. Its two worthwhile fixes are
                          one generated line per case and depend on nothing.
 ```

@@ -21,7 +21,7 @@ and `native-generator`) to be open sourced.
 
 Reference **code** is read-only. Never modify it. The exception is notes: work items
 and findings that belong to the source repo go into
-`../HEBI-Java/.claude/docs/plans.md` rather than into this repo's notes, and each
+`../HEBI-Java/.claude/plans.md` rather than into this repo's notes, and each
 repo's notes describe only that repo. The checkout differs per machine, so check what
 exists before citing paths:
 
@@ -32,7 +32,7 @@ exists before citing paths:
   the original `native-generator` only in git history (removed 2026-08-02, clang
   parser now in native-sdk test sources),
   `.github/workflows/publish-native-charts.yml` (the release CI and the reference for
-  the two-stage build), and its `CLAUDE.md` plus `.claude/docs/` (source repo docs, whose
+  the two-stage build), and its `CLAUDE.md` plus `.claude/` (source repo docs, whose
   extraction plan in `plans.md` item B.1 is superseded by this repo).
 - **Never look above the `claude/` parent directory.** Everything this repo may read
   lives under `C:\code\HEBI\claude\`, and the only valid source checkout is
