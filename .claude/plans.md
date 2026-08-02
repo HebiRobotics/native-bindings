@@ -19,7 +19,7 @@ that would catch a regression, and the one item it reorders is item 4.
 
 Sections are ordered by topic, not by priority. See **Sequencing** at the end.
 
-**Item 3 is implemented.** Item 7 was attempted and reverted, see its notes. Everything
+**Items 3 and 6 are done.** Item 7 was attempted and reverted, see its notes. Everything
 else is still a proposal. **Read *Reading the items together* before picking anything up**,
 it records the cross-item constraints and the order they imply.
 
@@ -261,7 +261,8 @@ for the real workloads, stop there.
 
 ## 3. `@CLibIndex` for language-specific index conversion (IMPLEMENTED)
 
-This one has landed. The section is kept because item 5 and item 6 depend on it. See
+This one has landed. The section is kept because item 5 and the item 6 leftovers
+depend on it. See
 *What shipped* below.
 
 **Motivating case.** `NativeGridWindow` in `native-charts` has four methods that each carry
@@ -343,7 +344,7 @@ not a valid one-based index, now reaches Java as `-1` instead of being absorbed.
 Overload precedence, as implemented: a `matlabOverload` that sets `parameters` or `call`
 owns the signature and gets no generated conversion. One that sets only `postBody` gets
 both, generated conversion first. That is recorded in the `CLAUDE.md` bitten list because
-it is a live double-conversion hazard during the item 6 migration.
+it is a live double-conversion hazard for the `@CLibIndex` swap left open in item 6.
 
 ### Decided: the index width is the author's choice, including `size_t`
 
@@ -646,123 +647,37 @@ that decision.
 
 ---
 
-## 6. Migrating `native-charts` onto these annotations
+## 6. Migrating `native-charts` onto these annotations (DONE)
 
-`native-charts` is the real consumer and the reason the extraction happened. It is
-read-only from this repo, so the migration happens in that repo against a published
-`bindings-runtime` and `bindings-generator`.
+Landed 2026-08-02 in the source repo: imports and poms switched to the published
+artifacts, the generated-output diff against the pre-migration baseline reviewed and
+pinned by a reference harness there (`GeneratedBindingsTest`), `native-generator` and
+`native-util` deleted, the clang parser moved into native-sdk's test sources, and the
+`CArrayConverter` bulk copies ported into `bindings-runtime` with the `Unsafe` fast
+path on `us.hebi:glue` (the `Transform` overload stayed behind as a private helper in
+native-charts). Source-repo follow-ups live in `../HEBI-Java/.claude/docs/plans.md`
+under the B.1 status note.
 
-### What already works
+Still open, in this repo's court:
 
-An annotation census over `native-charts` confirms it uses only features this project now
-supports and tests: `@CLibClass` (34 uses), `@CLibMethod` (343), `@CLibComment` (433),
-`@CDefault` (36), `@CSizeType` (28), `@CConst` (18), `@CLibEnum` (12), `@CLibTypeDef` (1),
-`@CLibLastErrorProvider` (1), the `Const` and `Noexcept` flags, and the `property`,
-`constructor`, `abstractClass`, `isolateName`, `enableInstancing`, `ignore`, `cppBody`,
-`cppOverloads`, `pythonOverload`, `matlabOverload`, `postBody` and `postCall` attributes.
-`@CExternalEnums` is declared but never used, in either repo.
-
-### The four actual blockers
-
-1. **`CArrayConverter`, 9 uses.** Dropped during extraction because it pulled in
-   `us.hebi.math.data.Transform`, `us.hebi.core.util.ArrayUtil` and
-   `us.hebi.glue.UnsafeAccess`. The bulk-copy methods are the part `native-charts` actually
-   uses. Port a trimmed version into `bindings-runtime` with the loop implementations and
-   without the `Transform` overloads. The `Unsafe.copyMemory` fast path is optional, so
-   measure before porting it. Better still, several call sites are `(pointer, length)` pairs
-   that item 4 replaces outright, so do item 4 first and port only what remains.
-2. **`us.hebi.ffi.util.*` imports, 8 files.** A mechanical rename to
-   `us.hebi.graalvm.bindings.runtime.*`. `CTypes` and `ExceptionHandlers` exist here with
-   the same shape.
-3. **Processor options.** `-Ahebi.nativegen.*` becomes `-Abindings.*` in
-   `native-charts/pom.xml`. Five arguments, including `enableGraphics=true`, which this
-   project already reads in `EnvProcessor` and `CocoaFeature`.
-4. **`annotationProcessorPaths` must list `native-image-base` explicitly.** The isolated
-   classloader does not inherit `provided` scope. This has bitten before and shows up as
-   `NoClassDefFoundError: org/graalvm/nativeimage/ObjectHandles`.
-
-### Ordering
-
-Do the rename and the pom changes first and get a build. Then diff the generated output
-against `native-charts/target/image` from before the migration. That diff is the real test,
-the same technique as the reference-file check applied to the production library, and it
-will surface anything the extraction changed. Expect two known non-empty entries:
-
-- The feature-ordering change from the recent generator cleanup. The C++ and Python
-  wrappers now emit the `LibraryInfo` block before the `Cocoa` block. The declarations are
-  independent so this is cosmetic, but it will show in the diff.
-- The `Indices` conversions from item 3, once the hand-written `MATLAB_FIX_INDEX` blocks
-  are replaced by `@CLibIndex`.
-- Whatever the span work changes, if item 4 lands first.
-
-Item 3 has landed, so delete the four `MATLAB_FIX_INDEX` blocks in `NativeGridWindow` while
-adding `@CLibIndex`, or the conversion will happen twice. A `matlabOverload` that sets only
-`postBody` does not suppress the generated conversion, which is exactly the shape those four
-methods have today.
-
-One behaviour change to expect for MATLAB users of those methods: the hand-written clamp
-absorbed an explicit `0`, and the generated conversion does not. `addLineChart(0, 0)` used
-to mean the first cell and now reaches Java as `-1, -1`. Zero was never a valid one-based
-index, so this turns silent absorption into a detectable error, but it is worth a release
-note.
-
-### Also worth doing during the migration
-
-- `native-charts` classes are named `Native*` while this repo renamed its test API to
-  `Test*`. Not required, because `@CLibClass(value = ...)` decouples the Java name from the
-  C symbol, but if it is wanted then do it as its own commit and confirm an empty
-  generated-output diff.
-- The hardcoded `files.hebi.us` download URL, known gap 5, affects `native-charts`
-  directly. A previous attempt at making it configurable was reverted for being too large
-  to review. If revisited, keep it to one `%%DOWNLOAD_URL%%` token in the existing
-  templates.
-
-**Effort:** small to medium, and mostly mechanical. The risk is concentrated in
-`CArrayConverter` and in whatever the output diff turns up.
-
-### Step 1 happened (2026-08-02), findings
-
-The mechanical migration was done in the source repo against the locally installed
-`0.1.0-SNAPSHOT`: imports and `MethodFlag` static imports renamed in 61 files across
-`native-charts` and `native-sdk`, both poms switched to `bindings-runtime` plus
-`bindings-generator` with `-Abindings.*` options, `native-util` kept as a dependency
-for `CArrayConverter`/`CDoubleArray`, `--native-compiler-path` still pointing at the
-checked-in scripts. No DoubleSpan, no `@CLibIndex`, the `MATLAB_FIX_INDEX` overloads
-kept as they are. Tests pass. The generated-output diff against the pre-migration
-baseline decomposes fully:
-
-- C header, C shim, Python module, cmake files, `locate_binary.m`, `graal_isolate.h`:
-  identical apart from trailing whitespace and the build number.
-- `hebi_charts.hpp` and `hebi_charts_dynamic.hpp`: pure block moves, verified by
-  sorting the diff lines (the LibraryInfo before Cocoa reorder).
-- `api.json`: field order plus the omit-defaults encoding. Class and method sets
-  verified identical after normalization.
-- MEX gateway `.cpp`: additive span helper block plus `operator char**()`, inert for a
-  span-free library.
-- The one real API change: `Runtime.m` `runOnUiThread` no longer echoes `userData` as
-  a MATLAB output. The census above says non-const pointer echo does not affect
-  hebi-charts, and it is wrong: `runOnUiThread(func, userData)` has a non-const
-  `void*` and MATLAB callers that captured the return now break. Needs a release note.
-
-Gaps this surfaced in this repo:
-
-1. **The mocks lost their assertion helpers.** The old `CDoublePointerMock` had
-   `checkEquals(delta, values...)` and `printTransformValues()`, used by the
-   native-sdk tests. The migrated tests keep importing the old mock from `native-util`
-   as a workaround. Port `checkEquals` to the runtime mocks (skip
-   `printTransformValues`, it is robotics-specific debug output).
+1. **The `@CLibIndex` swap.** The four `MATLAB_FIX_INDEX` overloads in
+   `NativeGridWindow` are still hand-written. Delete them while adding `@CLibIndex`,
+   or the conversion happens twice: a `matlabOverload` that sets only `postBody` does
+   not suppress the generated conversion.
 2. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
    them in 16 places to match the hand-written `hebi.h` ABI. Add a `Test*` class that
-   pins both before the native-sdk migration.
-3. **`bindings-tests/pom.xml` initializes a class that does not exist**:
-   `--initialize-at-run-time=...runtime.Debug` should say `Configuration`.
-4. `-Dhebi.includeDir` in the native-charts pom is vestigial (no include dir, no
-   `CContext` consumer there). It is real in native-sdk (`NativeHeaders`), which must
-   keep it or adopt the `SpanDirectives` resource-extraction pattern when it migrates.
-5. The clang parser (`ClangUtil`, dropped here by design) remains the only way to
-   regenerate native-sdk's `NativeEnums`/`NativeStructs` from `hebi.h`. It lives only
-   in the source repo's `native-generator`, which is now unused there. Decide where
-   that dev tool goes before deleting the old module.
+   pins both.
+3. **Port `checkEquals` to the runtime mocks.** The old mock helpers were not
+   extracted, so the native-sdk tests carry a local copy per test class.
+
+Release notes owed when the migrated library ships:
+
+- `Runtime.m` `runOnUiThread` no longer echoes `userData` as a MATLAB output. Callers
+  that captured the return break.
+- Once the `@CLibIndex` swap lands: the hand-written clamp absorbed an explicit MATLAB
+  `0`, the generated conversion does not, so `addLineChart(0, 0)` reaches Java as
+  `-1, -1`. Zero was never a valid one-based index, so silent absorption becomes a
+  detectable error.
 
 ---
 
@@ -890,7 +805,8 @@ Whichever of the two ways forward is taken, the accessor needs an allocation fre
   does split the pair across two places, `Errors.clearLastError()` alongside a library-level
   `getLastError()`. Decide whether that is acceptable before committing.
 - This breaks the C ABI. `hebi_charts_Runtime_getLastError` becomes
-  `hebi_charts_getLastError`, so it belongs with the item 6 migration rather than before it.
+  `hebi_charts_getLastError`. The item 6 migration landed first, so this now goes into
+  the same breaking release as item 9 rather than riding along with the migration.
 
 ---
 
@@ -1355,7 +1271,7 @@ one generated line per case.
 
 Release blockers, separate from the feature items above. None of these is large, and
 none should wait until a release is imminent. Assessed 2026-08-02 against the source
-repo (`../HEBI-Java`, see its `fable5-plans.md` Part A for the full evaluation).
+repo (`../HEBI-Java`, see its `.claude/docs/plans.md` Part A for the full evaluation).
 
 1. **License.** The README says `TODO`. Nothing else can ship first.
 2. **Download URL option.** CLAUDE.md gap 5. The generated loaders point every consumer
@@ -1363,14 +1279,13 @@ repo (`../HEBI-Java`, see its `fable5-plans.md` Part A for the full evaluation).
    single `%%DOWNLOAD_URL%%` token.
 3. **Nested class rejection.** CLAUDE.md gap 6. First external users will annotate an
    inner class within a week, and today that hangs the compile with no message.
-4. **`compiler-linux.sh` log header.** CLAUDE.md gap 7. One line of Windows batch syntax
-   in a generated shell script reads as carelessness to exactly the audience this
-   project wants.
-5. **Proto remnants.** CLAUDE.md gap 8. `package hebi.api.proto` and the `"hebi"` name
+4. **`compiler-linux.sh` log header.** Done. The `%LOG_FILE%` literal is fixed in the
+   generated `compiler-linux.sh` and `compiler-osx.sh`, with the reference files updated.
+5. **Proto remnants.** CLAUDE.md gap 7. `package hebi.api.proto` and the `"hebi"` name
    default should change before `api.json` has external consumers, not after.
 6. **Decide which documents ship.** Mostly handled: the root now carries only `README.md`
-   and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved to
-   `../HEBI-Java/docs/charts-blog-notes.md`. What remains is the call on `.claude/` itself,
+   and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved out to
+   the charts blog notes kept outside the repo. What remains is the call on `.claude/` itself,
    which is internal working material that a public repo would be judged by rather than by
    the code. Either keep it out of the published tree or move an edited
    `.claude/architecture.md` to `docs/` as the one piece worth publishing.
@@ -1401,18 +1316,16 @@ repo (`../HEBI-Java`, see its `fable5-plans.md` Part A for the full evaluation).
 
 ### Two things that do not line up
 
-**The ABI-breaking items sit after the migration.** Items 7 and 9 both rename public C
-symbols. Item 6 migrates `native-charts` onto the annotations. If the migration lands first,
-its consumers get one breaking release for the migration and then two more for the renames.
-Item 7's own text already says it "belongs with the item 6 migration rather than before
-it", which the ordering below now reflects: **all ABI breaks land before or with item 6, as
-one release.**
+**The ABI-breaking items now come after the migration.** Items 7 and 9 both rename
+public C symbols, and item 6 landed first, so the original plan of folding every break
+into the migration release is off the table. What remains of the constraint: **items 9
+and 7 land together as the one remaining breaking release**, 9 first so 7's accessor is
+only named once.
 
-**Item 8 does not actually depend on item 6.** Item 8 says to sequence it after the
-migration, but the static consumer is a separate algorithms library, not `native-charts`.
-Item 8's real gates are item 9, for the symbol collision, and that library adopting the
-annotations, which is its own migration. `bindings-tests` is enough to build and verify the
-packaging. Treat the item 6 dependency as removed.
+**Item 8 never depended on item 6.** The static consumer is a separate algorithms
+library, not `native-charts`. Item 8's real gates are item 9, for the symbol collision,
+and that library adopting the annotations, which is its own migration. `bindings-tests`
+is enough to build and verify the packaging.
 
 ### Interactions worth knowing
 
@@ -1422,7 +1335,6 @@ packaging. Treat the item 6 dependency as removed.
 | 9 into 1 | The MEX dispatch hash table covers every symbol. Renaming after adding callback cases means redoing that work. |
 | 9 into 2 | The Python extension binds C symbols by name, so it should be written against the final names. |
 | 9 into 8 | Removes the duplicate `graal_*` symbols that otherwise make two static images unlinkable. |
-| 4 into 6 | Spans replace several `CArrayConverter` call sites, so less of it needs porting. |
 | 4 into 2 | The extension's buffer-protocol path is the span path. Spans first avoids writing it twice. |
 | 4 into 1 | A callback taking a span cannot be marshalled by the MEX gateway. Item 1's rejection list needs a span case once item 4 lands. |
 | 4 into 5 | Julia passes structs by value natively, so spans work unchanged there. |
@@ -1447,34 +1359,31 @@ Grouped, because the ordering constraint is mostly between groups rather than wi
 
 ```
 A. Foundation            4 (spans, now with the output span)   with   11 (C++ gate)
-                         additive, unblocks 6, 2 and 5, and shrinks the item 6 port.
+                         additive, unblocks 2 and 5.
                          The gate lands with it or nothing asserts the output span.
 
 B. One breaking release  9 (isolate API)      then   7 (last error)
                          every public rename in a single release, 9 first so 7 is
                          named once. Retry 7 with its three commit split.
 
-C. Consumer migration    6 (native-charts)
-                         now lands on the final ABI and migrates exactly once
-
-D. Parallelisable        1 (callbacks)   and   8 (static packaging)
+C. Parallelisable        1 (callbacks)   and   8 (static packaging)
                          independent of each other. 1 is ABI-neutral, 8 needs only 9.
 
-E. Gated on the above    10 (generator convergence)
+D. Gated on the above    10 (generator convergence)
                          after 1 and 4, so it converges on the final shape
 
-F. Larger, optional      2 (Python extension)   then   5 (other languages)
+E. Larger, optional      2 (Python extension)   then   5 (other languages)
                          2 needs 1, 4 and 9. Benchmark the ctypes fast path first,
                          it may remove the need. 5 needs 10 and 4.
 
     3 (@CLibIndex)       DONE
+    6 (migration)        DONE, its three leftovers are small and slot anywhere
     12 (MEX review)      unblocked, slots anywhere. Its two worthwhile fixes are
                          one generated line per case and depend on nothing.
 ```
 
-The one genuine judgement call is **C against D**. If the static consumer is more urgent
-than `native-charts`, item 8 moves ahead of item 6, since it no longer depends on it.
-Nothing else in the order changes.
+The one genuine judgement call is the order within **C**: whether the static packaging
+or the callbacks matter first. Nothing else in the order changes.
 
 The allocation policy did not reorder the groups. It grew item 4, which was already first,
 and added item 11 next to it.

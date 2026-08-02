@@ -1,8 +1,8 @@
 # Architecture
 
-The architecture of the charts system, extracted from the blog notes so that
-`../../HEBI-Java/docs/charts-blog-notes.md` can stay about writing rather than about
-structure.
+The architecture of the charts system, extracted from the charts blog notes so that they
+can stay about writing rather than about structure. Those notes are kept outside both
+repositories.
 
 **Provenance, and how to read it.** Sections are marked:
 

@@ -19,16 +19,26 @@ and `native-generator`) to be open sourced.
 
 ## Reference repositories
 
-Reference material is **read-only**. Never modify it. The checkout differs per machine,
-so check what exists before citing paths:
+Reference **code** is read-only. Never modify it. The exception is notes: work items
+and findings that belong to the source repo go into
+`../HEBI-Java/.claude/docs/plans.md` rather than into this repo's notes, and each
+repo's notes describe only that repo. The checkout differs per machine, so check what
+exists before citing paths:
 
 - On the machine with the full source repo, `../HEBI-Java` holds everything:
-  `native-util` and `native-generator` (the original implementation), `native-charts`
-  (the real consumer, generated output in `target/image`, demo apps in `src/test/java`),
-  `protocol` (origin of `LibraryDescription.proto`),
+  `native-util` (still a live dependency there), `native-charts` (the real consumer,
+  now migrated onto this repo's artifacts, generated output in `target/image`, demo
+  apps in `src/test/java`), `protocol` (former origin of `LibraryDescription.proto`),
+  the original `native-generator` only in git history (removed 2026-08-02, clang
+  parser now in native-sdk test sources),
   `.github/workflows/publish-native-charts.yml` (the release CI and the reference for
-  the two-stage build), and `{ARCHITECTURE,CLAUDE,QUESTIONS,fable5-plans}.md` (source
-  repo docs, whose extraction plan item B.1 is superseded by this repo).
+  the two-stage build), and its `CLAUDE.md` plus `.claude/docs/` (source repo docs, whose
+  extraction plan in `plans.md` item B.1 is superseded by this repo).
+- **Never look above the `claude/` parent directory.** Everything this repo may read
+  lives under `C:\code\HEBI\claude\`, and the only valid source checkout is
+  `../HEBI-Java` (a pristine copy kept in sync by the author). Directories above or
+  beside `claude/`, such as `C:\code\HEBI\HEBI-Java`, are stale working copies that
+  must not be read, cited or evaluated.
 - On the other machine only a small subset of the `native-charts` project is available.
   Everything not in that subset has to come from this repo's own reference files and
   the notes in this file. Do not invent paths, and record here anything from the full
@@ -45,9 +55,13 @@ so check what exists before citing paths:
 | `us.hebi.ffi.util.*` | `us.hebi.graalvm.bindings.runtime.*` |
 | `-Ahebi.nativegen.*` | `-Abindings.*` |
 
-Dropped during extraction: the `parser/` package (shelled out to `clang`), `CArrayConverter`
-(depended on `us.hebi.math.data.Transform`), `com.google.mug:dot-parse`, lombok, and the
-antrun step that deleted `META-INF/services`.
+Dropped during extraction: the `parser/` package (shelled out to `clang`, now living in
+native-sdk's test sources), `com.google.mug:dot-parse`, lombok, and the antrun step that
+deleted `META-INF/services`. `CArrayConverter` was dropped at first and later ported in
+trimmed form (no `Transform` overload, that one call site keeps a private helper in
+native-charts). Its `Unsafe` fast path is also the reason `bindings-runtime` depends on
+`us.hebi:glue`, and its element loops double as the HotSpot mock path because the mocks
+throw from `rawValue()`.
 
 There are two `MethodFlag` enums on purpose. The annotation API has a plain one in
 `bindings-runtime`, the descriptor model has the protobuf one. `AnnotatedCLibMethod`
@@ -256,7 +270,8 @@ as the symbol, `char**` in the MEX gateway, subclass constructors in all three w
 Python static overloads needing an explicit `cls`, MATLAB echoing non-const pointer params
 as extra outputs (dropped, buffers are caller-owned and mutated in place like the C ABI),
 `@CDefault` string literals reaching MATLAB double-quoted (converted to single-quoted char
-arrays, the counterpart of Python's `convertCDefaultParamString`), the C++ constructor
+arrays, the counterpart of Python's `convertCDefaultParamString`), the `%LOG_FILE%` literal
+in the generated `compiler-{linux,osx}.sh` log header, the C++ constructor
 factory colliding with wrapped methods (now a per-class free function in the internal
 namespace).
 
@@ -277,18 +292,14 @@ Open:
    since the original implementation, the commented-out handling is still in
    `NativeAnnotationProcessor`. The cheap fix is rejecting nested classes with a compile
    error, allowing them is a separate investigation.
-7. The generated `compiler-linux.sh` writes its log header with Windows batch syntax
-   (`> %LOG_FILE%` on the first echo), creating a literal file named `%LOG_FILE%` in the
-   working directory. Carried over from the original. One-line fix plus a reference
-   update.
-8. `LibraryDescription.proto` still says `package hebi.api.proto` and
+7. `LibraryDescription.proto` still says `package hebi.api.proto` and
    `default = "hebi"` for the library name. The package rename only regenerates the
    model classes. The name default interacts with the omit-what-matches-default
    encoding: a library actually named `hebi` gets its name omitted from `api.json` and
    resolved from the default on read, so changing the default changes what older
    `api.json` files mean. Change it before the format has external consumers, with a
    reference update.
-9. The MEX target cannot be built in a `Debug` configuration on MSVC. `mex.cmake` adds
+8. The MEX target cannot be built in a `Debug` configuration on MSVC. `mex.cmake` adds
    `/MT` and `/O2` unconditionally, which collides with the configuration's own `/MDd`,
    `/Od` and `/RTC1`, and cl rejects `/RTC1` with `/O2` outright ("D8016"). The MEX file
    is always shipped release-built, so the fix is to state that rather than to inherit
