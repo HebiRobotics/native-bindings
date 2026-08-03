@@ -19,16 +19,23 @@ endif ()
 # Helper function for creating MEX files
 function(add_mex_target TARGET_NAME)
 
-    # Make sure we have a path to the headers
-    if(NOT DEFINED ENV{MATLABROOT})
-        message(FATAL_ERROR "Required environment variable: MATLABROOT is not set. Point it to your MATLAB installation or Slim SDK.")
+    # Building MEX only needs the headers and, on Windows, the import libraries.
+    # MATLABROOT selects a real installation, otherwise the bundled clean-room
+    # mex-sdk covers the API subset the generated gateway uses.
+    if(DEFINED ENV{MATLABROOT})
+        message(STATUS "Using matlabroot: $ENV{MATLABROOT}")
+        set(SDK_ROOT "$ENV{MATLABROOT}/extern")
+        set(SDK_INCLUDE_DIR "${SDK_ROOT}/include")
+        set(USE_BUNDLED_MEX_SDK OFF)
+    else()
+        message(STATUS "MATLABROOT is not set, using the bundled MEX SDK")
+        set(SDK_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/mex-sdk")
+        set(USE_BUNDLED_MEX_SDK ON)
     endif()
-    message(STATUS "Using matlabroot: $ENV{MATLABROOT}")
-    set(SDK_ROOT "$ENV{MATLABROOT}/extern")
 
     # Define the module (MEX is a loadable module)
     add_library(${TARGET_NAME} MODULE ${ARGN})
-    target_include_directories(${TARGET_NAME} PRIVATE "${SDK_ROOT}/include")
+    target_include_directories(${TARGET_NAME} PRIVATE "${SDK_INCLUDE_DIR}")
 
     # Set the correct extension
     set_target_properties(${TARGET_NAME} PROPERTIES
@@ -70,7 +77,44 @@ function(add_mex_target TARGET_NAME)
     endif()
 
     # Platform-specific Linking
-    if(WIN32)
+    if(WIN32 AND USE_BUNDLED_MEX_SDK)
+        # Windows MUST link against import libs, so build them from the bundled def
+        # files. The def files only carry export names, which is all an import
+        # library contains.
+        set(_mex_sdk_lib_dir "${CMAKE_CURRENT_BINARY_DIR}/mex-sdk")
+        file(MAKE_DIRECTORY "${_mex_sdk_lib_dir}")
+        if(MSVC)
+            set(_lib_tool ${CMAKE_AR})
+            if (NOT _lib_tool)
+                set(_lib_tool lib.exe)
+            endif ()
+            foreach(_name libmex libmx)
+                execute_process(
+                        COMMAND ${_lib_tool} /NOLOGO /MACHINE:X64
+                                "/DEF:${SDK_INCLUDE_DIR}/${_name}.def"
+                                "/OUT:${_mex_sdk_lib_dir}/${_name}.lib"
+                        RESULT_VARIABLE _lib_result)
+                if(NOT _lib_result EQUAL 0)
+                    message(FATAL_ERROR "Failed to build ${_name}.lib from ${_name}.def")
+                endif()
+            endforeach()
+        else()
+            # MinGW ships dlltool with binutils
+            foreach(_name libmex libmx)
+                execute_process(
+                        COMMAND dlltool -d "${SDK_INCLUDE_DIR}/${_name}.def"
+                                -l "${_mex_sdk_lib_dir}/${_name}.lib"
+                        RESULT_VARIABLE _lib_result)
+                if(NOT _lib_result EQUAL 0)
+                    message(FATAL_ERROR "Failed to build ${_name}.lib from ${_name}.def")
+                endif()
+            endforeach()
+        endif()
+        target_link_libraries(${TARGET_NAME} PRIVATE
+                "${_mex_sdk_lib_dir}/libmex.lib"
+                "${_mex_sdk_lib_dir}/libmx.lib"
+        )
+    elseif(WIN32)
         # Windows MUST link against the import libs
         target_link_libraries(${TARGET_NAME} PRIVATE
                 "${SDK_ROOT}/lib/win64/${WIN_SUBDIR}/libmex.lib"

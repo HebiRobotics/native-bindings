@@ -149,21 +149,22 @@ if (BUILD_RELEASE_PACKAGE)
     endif ()
 
     ###############################################################################
-    # Optional: Build MEX Target via CMake
+    # Build MEX Target via CMake
     ###############################################################################
-    if (DEFINED ENV{MATLABROOT})
-        # Create a MEX target
-        include(${CMAKE_CURRENT_LIST_DIR}/mex.cmake)
-        add_mex_target(bindings_tests_native ${BINDINGS_DIR}/+bindings_tests/private/bindings_tests_native.cpp)
+    # Needs no MATLAB installation: MATLABROOT selects a real one, the bundled
+    # mex-sdk covers the default case. See mex.cmake.
 
-        # Make sure that the MEX library gets built beforehand
-        add_dependencies(bindings_tests bindings_tests_native)
+    # Create a MEX target
+    include(${CMAKE_CURRENT_LIST_DIR}/mex.cmake)
+    add_mex_target(bindings_tests_native ${BINDINGS_DIR}/+bindings_tests/private/bindings_tests_native.cpp)
 
-        # Copy the MEX file to the lib dir
-        add_custom_command(TARGET bindings_tests POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:bindings_tests_native>" ${RELEASE_LIB_DIR}
-        )
-    endif ()
+    # Make sure that the MEX library gets built beforehand
+    add_dependencies(bindings_tests bindings_tests_native)
+
+    # Copy the MEX file to the lib dir
+    add_custom_command(TARGET bindings_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:bindings_tests_native>" ${RELEASE_LIB_DIR}
+    )
 
     ###############################################################################
     # POST-PROCESSING

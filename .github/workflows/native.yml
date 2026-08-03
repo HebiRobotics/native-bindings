@@ -63,20 +63,9 @@ jobs:
       - name: Build the shared library and the bindings
         run: mvn -B clean verify -Pnative
 
-      # Compiling MEX does not need a MATLAB install, only the headers and the static
-      # import libs. This minimal SDK holds exactly those files.
-      - name: Download the MEX SDK
-        run: |
-          curl -sSL "https://files.hebi.us/internal/mex-sdk/R2018b.zip" -o mex_sdk.zip
-          unzip -q mex_sdk.zip -d mex_sdk
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "MATLABROOT=$(pwd -W)/mex_sdk" >> $GITHUB_ENV
-          else
-            echo "MATLABROOT=$(pwd)/mex_sdk" >> $GITHUB_ENV
-          fi
-
-      # Stage two. Links the static library into the final shared library and, with
-      # MATLABROOT set above, builds the MEX gateway.
+      # Stage two. Links the static library into the final shared library and builds
+      # the MEX gateway against the generated clean-room mex-sdk, so no MATLAB
+      # installation or SDK download is needed.
       # Note: the release CI uses -G "Visual Studio 17 2022" -T v142 on Windows to stay
       # compatible with MATLAB before R2022a. The default generator is fine for the suites.
       - name: Link the release library with CMake

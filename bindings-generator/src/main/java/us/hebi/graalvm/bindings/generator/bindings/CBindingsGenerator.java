@@ -44,6 +44,13 @@ public class CBindingsGenerator extends BindingGenerator {
         filer.createFile("..", "CMakeLists.txt", this::writeCMakeLists);
         filer.createFile("..", "mex.cmake", writer -> writer.write(loadContent("c/mex.cmake")));
 
+        // Clean-room MEX SDK so the gateway builds without a MATLAB installation. The header
+        // is written from the documented C API, the def files list the import symbols that
+        // mex.cmake turns into import libraries on Windows.
+        for (var file : List.of("mex.h", "libmx.def", "libmex.def")) {
+            filer.createFile("../mex-sdk", file, writer -> writer.write(loadContent("c/mex-sdk/" + file)));
+        }
+
         // find_package entry point for the prebuilt static package
         filer.createFile("..", lib.getName() + "-config.cmake", this::writeCMakeConfig);
         filer.createFile("..", lib.getName() + "-config-version.cmake", this::writeCMakeConfigVersion);

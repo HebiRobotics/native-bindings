@@ -1,0 +1,30 @@
+; Import library definition for the Matrix API subset used by the generated MEX
+; gateway. Export symbol names are interface facts of MATLAB's libmx.dll, the
+; _800 suffix selects the R2018a interleaved-complex API.
+LIBRARY libmx
+EXPORTS
+    mxArrayToUTF8String_800
+    mxCalloc_800
+    mxCreateDoubleMatrix_800
+    mxCreateDoubleScalar_800
+    mxCreateNumericMatrix_800
+    mxCreateString_800
+    mxDestroyArray_800
+    mxFree_800
+    mxGetCell_800
+    mxGetClassID_800
+    mxGetData_800
+    mxGetField_800
+    mxGetM_800
+    mxGetN_800
+    mxGetNumberOfElements_800
+    mxGetPr_800
+    mxGetScalar_800
+    mxIsCell_800
+    mxIsChar_800
+    mxIsClass_800
+    mxIsComplex_800
+    mxIsEmpty_800
+    mxIsLogical_800
+    mxIsNumeric_800
+    mxIsUint64_800
