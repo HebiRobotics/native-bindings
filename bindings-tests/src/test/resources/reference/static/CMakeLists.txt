@@ -268,7 +268,7 @@ if (BUILD_STATIC_PACKAGE)
 
     # Build a .zip release for each platform
     set(STATIC_ZIP_DIR ${STATIC_RELEASE_DIR}/../..)
-    set(STATIC_ZIP_NAME "bindings_tests-${PROJECT_VERSION}-static-${CMAKE_PLATFORM}.zip")
+    set(STATIC_ZIP_NAME "bindings_tests-${PROJECT_VERSION}-${CMAKE_PLATFORM}-static.zip")
     add_custom_command(TARGET bindings_tests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E remove ${STATIC_ZIP_DIR}/${STATIC_ZIP_NAME}
             COMMAND ${CMAKE_COMMAND} -E tar cvf "${STATIC_ZIP_DIR}/${STATIC_ZIP_NAME}" --format=zip -- .
