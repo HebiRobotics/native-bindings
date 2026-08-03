@@ -151,8 +151,7 @@ if (BUILD_RELEASE_PACKAGE)
     ###############################################################################
     # Build MEX Target via CMake
     ###############################################################################
-    # Needs no MATLAB installation: MATLABROOT selects a real one, the bundled
-    # mex-sdk covers the default case. See mex.cmake.
+    # Needs no MATLAB installation: the minimal bundled mex-sdk covers the default case.
 
     # Create a MEX target
     include(${CMAKE_CURRENT_LIST_DIR}/mex.cmake)
