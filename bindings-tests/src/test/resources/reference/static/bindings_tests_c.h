@@ -183,6 +183,21 @@ void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* bu
 }
 
 
+// ==== Isolate Management ====
+
+// Opaque handles to the embedded VM. An isolate and its per-thread
+// attachments get created lazily on the first library call, so these
+// functions are only needed for manual lifecycle control.
+typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
+typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+
+bindings_tests_isolatethread_t* bindings_tests_createIsolate();
+bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
+bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
+int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
+
 
 #ifdef __cplusplus
 }

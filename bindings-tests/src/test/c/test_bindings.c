@@ -440,6 +440,32 @@ static void test_isolated(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Isolate management                                                  */
+/* ------------------------------------------------------------------ */
+
+static void test_isolate_api(void) {
+    /*
+     * The prefixed aliases of the GraalVM isolate API. Creating another isolate
+     * of the same image is supported, so this runs a scratch isolate through the
+     * full lifecycle. The isolates behind the wrappers stay untouched: tearing
+     * down the shared global isolate would break every later call.
+     */
+    bindings_tests_isolatethread_t* thread = bindings_tests_createIsolate();
+    assert(thread != NULL);
+    bindings_tests_isolate_t* isolate = bindings_tests_getIsolate(thread);
+    assert(isolate != NULL);
+    assert(bindings_tests_getCurrentThread(isolate) == thread);
+    assert(bindings_tests_detachThread(thread) == 0);
+
+    /* Re-attach so the scratch isolate can be torn down completely. */
+    thread = bindings_tests_attachThread(isolate);
+    assert(thread != NULL);
+    assert(bindings_tests_tearDownIsolate(thread) == 0);
+
+    printf("isolate api ok\n");
+}
+
+/* ------------------------------------------------------------------ */
 /* Callbacks                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -497,6 +523,7 @@ int main(void) {
     test_errors();
     test_overloads();
     test_isolated();
+    test_isolate_api();
     test_callbacks();
     printf("all C tests passed\n");
     return 0;

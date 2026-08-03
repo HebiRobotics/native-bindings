@@ -51,8 +51,8 @@ public abstract class AbstractGenerator implements EnvProcessor {
         return getNonNullEnvironment().getMessager();
     }
 
-    protected void createSourceFile(ClassName className, TypeSpec spec) {
-        createSourceFile(JavaFile.builder(className.packageName(), spec)
+    protected void createSourceFile(String packageName, TypeSpec spec) {
+        createSourceFile(JavaFile.builder(packageName, spec)
                 .skipJavaLangImports(true)
                 .indent("    ")
                 .build());
