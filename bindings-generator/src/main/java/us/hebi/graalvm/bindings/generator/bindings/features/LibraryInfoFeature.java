@@ -17,9 +17,13 @@ public class LibraryInfoFeature implements FeatureGenerator {
                       void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
                     """);
         } else {
+            // The header answers its own version, so this needs internal linkage: the shim
+            // carries a copy of the same function, and a consumer linking the static archive
+            // would otherwise collide with it. __inline covers MSVC's legacy C mode, which
+            // does not know the C99 keyword.
             return getReplacedText("""
                     DLL_PUBLIC void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
-                    void getHeaderVersionC(int* major, int* minor, int* patch, int* build) {
+                    static __inline void getHeaderVersionC(int* major, int* minor, int* patch, int* build) {
                         *major = VERSION_MAJOR;
                         *minor = VERSION_MINOR;
                         *patch = VERSION_PATCH;

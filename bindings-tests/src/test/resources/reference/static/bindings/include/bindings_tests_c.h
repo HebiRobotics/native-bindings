@@ -162,7 +162,7 @@ const char* bindings_tests_getLastError();
 const char* bindings_tests_secondary_getLastError();
 
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
-void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {
+static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {
     *major = 1;
     *minor = 2;
     *patch = 3;

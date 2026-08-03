@@ -73,8 +73,10 @@ echo "ar $AR_ARGS" >> ${LOG_FILE}
 ar $AR_ARGS
 echo "    \${CMAKE_CURRENT_LIST_DIR}/${LIB_NAME}.a" >> ${CMAKE_LIBS}
 
-# Add the required static and OS dependencies
+# Add the required static and OS dependencies. The linker command line repeats
+# the GraalVM archives, so each one is recorded only the first time it is seen.
 # TODO: how should "-framework,Foundation" be added?
+SEEN_LIBS=" "
 for arg in $CC_ARGS
 do
     # handle specific libraries specified with -Wl,-force_load (e.g. libglass.a)
@@ -86,9 +88,15 @@ do
 
     # copy each used archive into the static output dir
     if [[ $arg =~ .*\.(a)$ ]]; then
-        echo "* Copied static lib: $arg"  >> ${LOG_FILE}
-        cp $arg ${STATIC_OUTPUT_PATH}
-        echo "    ${prefix}\${CMAKE_CURRENT_LIST_DIR}/$(basename "${arg}")  # ${arg}" >> ${CMAKE_LIBS}
+        BASE_NAME=$(basename "${arg}")
+        if [[ "$SEEN_LIBS" != *" ${BASE_NAME} "* ]]; then
+            SEEN_LIBS+="${BASE_NAME} "
+            echo "* Copied static lib: $arg"  >> ${LOG_FILE}
+            cp $arg ${STATIC_OUTPUT_PATH}
+            echo "    ${prefix}\${CMAKE_CURRENT_LIST_DIR}/${BASE_NAME}  # ${arg}" >> ${CMAKE_LIBS}
+        else
+            echo "* Skipped duplicate: $arg" >> ${LOG_FILE}
+        fi
 
     # add system dependencies (start with -l in the input arguments)
     elif [[ $arg == -l* ]]; then

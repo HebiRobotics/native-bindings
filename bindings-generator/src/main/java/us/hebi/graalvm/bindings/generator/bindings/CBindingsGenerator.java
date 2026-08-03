@@ -44,6 +44,10 @@ public class CBindingsGenerator extends BindingGenerator {
         filer.createFile("..", "CMakeLists.txt", this::writeCMakeLists);
         filer.createFile("..", "mex.cmake", writer -> writer.write(loadContent("c/mex.cmake")));
 
+        // find_package entry point for the prebuilt static package
+        filer.createFile("..", lib.getName() + "-config.cmake", this::writeCMakeConfig);
+        filer.createFile("..", lib.getName() + "-config-version.cmake", this::writeCMakeConfigVersion);
+
         // Wrappers around the platform C compiler that native-image is pointed at with
         // --native-compiler-path. They intercept the link step to additionally emit the static
         // library and the cmake fragments that the second stage needs. Emitted here so that a
@@ -320,6 +324,14 @@ public class CBindingsGenerator extends BindingGenerator {
                 .add("appleLibs", getExtraAppleLibs())
                 .add("matlab_namespace", MatlabBindingsGenerator.getNamespacePrefix(lib))
                 .render());
+    }
+
+    private void writeCMakeConfig(Writer writer) throws IOException {
+        writer.write(loadTemplateWithLibVars("c/libName-config.cmake").render());
+    }
+
+    private void writeCMakeConfigVersion(Writer writer) throws IOException {
+        writer.write(loadTemplateWithLibVars("c/libName-config-version.cmake").render());
     }
 
     private String getExtraAppleLibs() {

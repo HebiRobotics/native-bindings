@@ -76,13 +76,20 @@ lib.exe %LIB_ARGS%
 if !errorlevel! neq 0 exit /b !errorlevel!
 echo     ${CMAKE_CURRENT_LIST_DIR}/%LIB_NAME%.lib >> %CMAKE_LIBS%
 
-REM Add the required static and OS dependencies
+REM Add the required static and OS dependencies. The linker command line repeats
+REM the GraalVM archives, so each one is recorded only the first time it is seen.
+set "SEEN_LIBS= "
 for %%i in (%*) do (
     if /i "%%~xi"==".lib" (
         if exist %%i ( REM GraalVM static libs
-            echo * copy "%%i" %STATIC_OUTPUT_PATH% >> %LOG_FILE%
-            copy "%%i" %STATIC_OUTPUT_PATH%
-            echo     ${CMAKE_CURRENT_LIST_DIR}/%%~nxi  # %%i >> %CMAKE_LIBS%
+            if "!SEEN_LIBS!"=="!SEEN_LIBS: %%~nxi =!" (
+                set "SEEN_LIBS=!SEEN_LIBS!%%~nxi "
+                echo * copy "%%i" %STATIC_OUTPUT_PATH% >> %LOG_FILE%
+                copy "%%i" %STATIC_OUTPUT_PATH%
+                echo     ${CMAKE_CURRENT_LIST_DIR}/%%~nxi  # %%i >> %CMAKE_LIBS%
+            ) else (
+                echo * Skipped duplicate: %%i >> %LOG_FILE%
+            )
         ) else ( REM OS static libs
             REM The /IMPLIB flag is only used for shared libraries, so
             REM we need to filter those inputs. Bash does not have a

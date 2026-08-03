@@ -78,6 +78,18 @@ if exist "%RELEASE_LIB_DIR%\%MEX_FILE%" (
     copy /y "%RELEASE_LIB_DIR%\%MEX_FILE%" "%MEX_STAGE_DIR%\%MEX_FILE%" >nul
 )
 
+rem The static package has to link and run with no shared library present, which is
+rem what the consumer project verifies through find_package against the staged tree.
+echo.
+echo ==^> Verifying the static package consumer
+set "CONSUMER_BUILD_DIR=%MODULE_DIR%\target\ctest-static"
+cmake -S "%MODULE_DIR%\src\test\static" -B "%CONSUMER_BUILD_DIR%"
+if errorlevel 1 exit /b 1
+cmake --build "%CONSUMER_BUILD_DIR%" --config Release
+if errorlevel 1 exit /b 1
+ctest --test-dir "%CONSUMER_BUILD_DIR%" --build-config Release --output-on-failure
+if errorlevel 1 exit /b 1
+
 echo.
 echo Done. Run scripts\run-tests.bat to exercise the bindings.
 exit /b 0

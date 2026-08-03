@@ -47,5 +47,13 @@ if [ -f "$RELEASE_LIB_DIR/$MEX_FILE" ]; then
     cp "$RELEASE_LIB_DIR/$MEX_FILE" "$BINDINGS_DIR/+$LIB_NAME/private/$MEX_FILE"
 fi
 
+# The static package has to link and run with no shared library present, which is
+# what the consumer project verifies through find_package against the staged tree.
+step "Verifying the static package consumer"
+CONSUMER_BUILD_DIR="$MODULE_DIR/target/ctest-static"
+cmake -S "$MODULE_DIR/src/test/static" -B "$CONSUMER_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$CONSUMER_BUILD_DIR" --config Release
+ctest --test-dir "$CONSUMER_BUILD_DIR" --build-config Release --output-on-failure
+
 echo
 echo "Done. Run scripts/run-tests.sh to exercise the bindings."
