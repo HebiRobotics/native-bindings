@@ -134,10 +134,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
 
             case ENUM, BOOL, INT8, INT16, INT32, INT64,
-                 FLOAT32, FLOAT64, SIZE_T, CHAR16 -> "%s %s = getScalar<%s>(prhs[%d])".formatted(
+                 FLOAT32, FLOAT64, SIZE_T, CHAR16 -> "%s %s = getScalar<%s>(prhs[%d], \"%s\")".formatted(
                     getMexCType(param),
                     param.getParamName(),
-                    getMexCType(param), index
+                    getMexCType(param), index,
+                    param.getParamName()
             );
 
             case FLOAT64_POINTER ->

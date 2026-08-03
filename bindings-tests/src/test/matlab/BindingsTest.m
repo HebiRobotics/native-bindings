@@ -59,6 +59,13 @@ classdef BindingsTest < matlab.unittest.TestCase
             % Both sides round to the same double, so this compares the rounded
             % value rather than the exact 63 bit cap.
             testCase.verifyEqual(bindings_tests.Math.maxSize(), 9223372036854775807);
+
+            % A wrong type on a scalar parameter raises in the MEX gateway
+            % instead of producing garbage through mxGetScalar. Unlike the
+            % wrapper errors, this one carries an identifier.
+            testCase.verifyError(@() bindings_tests.Math.negate(struct('a', 1)), 'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Math.negate([]), 'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Math.negate([1 2]), 'bindings_tests:TypeError');
         end
 
         function testCounter(testCase)
