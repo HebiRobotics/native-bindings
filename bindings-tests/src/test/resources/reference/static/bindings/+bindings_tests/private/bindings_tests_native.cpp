@@ -377,6 +377,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
+        case /* hash32_fnv1a("bindings_tests_Circle_getColor") */ 1712892204: {
+            static auto bindings_tests_Circle_getColor = libLoader.getFunc<int(*)(void*)>("bindings_tests_Circle_getColor");
+            int _value = bindings_tests_Circle_getColor(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Circle_area") */ 1913477986: {
             static auto bindings_tests_Circle_area = libLoader.getFunc<double(*)(void*)>("bindings_tests_Circle_area");
             double _value = bindings_tests_Circle_area(getPtr<void*>(prhs[1]));

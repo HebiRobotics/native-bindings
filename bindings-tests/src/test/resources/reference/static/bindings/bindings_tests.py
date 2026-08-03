@@ -199,6 +199,8 @@ libbindings_tests.bindings_tests_Circle_create.argtypes = [c_double]
 libbindings_tests.bindings_tests_Circle_create.restype = CirclePtr
 libbindings_tests.bindings_tests_Circle_getRadius.argtypes = [CirclePtr]
 libbindings_tests.bindings_tests_Circle_getRadius.restype = c_double
+libbindings_tests.bindings_tests_Circle_getColor.argtypes = [CirclePtr]
+libbindings_tests.bindings_tests_Circle_getColor.restype = c_int32
 libbindings_tests.bindings_tests_Circle_area.argtypes = [CirclePtr]
 libbindings_tests.bindings_tests_Circle_area.restype = c_double
 libbindings_tests.bindings_tests_Circle_sideCount.argtypes = [CirclePtr]
@@ -363,6 +365,11 @@ libbindings_tests.bindings_tests_secondary_getLastError.argtypes = []
 libbindings_tests.bindings_tests_secondary_getLastError.restype = c_char_p
 
 # ==== Enum Wrappers ====
+class CircleColor(IntEnum):
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+
 class Color(IntEnum):
     RED = 0
     GREEN = 1
@@ -495,6 +502,10 @@ class Circle(Shape):
     @property
     def radius(self) -> float:
         return libbindings_tests.bindings_tests_Circle_getRadius(self.ref_Circle)
+
+    def get_color(self) -> CircleColor:
+        """Returns the fill color, which is always Blue until setters exist."""
+        return CircleColor(libbindings_tests.bindings_tests_Circle_getColor(self.ref_Circle))
 
     def area(self) -> float:
         return libbindings_tests.bindings_tests_Circle_area(self.ref_Circle)

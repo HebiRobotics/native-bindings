@@ -33,6 +33,18 @@ public final class TestShape_TestCircle$CEntries {
     }
 
     @CEntryPoint(
+            name = "__bindings_tests_Circle_getColor"
+    )
+    public static int bindings_tests_Circle_getColor(IsolateThread _isolate, ObjectHandle _obj) {
+        try {
+            return TestShape_TestCircle_Color$$CEnum.fromJava(_getInstance(_obj).getColor());
+        } catch (Throwable throwable) {
+            ExceptionHandlers.setLastError(throwable);
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
             name = "__bindings_tests_Circle_getRadius"
     )
     public static double bindings_tests_Circle_getRadius(IsolateThread _isolate,

@@ -14,7 +14,7 @@ public final class TestPalette$CEntries {
     )
     public static int bindings_tests_Palette_next(IsolateThread _isolate, int color) {
         try {
-            return Color$$CEnum.fromJava(TestPalette.next(Color$$CEnum.toJava(color)));
+            return TestPalette_Color$$CEnum.fromJava(TestPalette.next(TestPalette_Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -26,7 +26,7 @@ public final class TestPalette$CEntries {
     )
     public static CCharPointer bindings_tests_Palette_nameOf(IsolateThread _isolate, int color) {
         try {
-            return CTypes.toTempCharPointer(TestPalette.nameOf(Color$$CEnum.toJava(color)));
+            return CTypes.toTempCharPointer(TestPalette.nameOf(TestPalette_Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();
@@ -38,7 +38,7 @@ public final class TestPalette$CEntries {
     )
     public static int bindings_tests_Palette_ordinalOf(IsolateThread _isolate, int color) {
         try {
-            return TestPalette.ordinalOf(Color$$CEnum.toJava(color));
+            return TestPalette.ordinalOf(TestPalette_Color$$CEnum.toJava(color));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;
@@ -51,7 +51,7 @@ public final class TestPalette$CEntries {
     public static CCharPointer bindings_tests_Palette_describe(IsolateThread _isolate, int color,
             int marker) {
         try {
-            return CTypes.toTempCharPointer(TestPalette.describe(Color$$CEnum.toJava(color), Marker$$CEnum.toJava(marker)));
+            return CTypes.toTempCharPointer(TestPalette.describe(TestPalette_Color$$CEnum.toJava(color), TestPalette_Marker$$CEnum.toJava(marker)));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return WordFactory.nullPointer();
@@ -63,7 +63,7 @@ public final class TestPalette$CEntries {
     )
     public static int bindings_tests_Palette_fromOrdinal(IsolateThread _isolate, int ordinal) {
         try {
-            return Color$$CEnum.fromJava(TestPalette.fromOrdinal(ordinal));
+            return TestPalette_Color$$CEnum.fromJava(TestPalette.fromOrdinal(ordinal));
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return 0;

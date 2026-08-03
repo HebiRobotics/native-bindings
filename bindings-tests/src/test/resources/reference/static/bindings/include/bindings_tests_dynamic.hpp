@@ -30,6 +30,12 @@ protected:
   std::string msg_;
 };
 
+enum class CircleColor : int32_t {
+  Red = 0,
+  Green = 1,
+  Blue = 2
+};
+
 enum class Color : int32_t {
   Red = 0,
   Green = 1,
@@ -141,6 +147,11 @@ class Circle : public Shape {
 public:
   Circle(double radius);
   double getRadius() const noexcept;
+
+  /**
+   * @brief Returns the fill color, which is always Blue until setters exist.
+   */
+  CircleColor getColor() const noexcept;
   double area() const noexcept;
   int sideCount() const noexcept;
   Circle(Circle&& from) noexcept;
@@ -775,6 +786,10 @@ inline Circle::Circle(double radius) : Circle(internal::createCirclePointer(radi
 inline double Circle::getRadius() const noexcept {
   static auto bindings_tests_Circle_getRadius = DynamicLookup::instance().getFunc<double(*)(internal::CirclePtr)>("bindings_tests_Circle_getRadius");
   return bindings_tests_Circle_getRadius(ptr_);
+}
+inline CircleColor Circle::getColor() const noexcept {
+  static auto bindings_tests_Circle_getColor = DynamicLookup::instance().getFunc<CircleColor(*)(internal::CirclePtr)>("bindings_tests_Circle_getColor");
+  return bindings_tests_Circle_getColor(ptr_);
 }
 inline double Circle::area() const noexcept {
   static auto bindings_tests_Circle_area = DynamicLookup::instance().getFunc<double(*)(internal::CirclePtr)>("bindings_tests_Circle_area");

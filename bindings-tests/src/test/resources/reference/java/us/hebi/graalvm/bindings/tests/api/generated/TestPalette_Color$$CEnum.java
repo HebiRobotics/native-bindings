@@ -2,7 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
-public class Color$$CEnum {
+public class TestPalette_Color$$CEnum {
     public static int fromJava(TestPalette.Color value) {
         return switch (value) {
             case Red -> 0;

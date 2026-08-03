@@ -132,6 +132,10 @@ double __bindings_tests_Circle_getRadius(bindings_tests_isolatethread_t* isolate
 double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj) {
     return __bindings_tests_Circle_getRadius(isolate::global(), obj);
 }
+bindings_tests_CircleColor __bindings_tests_Circle_getColor(bindings_tests_isolatethread_t* isolate, bindings_tests_CirclePtr obj);
+bindings_tests_CircleColor bindings_tests_Circle_getColor(bindings_tests_CirclePtr obj) {
+    return __bindings_tests_Circle_getColor(isolate::global(), obj);
+}
 double __bindings_tests_Circle_area(bindings_tests_isolatethread_t* isolate, bindings_tests_CirclePtr obj);
 double bindings_tests_Circle_area(bindings_tests_CirclePtr obj) {
     return __bindings_tests_Circle_area(isolate::global(), obj);

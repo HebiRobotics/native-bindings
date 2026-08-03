@@ -231,6 +231,18 @@
       "propertyName": "radius",
       "flags": ["Noexcept", "Const"]
     }, {
+      "name": "getColor",
+      "lowerUnderscoreName": "get_color",
+      "cName": "bindings_tests_Circle_getColor",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "CircleColor",
+        "comment": "Fill color of a circle.",
+        "dataType": "ENUM"
+      },
+      "documentation": "Returns the fill color, which is always Blue until setters exist.",
+      "flags": ["Noexcept", "Const"]
+    }, {
       "name": "area",
       "lowerUnderscoreName": "area",
       "cName": "bindings_tests_Circle_area",
@@ -1456,6 +1468,23 @@
     }]
   }],
   "enums": [{
+    "name": "CircleColor",
+    "cPrefix": "bindings_tests",
+    "cName": "bindings_tests_CircleColor",
+    "values": [{
+      "name": "Red",
+      "cName": "bindings_tests_CircleColor_Red",
+      "cValue": 0
+    }, {
+      "name": "Green",
+      "cName": "bindings_tests_CircleColor_Green",
+      "cValue": 1
+    }, {
+      "name": "Blue",
+      "cName": "bindings_tests_CircleColor_Blue",
+      "cValue": 2
+    }]
+  }, {
     "name": "Color",
     "cPrefix": "bindings_tests",
     "cName": "bindings_tests_Color",

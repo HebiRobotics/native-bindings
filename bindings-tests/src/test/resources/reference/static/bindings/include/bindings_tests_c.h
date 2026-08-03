@@ -25,6 +25,17 @@ typedef struct {
     size_t length;
 } bindings_tests_double_span;
 
+typedef enum bindings_tests_CircleColor {
+  bindings_tests_CircleColor_Red = 0,
+  bindings_tests_CircleColor_Green = 1,
+  bindings_tests_CircleColor_Blue = 2
+} bindings_tests_CircleColor;
+#if defined(_MSC_VER) || defined(__cplusplus)
+static_assert(sizeof(bindings_tests_CircleColor) == 4, "error: unexpected size for bindings_tests_CircleColor enum");
+#else
+_Static_assert(sizeof(bindings_tests_CircleColor) == 4, "error: unexpected size for bindings_tests_CircleColor enum");
+#endif
+
 typedef enum bindings_tests_Color {
   bindings_tests_Color_Red = 0,
   bindings_tests_Color_Green = 1,
@@ -68,6 +79,7 @@ void bindings_tests_Shape_release(bindings_tests_ShapePtr obj);
 // ==== Circle ====
 bindings_tests_CirclePtr bindings_tests_Circle_create(double radius);
 double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj);
+bindings_tests_CircleColor bindings_tests_Circle_getColor(bindings_tests_CirclePtr obj);
 double bindings_tests_Circle_area(bindings_tests_CirclePtr obj);
 int bindings_tests_Circle_sideCount(bindings_tests_CirclePtr obj);
 bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr ptr);

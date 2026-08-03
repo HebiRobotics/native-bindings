@@ -2,7 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
-public class Marker$$CEnum {
+public class TestPalette_Marker$$CEnum {
     public static int fromJava(TestPalette.Marker value) {
         return switch (value) {
             case Dot -> 0;

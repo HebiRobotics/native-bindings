@@ -11,6 +11,11 @@ classdef (Sealed) Circle < bindings_tests.Shape
             result = bindings_tests_native('bindings_tests_Circle_getRadius', this.ref_Circle);
         end
 
+        function result = getColor(this)
+            % Returns the fill color, which is always Blue until setters exist.
+            result = bindings_tests_native('bindings_tests_Circle_getColor', this.ref_Circle);
+        end
+
         function result = area(this)
             result = bindings_tests_native('bindings_tests_Circle_area', this.ref_Circle);
         end

@@ -143,6 +143,16 @@
         "type": "bindings_tests.Circle"
       }]
   },
+  "bindings_tests.Circle.getColor": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Circle"
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.CircleColor", "choices={'Red', 'Green', 'Blue'}"]
+      }]
+  },
   "bindings_tests.Circle.sideCount": {
     "inputs": [{
         "name": "this",

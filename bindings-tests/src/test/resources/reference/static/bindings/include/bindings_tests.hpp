@@ -22,6 +22,12 @@ protected:
   std::string msg_;
 };
 
+enum class CircleColor : int32_t {
+  Red = 0,
+  Green = 1,
+  Blue = 2
+};
+
 enum class Color : int32_t {
   Red = 0,
   Green = 1,
@@ -133,6 +139,11 @@ class Circle : public Shape {
 public:
   Circle(double radius);
   double getRadius() const noexcept;
+
+  /**
+   * @brief Returns the fill color, which is always Blue until setters exist.
+   */
+  CircleColor getColor() const noexcept;
   double area() const noexcept;
   int sideCount() const noexcept;
   Circle(Circle&& from) noexcept;
@@ -645,6 +656,7 @@ extern "C" {
   void bindings_tests_Shape_release(internal::ShapePtr);
   internal::CirclePtr bindings_tests_Circle_create(double);
   double bindings_tests_Circle_getRadius(internal::CirclePtr);
+  CircleColor bindings_tests_Circle_getColor(internal::CirclePtr);
   double bindings_tests_Circle_area(internal::CirclePtr);
   int bindings_tests_Circle_sideCount(internal::CirclePtr);
   internal::ShapePtr bindings_tests_Circle_to_Shape(internal::CirclePtr);
@@ -812,6 +824,9 @@ inline internal::CirclePtr createCirclePointer(double radius) {
 inline Circle::Circle(double radius) : Circle(internal::createCirclePointer(radius)) {}
 inline double Circle::getRadius() const noexcept {
   return bindings_tests_Circle_getRadius(ptr_);
+}
+inline CircleColor Circle::getColor() const noexcept {
+  return bindings_tests_Circle_getColor(ptr_);
 }
 inline double Circle::area() const noexcept {
   return bindings_tests_Circle_area(ptr_);
