@@ -31,13 +31,13 @@ public class CBindingsGenerator extends BindingGenerator {
         for (ClassDescription apiClass : lib.getClasses()) {
             process(apiClass);
         }
+        writeLastErrorAccessors();
 
         // Header for the shared library
         filer.createFile("include", lib.getName() + "_c.h", writer -> writeHeader(writer, false));
 
         // Additional sources for the static library
         filer.createFile("..", lib.getName() + "_c.h", writer -> writeHeader(writer, true));
-        filer.createFile("..", "graal_isolate.h", writer -> writer.write(loadContent("c/graal_isolate.h")));
         filer.createFile("..", lib.getName() + "_c.cpp", this::writeImplementation);
         filer.createFile("..", lib.getName() + "_objc.m", writer -> writer.write(mFile.toString()));
         filer.createFile("..", lib.getName() + "_static.cmake", this::writeCMakeStatic);
@@ -99,7 +99,7 @@ public class CBindingsGenerator extends BindingGenerator {
 
         header.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
         cFile.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
-        SignatureBuilder func = new SignatureBuilder();
+        SignatureBuilder func = new SignatureBuilder(getIsolateThreadType());
         String isolateName = apiClass.tryGetIsolateName().orElse("global");
 
         // Function signatures, e.g.,
@@ -135,6 +135,29 @@ public class CBindingsGenerator extends BindingGenerator {
 
     }
 
+    /**
+     * Per-isolate accessors for the calling thread's last error message. The
+     * entry point is emitted once for the whole library (the error slot lives in
+     * the isolate's image heap), so each isolate only needs a wrapper that binds
+     * it to its own isolate thread.
+     */
+    private void writeLastErrorAccessors() {
+        header.append("\n// ==== Last Error ====\n");
+        cFile.append("\n// ==== Last Error ====\n");
+        String internalName = SignatureBuilder.getInternalName(GeneratorUtil.getLastErrorCName(lib, ""));
+        cFile.append("const char* ").append(internalName)
+                .append("(").append(getIsolateThreadType()).append("* isolate);\n");
+        for (String isolateName : GeneratorUtil.getIsolateNames(lib)) {
+            String cName = GeneratorUtil.getLastErrorCName(lib, isolateName);
+            String isolateFunc = isolateName.isEmpty() ? "global" : isolateName;
+            header.append(DLL_PUBLIC).append("const char* ").append(cName).append("();\n");
+            cFile.append("const char* ").append(cName).append("() {\n")
+                    .append("    return ").append(internalName)
+                    .append("(").append(isolateNamespace).append(isolateFunc).append("());\n")
+                    .append("}\n");
+        }
+    }
+
     public static void addParentCastMethod(MethodDescription method, StringBuilder header, StringBuilder cFile) {
         Function<String, String> replace = input -> IndentingTextRenderer.of(input)
                 .set("DLL_PUBLIC", DLL_PUBLIC)
@@ -154,7 +177,6 @@ public class CBindingsGenerator extends BindingGenerator {
         }
     }
 
-    private static final String IsolateThreadParam = "graal_isolatethread_t* isolate";
     private static final String DLL_PUBLIC = "DLL_PUBLIC ";
 
     private void writeHeader(Writer fileWriter, boolean exportSymbols) throws IOException {
@@ -198,6 +220,7 @@ public class CBindingsGenerator extends BindingGenerator {
             writer.write("\n");
             writer.write(feature.getCHeader(false));
         }
+        writer.write(getIsolateApiHeader());
 
         // Fix exports
         var content = writer.toString();
@@ -220,7 +243,7 @@ public class CBindingsGenerator extends BindingGenerator {
         }
 
         StringBuilder isolates = new StringBuilder();
-        Set<String> isolateNames = new HashSet<>();
+        Set<String> isolateNames = new TreeSet<>();
         for (var aClass : lib.getClasses()) {
             aClass.tryGetIsolateName().ifPresent(isolateNames::add);
         }
@@ -231,6 +254,7 @@ public class CBindingsGenerator extends BindingGenerator {
         fileWriter.write(loadTemplate("c/libName_c.cpp")
                 .add("isolates", isolates.toString().trim())
                 .add("libName", lib.getName())
+                .add("cPrefix", lib.getCPrefix())
                 .add("content", writer.toString())
                 .render());
 
@@ -242,14 +266,55 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private String createIsolateCode(String functionName) {
         return IndentingTextRenderer.of("""
-                        graal_isolatethread_t* %%NAME%%() {
-                             static graal_isolate_t* isolate = createIsolate();
+                        %%THREAD_TYPE%%* %%NAME%%() {
+                             static %%ISOLATE_TYPE%%* isolate = createIsolate();
                              static thread_local ThreadHandle thread(isolate);
                              return thread.ptr;
                         }
                         """)
+                .set("THREAD_TYPE", getIsolateThreadType())
+                .set("ISOLATE_TYPE", getIsolateType())
                 .set("NAME", functionName)
                 .render();
+    }
+
+    /**
+     * Library-specific aliases for the GraalVM isolate C API. The image exports the
+     * generic graal_* symbols as well, but the aliases are what the generated code
+     * calls so that two generated libraries can be linked into the same binary. The
+     * definitions live in the image and are exported by native-image itself, so the
+     * declarations carry no DLL_PUBLIC.
+     */
+    private String getIsolateApiHeader() {
+        return IndentingTextRenderer.of("""
+
+                        // ==== Isolate Management ====
+
+                        // Opaque handles to the embedded VM. An isolate and its per-thread
+                        // attachments get created lazily on the first library call, so these
+                        // functions are only needed for manual lifecycle control.
+                        typedef struct %%PREFIX%%_isolate_s %%ISOLATE_TYPE%%;
+                        typedef struct %%PREFIX%%_isolatethread_s %%THREAD_TYPE%%;
+
+                        %%THREAD_TYPE%%* %%PREFIX%%_createIsolate();
+                        %%ISOLATE_TYPE%%* %%PREFIX%%_getIsolate(%%THREAD_TYPE%%* thread);
+                        %%THREAD_TYPE%%* %%PREFIX%%_attachThread(%%ISOLATE_TYPE%%* isolate);
+                        %%THREAD_TYPE%%* %%PREFIX%%_getCurrentThread(%%ISOLATE_TYPE%%* isolate);
+                        int %%PREFIX%%_detachThread(%%THREAD_TYPE%%* thread);
+                        int %%PREFIX%%_tearDownIsolate(%%THREAD_TYPE%%* thread);
+                        """)
+                .set("ISOLATE_TYPE", getIsolateType())
+                .set("THREAD_TYPE", getIsolateThreadType())
+                .set("PREFIX", lib.getCPrefix())
+                .render();
+    }
+
+    private String getIsolateType() {
+        return lib.getCPrefix() + "_isolate_t";
+    }
+
+    private String getIsolateThreadType() {
+        return lib.getCPrefix() + "_isolatethread_t";
     }
 
     private void writeCMakeStatic(Writer writer) throws IOException {
@@ -274,6 +339,10 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     static class SignatureBuilder {
+
+        public SignatureBuilder(String isolateThreadType) {
+            this.isolateThreadParam = isolateThreadType + "* isolate";
+        }
 
         public SignatureBuilder init(String isolateName, TypeDescription returnType, String cEntryPointName) {
             params.clear();
@@ -301,7 +370,7 @@ public class CBindingsGenerator extends BindingGenerator {
             boolean spanReturn = returnType.getDataType() == DataType.FLOAT64_SPAN;
             out.append(spanReturn ? "void" : getInternalQualifiedCType(returnType))
                     .append(" ").append(getInternalName(cEntryPointName)).append("(");
-            out.append(IsolateThreadParam);
+            out.append(isolateThreadParam);
             for (var param : params) {
                 if (param.getKey().getDataType() == DataType.FLOAT64_SPAN) {
                     out.append(", const ").append(TypeMap.toExternalC(param.getKey(), false))
@@ -373,6 +442,7 @@ public class CBindingsGenerator extends BindingGenerator {
             return CEntryPointGenerator.INTERNAL_PREFIX + cEntryPointName;
         }
 
+        private final String isolateThreadParam;
         private String isolateName;
         private TypeDescription returnType;
         private String cEntryPointName;

@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.tests.api;
 
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
-import us.hebi.graalvm.bindings.annotations.CLibLastErrorProvider;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 
@@ -13,8 +12,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  * not share static state or the handle registry with the default isolate.
  * <p>
  * {@link #getCounter()} is static, which is exactly the point: incrementing it here
- * must not be visible to anything in the default isolate, and each isolate needs its
- * own last error provider.
+ * must not be visible to anything in the default isolate
  *
  * @author Florian Enner
  */
@@ -44,12 +42,6 @@ public class TestIsolated {
         throw new IllegalStateException("alwaysFails in the secondary isolate");
     }
 
-    @CLibLastErrorProvider
-    @CLibMethod(flags = Noexcept)
-    @CLibComment("Last error for the calling thread within the secondary isolate.")
-    public static String getLastError() {
-        return ExceptionHandlers.getLastError(false);
-    }
 
     private static int counter = 0;
 

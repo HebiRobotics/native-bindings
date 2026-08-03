@@ -13,7 +13,7 @@ classdef (Sealed) Errors
             %       Error value is negative
             status_ = bindings_tests_native('bindings_tests_Errors_requireNonNegative', value);
             if status_ ~= 0
-                error(['Encountered error in Errors.requireNonNegative' ': ' bindings_tests_native('bindings_tests_Errors_getLastError')]);
+                error(['Encountered error in Errors.requireNonNegative' ': ' bindings_tests_native('bindings_tests_getLastError')]);
             end
         end
 
@@ -74,8 +74,8 @@ classdef (Sealed) Errors
 
         function result = getLastError()
             % Message of the last exception thrown on the calling thread, or an empty
-            %   string if there has not been one. The language wrappers call this to turn
-            %   a failed call into a native exception.
+            %   string if there has not been one. Same content as the generated library
+            %   level accessor, exported as an ordinary method.
             result = bindings_tests_native('bindings_tests_Errors_getLastError');
         end
 

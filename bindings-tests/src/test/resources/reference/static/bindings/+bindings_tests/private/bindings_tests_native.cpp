@@ -628,12 +628,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
-        case /* hash32_fnv1a("bindings_tests_Isolated_getLastError") */ 3203481780: {
-            static auto bindings_tests_Isolated_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_Isolated_getLastError");
-            const char* _value = bindings_tests_Isolated_getLastError();
-            if (nlhs > 0) plhs[0] = createMexString(_value);
-            break;
-        }
 
         // Math
         case /* hash32_fnv1a("bindings_tests_Math_negate") */ 1195230251: {
@@ -874,6 +868,20 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             MatlabString value(prhs[1]);
             size_t times = getScalar<size_t>(prhs[2]);
             const char* _value = bindings_tests_Strings_repeat(value, times);
+            if (nlhs > 0) plhs[0] = createMexString(_value);
+            break;
+        }
+
+        // Library
+        case /* hash32_fnv1a("bindings_tests_getLastError") */ 2861779828: {
+            static auto bindings_tests_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_getLastError");
+            const char* _value = bindings_tests_getLastError();
+            if (nlhs > 0) plhs[0] = createMexString(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_secondary_getLastError") */ 652972755: {
+            static auto bindings_tests_secondary_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_secondary_getLastError");
+            const char* _value = bindings_tests_secondary_getLastError();
             if (nlhs > 0) plhs[0] = createMexString(_value);
             break;
         }

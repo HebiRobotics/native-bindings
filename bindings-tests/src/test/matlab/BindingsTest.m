@@ -320,8 +320,10 @@ classdef BindingsTest < matlab.unittest.TestCase
         function testIsolated(testCase)
             % State confined to a second GraalVM isolate. It does not share
             % static fields, the handle registry or the last error slot with the
-            % default isolate, which is why the class has its own last error
-            % provider.
+            % default isolate, which is why it gets its own generated last error
+            % accessor. The MEX gateway lives in a private folder, so the raw
+            % accessor is not reachable from here and the error message, which
+            % flows through it, is the observable instead.
             bindings_tests.Isolated.reset();
             bindings_tests.Isolated.increment();
             bindings_tests.Isolated.increment();
@@ -330,7 +332,6 @@ classdef BindingsTest < matlab.unittest.TestCase
 
             message = testCase.captureError(@() bindings_tests.Isolated.alwaysFails());
             testCase.verifyTrue(contains(message, 'secondary isolate'));
-            testCase.verifyTrue(contains(bindings_tests.Isolated.getLastError(), 'secondary isolate'));
         end
 
     end

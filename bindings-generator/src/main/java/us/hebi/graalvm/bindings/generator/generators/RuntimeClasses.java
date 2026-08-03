@@ -14,7 +14,7 @@ class RuntimeClasses {
 
     static final ClassName HandlesUtil = ClassName.get("us.hebi.graalvm.bindings.runtime.handles", "Handles");
 
-    private static final ClassName ExceptionHandlers = ClassName.get("us.hebi.graalvm.bindings.runtime.exceptions", "ExceptionHandlers");
+    static final ClassName ExceptionHandlers = ClassName.get("us.hebi.graalvm.bindings.runtime.exceptions", "ExceptionHandlers");
 
     public static final ClassName CTypes = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CTypes");
 

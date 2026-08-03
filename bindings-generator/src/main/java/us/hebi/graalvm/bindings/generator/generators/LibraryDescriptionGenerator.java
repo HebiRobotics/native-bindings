@@ -48,7 +48,6 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
             if (method.isConstructor()) methodDesc.setIsConstructor(true);
-            if (method.isLastErrorProvider()) methodDesc.setIsLastErrorProvider(true);
 
             method.getPropertyName().ifPresent(methodDesc::setPropertyName);
 

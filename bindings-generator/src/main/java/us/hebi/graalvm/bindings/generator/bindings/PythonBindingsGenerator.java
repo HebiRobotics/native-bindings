@@ -245,6 +245,20 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .render());
             }
         }
+
+        // The per-isolate last error accessors are library-level symbols. Without
+        // the restype registration ctypes would default to c_int and truncate the
+        // pointer before the decode in the error messages.
+        content.append("\n# ==== Library ====\n");
+        for (String isolateName : GeneratorUtil.getIsolateNames(lib)) {
+            content.append(IndentingTextRenderer.of("""
+                            %%LIB_FIELD%%.%%CENTRY_NAME%%.argtypes = []
+                            %%LIB_FIELD%%.%%CENTRY_NAME%%.restype = c_char_p
+                            """)
+                    .set("LIB_FIELD", libField)
+                    .set("CENTRY_NAME", GeneratorUtil.getLastErrorCName(lib, isolateName))
+                    .render());
+        }
     }
 
     private void appendEnumWrappers(StringBuilder content) {
@@ -548,11 +562,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private String getErrorReason(ClassDescription apiClass, MethodDescription desc) {
-        var cErrorMethod = getLastErrorMethod(apiClass);
-        if (cErrorMethod == null) return "";
-
         return " ({%%LIB_FIELD%%.%%C_ERROR_METHOD%%().decode(\"utf-8\")})"
-                .replace("%%C_ERROR_METHOD%%", cErrorMethod);
+                .replace("%%C_ERROR_METHOD%%", getLastErrorMethod(apiClass));
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {

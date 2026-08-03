@@ -277,10 +277,6 @@ int __bindings_tests_Isolated_alwaysFails(bindings_tests_isolatethread_t* isolat
 int bindings_tests_Isolated_alwaysFails() {
     return __bindings_tests_Isolated_alwaysFails(isolate::secondary());
 }
-const char* __bindings_tests_Isolated_getLastError(bindings_tests_isolatethread_t* isolate);
-const char* bindings_tests_Isolated_getLastError() {
-    return __bindings_tests_Isolated_getLastError(isolate::secondary());
-}
 
 // ==== Math ====
 int __bindings_tests_Math_negate(bindings_tests_isolatethread_t* isolate, int value);

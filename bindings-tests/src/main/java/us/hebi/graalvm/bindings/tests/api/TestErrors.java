@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.tests.api;
 
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
-import us.hebi.graalvm.bindings.annotations.CLibLastErrorProvider;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 
@@ -87,12 +86,11 @@ public class TestErrors {
         ExceptionHandlers.lastException.remove();
     }
 
-    @CLibLastErrorProvider
     @CLibMethod(flags = Noexcept)
     @CLibComment("""
             Message of the last exception thrown on the calling thread, or an empty
-            string if there has not been one. The language wrappers call this to turn
-            a failed call into a native exception.
+            string if there has not been one. Same content as the generated library
+            level accessor, exported as an ordinary method.
             """)
     public static String getLastError() {
         return ExceptionHandlers.getLastError(false);

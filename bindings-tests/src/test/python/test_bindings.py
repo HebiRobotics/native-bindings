@@ -385,8 +385,8 @@ class IsolatedTest(unittest.TestCase):
     """State confined to a second GraalVM isolate.
 
     This counter does not share static fields, the handle registry or the last
-    error slot with the default isolate, which is why the class has its own last
-    error provider.
+    error slot with the default isolate, which is why it gets its own generated
+    last error accessor.
     """
 
     def test_counter(self):
@@ -397,9 +397,12 @@ class IsolatedTest(unittest.TestCase):
         self.assertEqual(3, bindings_tests.Isolated.get_counter())
 
     def test_always_fails(self):
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "secondary isolate"):
             bindings_tests.Isolated.always_fails()
-        self.assertIn("secondary isolate", bindings_tests.Isolated.get_last_error())
+        # The wrappers use the generated per-isolate accessor internally, so the
+        # raw symbol is asserted through the loaded library handle.
+        message = bindings_tests.libbindings_tests.bindings_tests_secondary_getLastError()
+        self.assertIn("secondary isolate", message.decode("utf-8"))
 
 
 class CallbacksTest(unittest.TestCase):

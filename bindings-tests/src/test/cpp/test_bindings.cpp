@@ -348,10 +348,14 @@ static void testOverloads() {
 // Isolated (second isolate)
 // ---------------------------------------------------------------------------
 
+// The C++ wrapper only uses the generated per-isolate accessor internally, so
+// the raw C symbol is declared here to assert on it directly.
+extern "C" const char* bindings_tests_secondary_getLastError();
+
 static void testIsolated() {
   // This state lives in a second GraalVM isolate. It does not share static
   // fields, the handle registry or the last error slot with the default
-  // isolate, which is why it has its own last error provider.
+  // isolate, which is why it gets its own generated last error accessor.
   bt::isolated::reset();
   bt::isolated::increment();
   bt::isolated::increment();
@@ -365,7 +369,7 @@ static void testIsolated() {
     threw = true;
   }
   CHECK(threw);
-  CHECK(bt::isolated::getLastError().find("secondary isolate") != std::string::npos);
+  CHECK(std::string(bindings_tests_secondary_getLastError()).find("secondary isolate") != std::string::npos);
 }
 
 // ---------------------------------------------------------------------------

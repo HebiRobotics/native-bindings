@@ -328,6 +328,11 @@ static void test_errors(void) {
     assert(message != NULL);
     assert(strstr(message, "must not be negative") != NULL);
 
+    /* The library level accessor reads the same per-thread slot. */
+    message = bindings_tests_getLastError();
+    assert(message != NULL);
+    assert(strstr(message, "must not be negative") != NULL);
+
     /* Every other return type gets a type specific default on failure. */
     assert(bindings_tests_Errors_divideInt32(10, 2) == 5);
     assert(bindings_tests_Errors_divideInt32(1, 0) == 0);
@@ -423,7 +428,7 @@ static void test_isolated(void) {
     /*
      * This state lives in a second GraalVM isolate. It does not share static
      * fields, the handle registry or the last error slot with the default
-     * isolate, which is why it has its own last error provider.
+     * isolate, which is why it gets its own generated last error accessor.
      */
     bindings_tests_Isolated_reset();
     bindings_tests_Isolated_increment();
@@ -431,10 +436,20 @@ static void test_isolated(void) {
     bindings_tests_Isolated_increment();
     assert(bindings_tests_Isolated_getCounter() == 3);
 
+    bindings_tests_Errors_clearLastError();
     assert(bindings_tests_Isolated_alwaysFails() != 0);
-    message = bindings_tests_Isolated_getLastError();
+
+    /*
+     * The generated accessors exist once per isolate over a single entry point.
+     * The failure above must be visible through the secondary accessor and must
+     * not leak into the default isolate's slot.
+     */
+    message = bindings_tests_secondary_getLastError();
     assert(message != NULL);
     assert(strstr(message, "secondary isolate") != NULL);
+    message = bindings_tests_getLastError();
+    assert(message != NULL);
+    assert(strlen(message) == 0);
 
     printf("isolated ok\n");
 }

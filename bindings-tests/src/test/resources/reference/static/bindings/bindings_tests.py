@@ -283,8 +283,6 @@ libbindings_tests.bindings_tests_Isolated_reset.argtypes = []
 libbindings_tests.bindings_tests_Isolated_reset.restype = None
 libbindings_tests.bindings_tests_Isolated_alwaysFails.argtypes = []
 libbindings_tests.bindings_tests_Isolated_alwaysFails.restype = c_int
-libbindings_tests.bindings_tests_Isolated_getLastError.argtypes = []
-libbindings_tests.bindings_tests_Isolated_getLastError.restype = c_char_p
 
 # ==== Math ====
 libbindings_tests.bindings_tests_Math_negate.argtypes = [c_int]
@@ -358,6 +356,12 @@ libbindings_tests.bindings_tests_Strings_join.restype = c_char_p
 libbindings_tests.bindings_tests_Strings_repeat.argtypes = [c_char_p, c_size_t]
 libbindings_tests.bindings_tests_Strings_repeat.restype = c_char_p
 
+# ==== Library ====
+libbindings_tests.bindings_tests_getLastError.argtypes = []
+libbindings_tests.bindings_tests_getLastError.restype = c_char_p
+libbindings_tests.bindings_tests_secondary_getLastError.argtypes = []
+libbindings_tests.bindings_tests_secondary_getLastError.restype = c_char_p
+
 # ==== Enum Wrappers ====
 class Color(IntEnum):
     RED = 0
@@ -386,7 +390,7 @@ class Counter:
         """
         ptr_ = libbindings_tests.bindings_tests_Counter_create(start)
         if not ptr_:
-            raise RuntimeError(f'Failed to create Counter in Counter::__init__ ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
+            raise RuntimeError(f'Failed to create Counter in Counter::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
         self.ptr = ptr_
         if value is not None: self.value = value
 
@@ -476,7 +480,7 @@ class Circle(Shape):
     def __init__(self, radius: float, *, name: str = None) -> None:
         ptr_ = libbindings_tests.bindings_tests_Circle_create(radius)
         if not ptr_:
-            raise RuntimeError(f'Failed to create Circle in Circle::__init__ ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
+            raise RuntimeError(f'Failed to create Circle in Circle::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
         self.ref_Circle = ptr_
         super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -507,7 +511,7 @@ class Square(Shape):
     def __init__(self, side: float, *, name: str = None) -> None:
         ptr_ = libbindings_tests.bindings_tests_Square_create(side)
         if not ptr_:
-            raise RuntimeError(f'Failed to create Square in Square::__init__ ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
+            raise RuntimeError(f'Failed to create Square in Square::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
         self.ref_Square = ptr_
         super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -716,7 +720,7 @@ class Errors:
         """
         status_ = libbindings_tests.bindings_tests_Errors_requireNonNegative(value)
         if status_ != 0:
-            raise RuntimeError(f'Encountered error in Errors::require_non_negative ({libbindings_tests.bindings_tests_Errors_getLastError().decode("utf-8")})')
+            raise RuntimeError(f'Encountered error in Errors::require_non_negative ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
 
     @classmethod
     def divide_int32(cls, a: int, b: int) -> int:
@@ -781,8 +785,8 @@ class Errors:
     @classmethod
     def get_last_error(cls) -> str:
         """Message of the last exception thrown on the calling thread, or an empty
-        string if there has not been one. The language wrappers call this to turn
-        a failed call into a native exception.
+        string if there has not been one. Same content as the generated library
+        level accessor, exported as an ordinary method.
         """
         ptr_ = libbindings_tests.bindings_tests_Errors_getLastError()
         return ptr_.decode("utf-8") if ptr_ is not None else ""
@@ -881,13 +885,7 @@ class Isolated:
         """
         status_ = libbindings_tests.bindings_tests_Isolated_alwaysFails()
         if status_ != 0:
-            raise RuntimeError(f'Encountered error in Isolated::always_fails ({libbindings_tests.bindings_tests_Isolated_getLastError().decode("utf-8")})')
-
-    @classmethod
-    def get_last_error(cls) -> str:
-        """Last error for the calling thread within the secondary isolate."""
-        ptr_ = libbindings_tests.bindings_tests_Isolated_getLastError()
-        return ptr_.decode("utf-8") if ptr_ is not None else ""
+            raise RuntimeError(f'Encountered error in Isolated::always_fails ({libbindings_tests.bindings_tests_secondary_getLastError().decode("utf-8")})')
 
 
 class Math:

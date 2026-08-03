@@ -71,42 +71,6 @@ public class ProcessorValidationTest {
     }
 
     @Test
-    public void rejectsNonStaticLastErrorProvider() {
-        assertThat(compile(source("InstanceProvider", """
-                @CLibClass("InstanceProvider")
-                public class InstanceProvider {
-                    @CLibLastErrorProvider
-                    @CLibMethod(flags = Noexcept)
-                    public String getLastError() { return ""; }
-                }
-                """))).hadErrorContaining("Error provider must be a static no-args method");
-    }
-
-    @Test
-    public void rejectsLastErrorProviderWithArguments() {
-        assertThat(compile(source("ArgProvider", """
-                @CLibClass("ArgProvider")
-                public class ArgProvider {
-                    @CLibLastErrorProvider
-                    @CLibMethod(flags = Noexcept)
-                    public static String getLastError(boolean withStackTrace) { return ""; }
-                }
-                """))).hadErrorContaining("Error provider must be a static no-args method");
-    }
-
-    @Test
-    public void rejectsLastErrorProviderWithWrongReturnType() {
-        assertThat(compile(source("IntProvider", """
-                @CLibClass("IntProvider")
-                public class IntProvider {
-                    @CLibLastErrorProvider
-                    @CLibMethod(flags = Noexcept)
-                    public static int getLastError() { return 0; }
-                }
-                """))).hadErrorContaining("Error provider must be a static no-args method");
-    }
-
-    @Test
     public void rejectsDoubleSpanReturn() {
         assertThat(compile(source("SpanReturn", """
                 import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;

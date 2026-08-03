@@ -25,7 +25,7 @@ classdef (Sealed) Square < bindings_tests.Shape
         function this = Square(side, varargin)
             ptr_ = bindings_tests_native('bindings_tests_Square_create', side);
             if isempty(ptr_)
-                error(['Failed to create bindings_tests.Square in Square.Square' ': ' bindings_tests_native('bindings_tests_Errors_getLastError')]);
+                error(['Failed to create bindings_tests.Square in Square.Square' ': ' bindings_tests_native('bindings_tests_getLastError')]);
             end
             this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Square_to_Shape', ptr_));
             this.ref_Square = ptr_;

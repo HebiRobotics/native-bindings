@@ -5,6 +5,7 @@ import org.stringtemplate.v4.ST;
 import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
+import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.ProtoSortUtil;
 import us.hebi.graalvm.bindings.model.*;
 
@@ -36,21 +37,8 @@ public abstract class BindingGenerator {
     }
 
     protected String getLastErrorMethod(ClassDescription apiClass) {
-        if (lastErrorMethods == null) {
-            lastErrorMethods = new HashMap<>();
-            for (var clazz : lib.getClasses()) {
-                var isolate = clazz.getIsolateName();
-                for (var method : clazz.getMethods()) {
-                    if (method.getIsLastErrorProvider() && !lastErrorMethods.containsKey(isolate)) {
-                        lastErrorMethods.put(isolate, method.getCName());
-                    }
-                }
-            }
-        }
-        return lastErrorMethods.get(apiClass.getIsolateName());
+        return GeneratorUtil.getLastErrorCName(lib, apiClass.getIsolateName());
     }
-
-    private Map<String, String> lastErrorMethods;
 
     protected ST loadTemplateWithLibVars(String template) {
         return loadTemplate(template)

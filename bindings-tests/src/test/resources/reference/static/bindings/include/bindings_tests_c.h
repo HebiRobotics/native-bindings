@@ -116,7 +116,6 @@ void bindings_tests_Isolated_increment();
 int bindings_tests_Isolated_getCounter();
 void bindings_tests_Isolated_reset();
 int bindings_tests_Isolated_alwaysFails();
-const char* bindings_tests_Isolated_getLastError();
 
 // ==== Math ====
 int bindings_tests_Math_negate(int value);
@@ -158,6 +157,10 @@ const char* bindings_tests_Strings_nullString();
 const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
+// ==== Last Error ====
+const char* bindings_tests_getLastError();
+const char* bindings_tests_secondary_getLastError();
+
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {
     *major = 1;
@@ -166,6 +169,21 @@ void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* bu
     *build = 42;
 }
 
+
+// ==== Isolate Management ====
+
+// Opaque handles to the embedded VM. An isolate and its per-thread
+// attachments get created lazily on the first library call, so these
+// functions are only needed for manual lifecycle control.
+typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
+typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+
+bindings_tests_isolatethread_t* bindings_tests_createIsolate();
+bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
+bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
+int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
 
 
 #ifdef __cplusplus
