@@ -247,6 +247,22 @@ Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
   consuming pom produces exactly that, so an option whose empty value is meaningful has to
   read the map directly instead of relying on `getOrDefault`, which only fires when the key
   is absent. `getDownloadUrl` is the one that bit.
+- **Only the generated Java is nesting aware, and it has to be built from
+  `ClassName.get(element)`.** `ClassName.get(package, simpleName)` silently produces a
+  top-level `pkg.Inner` for a nested `pkg.Outer.Inner`, so the entry points import a type
+  that does not exist and the compile fails with a bare "cannot find symbol". This is what
+  the old "inner classes hang the processor" TODO really described, the hang itself came
+  from the commented-out handling that processed nested classes a second time. The wrapper
+  class is always top level, so `getWrapperType` joins the whole nesting path
+  (`Outer_Inner$CEntries`). Join the path rather than taking the innermost name, or
+  `Outer.Inner` and a top-level `Inner` write to the same file and the second one dies in
+  `AbstractGenerator` with a swallowed `FilerException`. `AnnotatedClibType.getApiTypeWrapperClass`
+  derives the same name independently for cross-class handle references, so the two must
+  change together, and `CEnumGenerator.getGeneratedClassName` joins the path for the same
+  reason. That last one collided without any nesting at all, since two top-level classes
+  each declaring a `Color` enum both wanted `Color$$CEnum`. Nothing outside generated Java is affected: every C, C++, Python and
+  MATLAB symbol comes from the `@CLibClass` value, which is why nesting `TestCircle` inside
+  `TestShape` left all four languages' reference files byte identical.
 - **Word types must not be compared to `null`.** `pointer == null` is a native-image
   build error ("Should not compare Word to Object"). Use `isNull()`.
 - **`@CStruct` interfaces may only contain annotated accessors.** Default or static
@@ -280,7 +296,9 @@ factory colliding with wrapped methods (now a per-class free function in the int
 namespace), the MEX target failing to build in a `Debug` configuration on MSVC (cl
 rejects the unconditional `/O2` against the configuration's `/RTC1` with "D8016",
 which broke IDE profiles defaulting to Debug, so `/O2` and `/DNDEBUG` now apply only
-outside Debug while `/MT` stays unconditional, its override being only a warning).
+outside Debug while `/MT` stays unconditional, its override being only a warning),
+annotated static nested classes (the old TODO claimed an infinite loop, see the bitten
+list for what actually happened).
 
 Open:
 
@@ -291,11 +309,7 @@ Open:
 3. Only leaf classes may declare constructors.
 4. Structs are unsupported, except the span struct as the one special case.
    `@CExternalEnums` is declared but never read.
-5. A nested `@CLibClass` sends the processor into an infinite loop with no error. Known
-   since the original implementation, the commented-out handling is still in
-   `NativeAnnotationProcessor`. The cheap fix is rejecting nested classes with a compile
-   error, allowing them is a separate investigation.
-6. `LibraryDescription.proto` still says `package hebi.api.proto` and
+5. `LibraryDescription.proto` still says `package hebi.api.proto` and
    `default = "hebi"` for the library name. The package rename only regenerates the
    model classes. The name default interacts with the omit-what-matches-default
    encoding: a library actually named `hebi` gets its name omitted from `api.json` and

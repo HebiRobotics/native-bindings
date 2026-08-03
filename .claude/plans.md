@@ -1586,9 +1586,10 @@ general-purpose Java library binding. Build on item 1, do not attempt before it.
   C++ begin/end).
 - Nullable handle returns (`evaluateSingle` returning empty) likely work as the
   null handle but are unpinned, add a bindings-tests case.
-- The nested-class hang (CLAUDE.md gap 5, release blocker 3 under *Before open
-  sourcing*): a richer API makes annotated inner classes near-certain, fix the
-  rejection first, allowing them stays a separate investigation.
+- Nested classes: a richer API makes annotated nested classes near-certain, and static
+  nested classes are supported as of 2026-08-03, so this is no longer a blocker for
+  Saxon. What is still unchecked is the duplicate `@CLibClass` value collision recorded
+  under release blocker 3, which a wider API surface makes easier to hit.
 - Explicitly not needed for Saxon: the varargs/variant marshalling planned for the
   MATLAB SDK item in the source repo. Saxon's key-value surfaces are plain
   `setProperty(String, String)` / `setParameter(QName, XdmValue)` methods. The two
@@ -1689,6 +1690,162 @@ blocker as long as the download stays internal.
 
 ---
 
+## 15. Packaging the wrappers for their own ecosystems: wheels and toolboxes
+
+Item 8 packaged the C and C++ wrappers and item 14 made the MEX gateway buildable without
+a MATLAB install. The same question is unanswered for the other two languages: a Python
+user still installs by unzipping a directory, and a MATLAB user still calls `addpath`.
+Both ecosystems have a standard package format, and both are within reach because of a
+property the loaders already have.
+
+**The property that makes this cheap.** Both loaders resolve the binary in the same three
+steps: bundled at `<root>/lib/<platform>/<libFile>`, then the shared cache under the
+user's cache directory, then the download. The generated Python does it around its
+`this_file_dir` lookup and `locate_binary.m` around `rootDir`. A wheel or a toolbox is
+nothing more than an archive that populates the bundled slot, so neither format needs a
+loader change, and the download path stays exactly as it is for the C++ and source
+consumers that have no package manager.
+
+### 15a. Python wheels
+
+**Recommendation: do this, and do it before item 2.**
+
+The wrapper is pure Python over ctypes, so the wheel carries no CPython ABI and its tag
+is `py3-none-<platform>`. One wheel per platform then serves every Python 3 minor version
+and also PyPy and GraalPy, which are exactly the interpreters the ctypes backend exists
+for. That is the cheap shape, and item 2 ends it: an abi3 extension turns the tag into
+`cp38-abi3-<platform>` and needs the pure wheel kept alongside it as the fallback.
+
+That ordering is the real argument for doing this now. Item 2's risk list calls wheel
+building and manylinux "a distribution problem rather than a code problem, but they are
+why this is a bigger commitment than it looks". Landing the distribution half first,
+against a wrapper that has nothing compiled in it, leaves item 2 as only the code.
+
+Design: emit a `pyproject.toml` next to the generated package, the same way the cmake
+templates and `download_binary.m` are emitted, and build one wheel per platform from
+output that already exists as the per-platform zip. Setting `--plat-name` is the whole
+platform story, since there is nothing to compile.
+
+Three things to measure rather than assume:
+
+- **Size against the PyPI per file limit**, 100 MB by default and raised on request. The
+  native-charts image is 117 MB on Windows, so whether its shared library fits is what
+  decides whether PyPI is an option at all for that library. If it is not, a private
+  index means consumers need `--extra-index-url`, which gives up most of what the wheel
+  was for. `bindings-tests` is small enough to verify the packaging either way.
+- **The manylinux floor**, set by what the GraalVM produced `.so` links against.
+  `manylinux_2_28` is the realistic target and `auditwheel repair` is the check.
+- **macOS**, which needs separate `arm64` and `x86_64` wheels or a `universal2` build, and
+  where signing and notarization of a shipped `.dylib` is a question this repo has not had
+  to answer yet.
+
+Verification: `bindings-tests` builds its wheel in `scripts/build-native.*`, and a leg
+installs it into a throwaway virtualenv and runs the existing Python suite against the
+installed package rather than the source tree. That is the property the format exists to
+provide, and it is the same shape as item 8's consumer test.
+
+### 15b. MATLAB toolboxes
+
+**Recommendation: worth having, but it belongs in the consuming project's release CI
+rather than in this repo, and it runs against a decision this repo just made in the other
+direction.**
+
+An `.mltbx` gives what `addpath` cannot: install and uninstall through the Add-Ons
+manager, automatic path setup, version management, and distribution through File Exchange
+or MATLAB Online. Half of a good toolbox exists already, since the generator emits
+`functionSignatures.json` for tab completion.
+
+The cost is not the packaging, it is that building an `.mltbx` needs MATLAB.
+`matlab.addons.toolbox.packageToolbox` runs against a `.prj` inside a MATLAB session, and
+item 14 exists specifically to keep a licensed MATLAB out of the build. Putting toolbox
+packaging in the generator hands every consumer of an open source project the MATLAB
+requirement item 14 just removed. The format is a zip with metadata XML and hand rolling
+it is possible, but it is undocumented and would break on a MathWorks release with nothing
+to catch it, so it is not something to ship in a generator.
+
+The split that keeps both properties: the generator emits the `.prj` template next to the
+other MATLAB resources, and the `packageToolbox` call lives in the consuming project's
+release workflow, where a MATLAB license is already present.
+
+One structural consequence worth knowing before promising it. A toolbox has no per
+platform variants, so an `.mltbx` is necessarily the `-all` bundle with every platform's
+binary inside. `locate_binary.m` already picks the right one at runtime, so this works
+unchanged, it is only large.
+
+Timing: this matters most when the source repo's B.8 lands and the MATLAB SDK ships on
+this stack, because that replaces an API distributed as a zip and makes installation user
+facing. Before that it is polish on hebi-charts.
+
+### Files
+
+- `bindings-generator/.../bindings/python/pyproject.toml` (new resource, and the first one
+  the Python generator uses, since it emits everything from Java today)
+- `.../bindings/PythonBindingsGenerator.java`, emit it next to the package
+- `.../bindings/matlab/libName.prj` (new resource), next to `build_native.m`
+- `scripts/build-native.*` and the CI, build and verify the wheel
+- `bindings-tests`, the installed-wheel test leg
+
+### Risks
+
+- Publishing is a commitment in a way that a zip is not. A name on PyPI is claimed once,
+  and a wheel that installs but fails to load is a worse first impression than no wheel.
+  The installed-wheel leg is what keeps that from happening.
+- The download path must stay. Wheels and toolboxes cover Python and MATLAB, and the C++
+  and source consumers still resolve binaries the existing way.
+
+**Effort:** small for the Python wheel, most of it in CI rather than in the generator.
+Small for the `.prj` template, with the toolbox build itself living in the consuming
+project.
+
+---
+
+## 16. Diagnostics: real exception types that carry their element
+
+`ProcessingException` carries an `Element` and nothing ever reads it.
+`NativeAnnotationProcessor.steps()` catches `Throwable`, formats the Java stack trace into
+a string and passes that to `printMessage(ERROR, ...)` with no element argument, so every
+rejection surfaces as a generator stack trace attached to no source location. The user
+sees where the generator threw rather than which of their methods is wrong, and
+`ProcessingException.getElement()` is dead code.
+
+The types underneath are the other half. The generator throws four kinds: 4
+`ProcessingException`, 7 `IllegalArgumentException`, 5 `IllegalStateException` and 3
+`RuntimeException`, plus 25 `checkState` and `checkArgument` calls. Only the first can
+point at source. The rest are indistinguishable at the catch site from a genuine generator
+bug, which is why the catch is written the way it is.
+
+### Design
+
+- Pass the element through: `printMessage(ERROR, message, element)` is what makes javac
+  report the user's file and line. Keep the stack trace, but only for what is not a
+  `ProcessingException`, since those are generator bugs and the trace is the useful part
+  there.
+- Give the validation throws a type that carries their element. The mechanical half is
+  converting the `IllegalArgumentException` and `IllegalStateException` throws reachable
+  from user input, in `AnnotatedClibType`, `AnnotatedCLibMethod`, `TypeMap` and the three
+  generators, into `ProcessingException` with the element that is already in scope. The
+  ones an annotated API cannot trigger, such as `EnvProcessor`'s uninitialized
+  environment, stay unchecked and stay traced.
+- Separate the two audiences while doing it: a rejection is a diagnostic for the API
+  author and needs a location, an internal invariant is a bug report and needs a trace.
+  Today both look the same.
+
+The distinction is worth stating in `style.md`, because every future validation lands on
+this fork.
+
+### Verification
+
+`ProcessorValidationTest` asserts with `hadErrorContaining` only, so nothing pins the
+location today. compile-testing can assert `inFile(...).onLine(...)`, which is what turns
+this from a cosmetic change into something the suite holds. Add it to the existing cases
+rather than writing new ones.
+
+**Effort:** small. The catch site is a few lines, the throw conversion is mechanical and
+the compiler finds every site. Worth doing before external users arrive, since a stack
+trace with no source location is what they meet on their first mistake.
+
+---
+
 ## Before open sourcing
 
 Release blockers, separate from the feature items above. None of these is large, and
@@ -1708,11 +1865,44 @@ repo (`../HEBI-Java`, see its `.claude/plans.md` Part A for the full evaluation)
    it exists. `bindings-tests` sets an `example.com` url so the reference files keep
    covering the download path, and `DownloadUrlOptionTest` drives the processor with and
    without the option to pin both shapes.
-3. **Nested class rejection.** CLAUDE.md gap 5. First external users will annotate an
-   inner class within a week, and today that hangs the compile with no message.
+3. **Nested classes.** Done 2026-08-03, and they are **supported** rather than rejected.
+   The premise of the old TODO did not survive checking: with the commented-out
+   inner-class handling deleted, an annotated nested class does not hang anything, it
+   fails with "cannot find symbol" because `ClassName.get(package, simpleName)` flattens
+   `Outer.Inner` to a `pkg.Inner` that does not exist. Building the type from
+   `ClassName.get(element)` and folding the nesting path into the wrapper name
+   (`Outer_Inner$CEntries`, in both `AnnotatedCLibClass.getWrapperType` and
+   `AnnotatedClibType.getApiTypeWrapperClass`) is the whole fix. The four language
+   generators needed no change at all, because every symbol they emit comes from the
+   `@CLibClass` value rather than the Java name. `castToTypeElement` still rejects inner,
+   local and anonymous classes, which have no callable static form. `TestShape` now
+   declares `TestCircle` as a static nested class, which pins it: the C, C++, Python and
+   MATLAB reference files and `api.json` came out byte identical and all four suites pass
+   unchanged, so only the generated Java moved. `ProcessorValidationTest` covers both
+   sides, `acceptsStaticNestedClass` (whose generated entry points are compiled by
+   compile-testing, so a nesting-blind reference fails it) and `rejectsInnerClass`.
+
+   The same collision in `CEnumGenerator.getGeneratedClassName` was fixed with it, since
+   it keyed on the innermost simple name and gave two annotated classes each declaring a
+   `Color` enum the same `Color$$CEnum` file. It now joins the full path the same way, so
+   `TestPalette.Color` and `TestShape.TestCircle.Color` become `TestPalette_Color$$CEnum`
+   and `TestShape_TestCircle_Color$$CEnum`. This collision was reachable without nesting,
+   two top-level classes were always enough, and `TestCircle.Color` pins it: reverting
+   just the join fails the build with "Attempt to recreate a file for type
+   ...generated.Color$$CEnum". Existing enum wrapper files are renamed by the fix, which
+   is the whole of its reference churn outside the new enum itself.
+
+   One latent collision is left, and it is the one no name mangling can solve, because the
+   names are the author's rather than derived: two classes sharing a `@CLibClass` value, or
+   two enums sharing a `@CLibEnum` value, produce duplicate C symbols and an unstable sort
+   in `ProtoSortUtil`, with no check anywhere. Nesting makes it easier to write by accident,
+   since the enclosing Java type no longer keeps the declarations visibly apart. It
+   currently surfaces, if at all, as a swallowed `FilerException` from `AbstractGenerator`
+   reported as a bare "Attempt to recreate a file" with no location. A duplicate-value check
+   over the registry, raised as a proper diagnostic, is the fix.
 4. **`compiler-linux.sh` log header.** Done. The `%LOG_FILE%` literal is fixed in the
    generated `compiler-linux.sh` and `compiler-osx.sh`, with the reference files updated.
-5. **Proto remnants.** CLAUDE.md gap 6. `package hebi.api.proto` and the `"hebi"` name
+5. **Proto remnants.** CLAUDE.md gap 5. `package hebi.api.proto` and the `"hebi"` name
    default should change before `api.json` has external consumers, not after.
 6. **Decide which documents ship.** Mostly handled: the root now carries only `README.md`
    and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved out to
@@ -1776,6 +1966,7 @@ is enough to build and verify the packaging.
 | 4 into 11 | The output span is the reason the gate exists. Land the C++ half with item 4 or nothing asserts it. |
 | 8 into 11 | The gate should link the static package, so loader symbol resolution stays out of the measured loop. |
 | 12 into 1 | The gateway review records the longjmp and validation constraints the callback trampoline runs into. |
+| 15a into 2 | The wheel is the extension's distribution half. Building it against the pure ctypes wrapper leaves item 2 as only the code. |
 | 10 into 11 | Once the shared shape carries "allocates", the gate can assert per method instead of per hand-picked case. |
 
 Two items are **ABI-neutral** and can therefore slot anywhere: item 1, because the callback
@@ -1813,6 +2004,9 @@ E. Larger, optional      2 (Python extension)   then   5 (other languages)
     6 (migration)        DONE, its two leftovers are small and slot anywhere
     12 (MEX review)      fix 1 (getScalar validation) DONE. Fix 2 (nrhs check)
                          remains, one generated line per case, depends on nothing.
+    15 (packaging)       15a (wheels) goes before 2 and de-risks it. 15b (toolbox)
+                         waits on the source repo's B.8 and stays out of this repo.
+    16 (diagnostics)     independent and small, wanted before external users arrive
 ```
 
 The one genuine judgement call is the order within **C**: whether the static packaging
