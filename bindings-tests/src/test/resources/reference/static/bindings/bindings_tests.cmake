@@ -73,7 +73,7 @@ if(DOWNLOAD_BINDINGS_TESTS AND NOT EXISTS "${BINDINGS_TESTS_LIB_FILE}")
 
   # Build URL
   set(BINDINGS_TESTS_DL_NAME "bindings_tests-${BINDINGS_TESTS_VERSION}-${BINDINGS_TESTS_PLATFORM}.zip")
-  set(BINDINGS_TESTS_DL_URL "https://files.hebi.us/download/bindings_tests/snapshot/${BINDINGS_TESTS_BUILD_NUMBER}/${BINDINGS_TESTS_DL_NAME}")
+  set(BINDINGS_TESTS_DL_URL "https://example.com/download/bindings_tests/snapshot/42/${BINDINGS_TESTS_DL_NAME}")
 
   # Make sure the directory exists
   file(MAKE_DIRECTORY "${BINDINGS_TESTS_DOWNLOAD_DIR}")

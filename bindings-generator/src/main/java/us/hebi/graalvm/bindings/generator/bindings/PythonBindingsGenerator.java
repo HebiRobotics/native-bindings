@@ -100,7 +100,47 @@ public class PythonBindingsGenerator extends BindingGenerator {
                             if not os.path.exists(lib_path):
                                 download_dir = os.path.join(cache_home, lib_name, f'{version}-build{build_number}')
                                 lib_path = os.path.join(download_dir, lib_name, 'lib', lib_platform, lib_file)
+                        %%DOWNLOAD_BLOCK%%
+                            # Sanity check due to loadlibrary errors being harder to parse
+                            if not os.path.exists(lib_path):
+                                raise Exception(f'Required binary was not found: {lib_path}')
 
+                            # Load the library
+                            return cdll.LoadLibrary(lib_path)
+
+                        %%LIB_FIELD%% = load_library()
+
+                        # Optional lazy-loaded numpy dependency for bulk methods
+                        _numpy = None
+                        def _require_numpy():
+                            global _numpy
+                            if _numpy is None:
+                                try:
+                                    import numpy as np
+                                    _numpy = np
+                                except ImportError:
+                                    raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
+                            return _numpy
+
+                        # API definitions
+                        """)
+                .set("LIB_NAME", lib.getName())
+                .set("LIB_VERSION", lib.getVersion())
+                .set("LIB_BUILD_NUMBER", lib.getBuild())
+                .set("LIB_FIELD", libField)
+                .set("DOWNLOAD_BLOCK", createDownloadBlock())
+                .render());
+    }
+
+    /**
+     * The on-demand download of a release archive. Libraries that do not publish
+     * their binaries leave the url empty and get a loader that only looks locally.
+     */
+    private String createDownloadBlock() {
+        if (!lib.hasDownloadUrl()) {
+            return "";
+        }
+        return "\n" + IndentingTextRenderer.of("""
                                 # If necessary, start a new download it into a shared dir. All files are
                                 # kept so we can share a single download for all languages.
                                 if not os.path.exists(lib_path):
@@ -109,7 +149,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
                                     # Build download url
                                     dl_name = f"{lib_name}-{version}-{lib_platform}.zip"
-                                    url = f"https://files.hebi.us/download/{lib_name}/snapshot/{build_number}/{dl_name}"
+                                    url = f"%%DOWNLOAD_URL%%/{dl_name}"
 
                                     # Download zip file
                                     print(f"Downloading {url}")
@@ -138,35 +178,9 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
                                     print(f'Removing temporary files')
                                     os.remove(zip_path)
-
-                            # Sanity check due to loadlibrary errors being harder to parse
-                            if not os.path.exists(lib_path):
-                                raise Exception(f'Required binary was not found: {lib_path}')
-
-                            # Load the library
-                            return cdll.LoadLibrary(lib_path)
-
-                        %%LIB_FIELD%% = load_library()
-
-                        # Optional lazy-loaded numpy dependency for bulk methods
-                        _numpy = None
-                        def _require_numpy():
-                            global _numpy
-                            if _numpy is None:
-                                try:
-                                    import numpy as np
-                                    _numpy = np
-                                except ImportError:
-                                    raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
-                            return _numpy
-
-                        # API definitions
                         """)
-                .set("LIB_NAME", lib.getName())
-                .set("LIB_VERSION", lib.getVersion())
-                .set("LIB_BUILD_NUMBER", lib.getBuild())
-                .set("LIB_FIELD", libField)
-                .render());
+                .set("DOWNLOAD_URL", lib.getDownloadUrl())
+                .render();
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {

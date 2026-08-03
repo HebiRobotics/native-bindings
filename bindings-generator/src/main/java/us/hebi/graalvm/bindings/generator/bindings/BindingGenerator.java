@@ -45,7 +45,8 @@ public abstract class BindingGenerator {
                 .add("projectName", lib.getName().toUpperCase(Locale.ENGLISH))
                 .add("libName", lib.getName())
                 .add("libVersion", lib.getVersion())
-                .add("buildNumber", lib.getBuild());
+                .add("buildNumber", lib.getBuild())
+                .add("downloadUrl", lib.tryGetDownloadUrl().orElse(null));
     }
 
     protected String loadContent(String fileName) {

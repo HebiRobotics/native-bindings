@@ -66,6 +66,7 @@ function(target_add_<libName> target_name)
   target_link_libraries(${target_name} PRIVATE ${<projectName>_LINK_FILE})
   add_copy_<libName>(${target_name})
 endfunction()
+<if(downloadUrl)>
 
 # ======== Download binaries on-demand ========
 option(DOWNLOAD_<projectName> "Download binaries for the local system if none are available" ON)
@@ -73,7 +74,7 @@ if(DOWNLOAD_<projectName> AND NOT EXISTS "${<projectName>_LIB_FILE}")
 
   # Build URL
   set(<projectName>_DL_NAME "<libName>-${<projectName>_VERSION}-${<projectName>_PLATFORM}.zip")
-  set(<projectName>_DL_URL "https://files.hebi.us/download/<libName>/snapshot/${<projectName>_BUILD_NUMBER}/${<projectName>_DL_NAME}")
+  set(<projectName>_DL_URL "<downloadUrl>/${<projectName>_DL_NAME}")
 
   # Make sure the directory exists
   file(MAKE_DIRECTORY "${<projectName>_DOWNLOAD_DIR}")
@@ -93,3 +94,4 @@ if(DOWNLOAD_<projectName> AND NOT EXISTS "${<projectName>_LIB_FILE}")
   file(REMOVE "${<projectName>_DL_PATH}")
 
 endif()
+<endif>

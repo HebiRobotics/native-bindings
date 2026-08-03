@@ -27,6 +27,9 @@
         <lib.version>1.2.3</lib.version>
         <lib.build>42</lib.build>
 
+        <!-- Where the loaders fetch a release archive from. Fake url for testing. -->
+        <lib.downloadUrl>https://example.com/download/${lib.name}/snapshot/${lib.build}</lib.downloadUrl>
+
         <!-- The processor writes '<outputDir>/bindings/...' and escapes to '<outputDir>' for build files -->
         <bindings.outputDir>${project.build.directory}/image/static</bindings.outputDir>
     </properties>
@@ -108,6 +111,7 @@
                                 <arg>-Abindings.namespace=${lib.namespace}</arg>
                                 <arg>-Abindings.libVersion=${lib.version}</arg>
                                 <arg>-Abindings.libBuild=${lib.build}</arg>
+                                <arg>-Abindings.downloadUrl=${lib.downloadUrl}</arg>
                                 <arg>-Abindings.enableGraphics=false</arg>
                             </compilerArgs>
                         </configuration>
