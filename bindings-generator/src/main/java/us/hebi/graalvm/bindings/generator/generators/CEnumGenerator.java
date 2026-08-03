@@ -30,7 +30,7 @@ public class CEnumGenerator extends AbstractGenerator {
 
     private static ClassName getGeneratedClassName(ClassName enumType, String suffix) {
         var packageName = enumType.packageName() + ".generated";
-        var simpleName = enumType.simpleName() + suffix;
+        var simpleName = String.join("_", enumType.simpleNames()) + suffix;
         return ClassName.get(packageName, simpleName);
     }
 

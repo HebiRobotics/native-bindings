@@ -2,6 +2,7 @@ package us.hebi.graalvm.bindings.tests.api;
 
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
+import us.hebi.graalvm.bindings.annotations.CLibEnum;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
@@ -27,9 +28,28 @@ public abstract class TestShape {
     @CLibClass("Circle")
     public static class TestCircle extends TestShape {
 
+        /**
+         * Deliberately named {@code Color}, the same as {@link TestPalette.Color}. The
+         * generated enum wrapper is a top-level class, so both would land in the same file
+         * if it were keyed on the innermost name.
+         */
+        @CLibEnum("CircleColor")
+        @CLibComment("Fill color of a circle.")
+        public enum Color {
+            Red,
+            Green,
+            Blue
+        }
+
         @CLibMethod(constructor = true)
         public static TestCircle create(double radius) {
             return new TestCircle(radius);
+        }
+
+        @CLibMethod(flags = {Noexcept, Const})
+        @CLibComment("Returns the fill color, which is always Blue until setters exist.")
+        public Color getColor() {
+            return Color.Blue;
         }
 
         @CLibMethod(flags = {Noexcept, Const}, property = "radius")
