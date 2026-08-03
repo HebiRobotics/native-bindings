@@ -184,24 +184,25 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     }
 
     public ClassName getJavaType() {
-        return ClassName.get(getNamespace(), getTypeName());
+        // Nesting aware, so a nested class is referenced as Outer.Inner
+        return ClassName.get(element);
     }
 
     public ClassName getWrapperType() {
-        return getWrapperType(getNamespace(), getTypeName());
+        return getWrapperType(getJavaType());
     }
 
-    protected static ClassName getWrapperType(String namespace, String name) {
-        return ClassName.get(namespace + WRAPPER_PACKAGE_SUFFIX, name + WRAPPER_NAME_SUFFIX
-        );
+    /**
+     * The generated wrapper is always a top-level class, so a nested API class has its
+     * enclosing types folded into the name. Joining the whole nesting path.
+     */
+    protected static ClassName getWrapperType(ClassName javaType) {
+        return ClassName.get(javaType.packageName() + WRAPPER_PACKAGE_SUFFIX,
+                String.join("_", javaType.simpleNames()) + WRAPPER_NAME_SUFFIX);
     }
 
     public String getNamespace() {
         return String.valueOf(MoreElements.getPackage(element).getQualifiedName());
-    }
-
-    private String getTypeName() {
-        return String.valueOf(element.getSimpleName());
     }
 
     public List<AnnotatedCLibMethod> getPublicApiMethods() {

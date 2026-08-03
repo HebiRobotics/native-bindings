@@ -126,6 +126,38 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("@CLibIndex requires an integer @CDefault");
     }
 
+    @Test
+    public void acceptsStaticNestedClass() {
+        // The generated entry points are compiled as part of this, so a nesting-blind
+        // reference to the API class shows up here as "cannot find symbol"
+        assertThat(compile(source("Outer", """
+                @CLibClass("Outer")
+                public class Outer {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+
+                    @CLibClass("Nested")
+                    public static class Nested {
+                        @CLibMethod(flags = Noexcept)
+                        public static int value() { return 2; }
+                    }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void rejectsInnerClass() {
+        assertThat(compile(source("InnerHolder", """
+                public class InnerHolder {
+                    @CLibClass("Inner")
+                    public class Inner {
+                        @CLibMethod(flags = Noexcept)
+                        public int value() { return 1; }
+                    }
+                }
+                """))).hadErrorContaining("@CLibClass requires a top-level or static nested class");
+    }
+
     private Compilation compile(JavaFileObject source) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred

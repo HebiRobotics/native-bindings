@@ -10,12 +10,53 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  * Abstract base of the inheritance test. Subclasses share this class's handle
  * registry, so a Circle handle can be passed to any method declared here after
  * an upcast.
+ * <p>
+ * {@link TestCircle} is declared here rather than in its own file to cover annotated
+ * static nested classes. Nothing about the C ABI changes: every symbol comes from the
+ * {@code @CLibClass} value, so Circle's generated C, C++, Python and MATLAB output is
+ * identical to what a top-level declaration produces. Only the generated Java wrapper
+ * differs, folding the enclosing type into its name.
  *
  * @author Florian Enner
  */
 @CLibComment("Base class for the shape hierarchy.")
 @CLibClass(value = "Shape", abstractClass = true)
 public abstract class TestShape {
+
+    @CLibComment("A circle. Inherits name and area from Shape.")
+    @CLibClass("Circle")
+    public static class TestCircle extends TestShape {
+
+        @CLibMethod(constructor = true)
+        public static TestCircle create(double radius) {
+            return new TestCircle(radius);
+        }
+
+        @CLibMethod(flags = {Noexcept, Const}, property = "radius")
+        public double getRadius() {
+            return radius;
+        }
+
+        @Override
+        @CLibMethod(flags = {Noexcept, Const})
+        public double area() {
+            return Math.PI * radius * radius;
+        }
+
+        @Override
+        @CLibMethod(flags = {Noexcept, Const})
+        public int sideCount() {
+            return 0;
+        }
+
+        private TestCircle(double radius) {
+            super("circle");
+            this.radius = radius;
+        }
+
+        private final double radius;
+
+    }
 
     @CLibMethod(flags = {Noexcept, Const}, property = "name")
     public String getName() {

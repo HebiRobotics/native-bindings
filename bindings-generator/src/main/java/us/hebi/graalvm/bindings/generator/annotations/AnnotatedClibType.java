@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.annotations;
 
-import com.google.auto.common.MoreElements;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.nativeimage.Isolate;
@@ -182,9 +181,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
     public Optional<ClassName> getApiTypeWrapperClass() {
         if (isNativeApiType()) {
             TypeElement typeElement = (TypeElement) env.getTypeUtils().asElement(rawMirror);
-            var namespace = MoreElements.getPackage(typeElement).getQualifiedName();
-            var name = typeElement.getSimpleName();
-            return Optional.of(AnnotatedCLibClass.getWrapperType(namespace.toString(), name.toString()));
+            return Optional.of(AnnotatedCLibClass.getWrapperType(ClassName.get(typeElement)));
         }
         return Optional.empty();
     }

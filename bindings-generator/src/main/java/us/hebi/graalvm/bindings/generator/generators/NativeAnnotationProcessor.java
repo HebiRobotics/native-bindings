@@ -20,6 +20,7 @@ import javax.annotation.processing.SupportedOptions;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.tools.StandardLocation;
 import java.io.IOException;
@@ -85,9 +86,21 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
 
     private static TypeElement castToTypeElement(Element element) {
         if (element instanceof TypeElement typeElement && element.getKind() == ElementKind.CLASS) {
+            if (!isTopLevelOrStaticNested(typeElement)) {
+                throw new ProcessingException(element, "@CLibClass requires a top-level or static nested class: %s",
+                        typeElement.getQualifiedName());
+            }
             return typeElement;
         }
         throw new ProcessingException(element, "Input can only be class type");
+    }
+
+    private static boolean isTopLevelOrStaticNested(TypeElement type) {
+        return switch (type.getNestingKind()) {
+            case TOP_LEVEL -> true;
+            case MEMBER -> type.getModifiers().contains(Modifier.STATIC);
+            case LOCAL, ANONYMOUS -> false;
+        };
     }
 
     private void processElement(TypeElement type, ProcessingEnvironment environment) {
@@ -110,26 +123,6 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         // Set the flag after processing so that the postRound skips finish() and avoids
         // masking the error with a second exception.
         hasProcessedElements = true;
-
-        // TODO:
-        //  Allow inner classes. It gets stuck in an infinite loop without error.
-        //  I haven't found the exact reason, but my best guess is poor namespace
-        //  resolution
-
-        // Process inner classes
-        /*var nestedClasses = type.getEnclosedElements().stream()
-                .filter(enclosed -> enclosed.getKind() == ElementKind.CLASS)
-                .filter(enclosed -> enclosed.getAnnotation(CApiClass.class) != null)
-                .map(GeneratorUtil::castToTypeElement)
-                .map(t -> new AnnotatedNativeClass(t, processingEnv))
-                .toList();
-
-        for (AnnotatedNativeClass nested : nestedClasses) {
-            for (AbstractGenerator generator : generators) {
-                generator.process(nested, processingEnv);
-            }
-        }*/
-
     }
 
     protected void postRound(RoundEnvironment roundEnv) {
