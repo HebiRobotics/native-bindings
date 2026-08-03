@@ -22,13 +22,8 @@ classdef (Sealed) Isolated
             %       Error always
             status_ = bindings_tests_native('bindings_tests_Isolated_alwaysFails');
             if status_ ~= 0
-                error(['Encountered error in Isolated.alwaysFails' ': ' bindings_tests_native('bindings_tests_Isolated_getLastError')]);
+                error(['Encountered error in Isolated.alwaysFails' ': ' bindings_tests_native('bindings_tests_secondary_getLastError')]);
             end
-        end
-
-        function result = getLastError()
-            % Last error for the calling thread within the secondary isolate.
-            result = bindings_tests_native('bindings_tests_Isolated_getLastError');
         end
 
     end

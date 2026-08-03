@@ -328,6 +328,11 @@ static void test_errors(void) {
     assert(message != NULL);
     assert(strstr(message, "must not be negative") != NULL);
 
+    /* The library level accessor reads the same per-thread slot. */
+    message = bindings_tests_getLastError();
+    assert(message != NULL);
+    assert(strstr(message, "must not be negative") != NULL);
+
     /* Every other return type gets a type specific default on failure. */
     assert(bindings_tests_Errors_divideInt32(10, 2) == 5);
     assert(bindings_tests_Errors_divideInt32(1, 0) == 0);
@@ -423,7 +428,7 @@ static void test_isolated(void) {
     /*
      * This state lives in a second GraalVM isolate. It does not share static
      * fields, the handle registry or the last error slot with the default
-     * isolate, which is why it has its own last error provider.
+     * isolate, which is why it gets its own generated last error accessor.
      */
     bindings_tests_Isolated_reset();
     bindings_tests_Isolated_increment();
@@ -431,12 +436,63 @@ static void test_isolated(void) {
     bindings_tests_Isolated_increment();
     assert(bindings_tests_Isolated_getCounter() == 3);
 
+    bindings_tests_Errors_clearLastError();
     assert(bindings_tests_Isolated_alwaysFails() != 0);
-    message = bindings_tests_Isolated_getLastError();
+
+    /*
+     * The generated accessors exist once per isolate over a single entry point.
+     * The failure above must be visible through the secondary accessor and must
+     * not leak into the default isolate's slot.
+     */
+    message = bindings_tests_secondary_getLastError();
     assert(message != NULL);
     assert(strstr(message, "secondary isolate") != NULL);
+    message = bindings_tests_getLastError();
+    assert(message != NULL);
+    assert(strlen(message) == 0);
 
     printf("isolated ok\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Isolate management                                                  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The prefixed aliases of the GraalVM isolate API are exported by the image
+ * but kept out of the public header on purpose, so this test declares the
+ * symbols it links against itself.
+ */
+typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
+typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+
+bindings_tests_isolatethread_t* bindings_tests_createIsolate(void);
+bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
+bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
+int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
+
+static void test_isolate_api(void) {
+    /*
+     * Creating another isolate of the same image is supported, so this runs a
+     * scratch isolate through the full lifecycle. The isolates behind the
+     * wrappers stay untouched: tearing down the shared global isolate would
+     * break every later call.
+     */
+    bindings_tests_isolatethread_t* thread = bindings_tests_createIsolate();
+    assert(thread != NULL);
+    bindings_tests_isolate_t* isolate = bindings_tests_getIsolate(thread);
+    assert(isolate != NULL);
+    assert(bindings_tests_getCurrentThread(isolate) == thread);
+    assert(bindings_tests_detachThread(thread) == 0);
+
+    /* Re-attach so the scratch isolate can be torn down completely. */
+    thread = bindings_tests_attachThread(isolate);
+    assert(thread != NULL);
+    assert(bindings_tests_tearDownIsolate(thread) == 0);
+
+    printf("isolate api ok\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -497,6 +553,7 @@ int main(void) {
     test_errors();
     test_overloads();
     test_isolated();
+    test_isolate_api();
     test_callbacks();
     printf("all C tests passed\n");
     return 0;

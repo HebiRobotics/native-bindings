@@ -672,9 +672,8 @@
         "isConst": true,
         "dataType": "CHAR_POINTER"
       },
-      "documentation": "Message of the last exception thrown on the calling thread, or an empty\nstring if there has not been one. The language wrappers call this to turn\na failed call into a native exception.\n",
-      "flags": ["Noexcept"],
-      "isLastErrorProvider": true
+      "documentation": "Message of the last exception thrown on the calling thread, or an empty\nstring if there has not been one. Same content as the generated library\nlevel accessor, exported as an ordinary method.\n",
+      "flags": ["Noexcept"]
     }]
   }, {
     "type": {
@@ -839,18 +838,6 @@
       },
       "documentation": "Always throws, so the secondary isolate's error path is exercised too.",
       "throwsOn": "always"
-    }, {
-      "name": "getLastError",
-      "lowerUnderscoreName": "get_last_error",
-      "isStatic": true,
-      "cName": "bindings_tests_Isolated_getLastError",
-      "returnType": {
-        "isConst": true,
-        "dataType": "CHAR_POINTER"
-      },
-      "documentation": "Last error for the calling thread within the secondary isolate.",
-      "flags": ["Noexcept"],
-      "isLastErrorProvider": true
     }]
   }, {
     "type": {

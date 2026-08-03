@@ -1,13 +1,16 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
 import com.squareup.javapoet.*;
+import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.word.WordFactory;
+import org.graalvm.nativeimage.c.type.CCharPointer;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.model.DataType;
+
+import java.util.TreeSet;
 
 import static javax.lang.model.element.Modifier.*;
 import static us.hebi.graalvm.bindings.generator.generators.RuntimeClasses.*;
@@ -20,10 +23,79 @@ public class CEntryPointGenerator extends AbstractGenerator {
 
     @Override
     protected void process(AnnotatedCLibClass apiClass) {
-        createSourceFile(generateJavaCode(apiClass));
+        String packageName = apiClass.getWrapperType().packageName();
+        wrapperPackages.add(packageName);
+        createSourceFile(packageName, generateEntryPointWrapper(apiClass));
     }
 
-    JavaFile generateJavaCode(AnnotatedCLibClass apiClass) {
+    @Override
+    public void finish() {
+        // Use the first package (sorted for determinism) for global isolate methods
+        if (!hasProcessedAny() || wrapperPackages.isEmpty()) return;
+        createSourceFile(wrapperPackages.first(), generateIsolateApi());
+    }
+
+    /**
+     * Prefixed aliases for the GraalVM isolate C API. A static image exports the
+     * generic graal_* symbols, so two generated libraries in one binary would
+     * collide on duplicate names.
+     */
+    TypeSpec generateIsolateApi() {
+        final String prefix = getOptions().getCPrefix();
+        final TypeSpec.Builder isolateClass = TypeSpec.classBuilder(ISOLATE_API_CLASS_NAME)
+                .addModifiers(PUBLIC, FINAL);
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "createIsolate", CEntryPoint.Builtin.CREATE_ISOLATE)
+                .returns(IsolateThread.class)
+                .build());
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "getIsolate", CEntryPoint.Builtin.GET_ISOLATE)
+                .returns(Isolate.class)
+                .addParameter(IsolateThread.class, "thread")
+                .build());
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "attachThread", CEntryPoint.Builtin.ATTACH_THREAD)
+                .returns(IsolateThread.class)
+                .addParameter(Isolate.class, "isolate")
+                .build());
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "getCurrentThread", CEntryPoint.Builtin.GET_CURRENT_THREAD)
+                .returns(IsolateThread.class)
+                .addParameter(Isolate.class, "isolate")
+                .build());
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "detachThread", CEntryPoint.Builtin.DETACH_THREAD)
+                .returns(TypeName.INT)
+                .addParameter(IsolateThread.class, "thread")
+                .build());
+        isolateClass.addMethod(createBuiltinEntryPoint(prefix, "tearDownIsolate", CEntryPoint.Builtin.TEAR_DOWN_ISOLATE)
+                .returns(TypeName.INT)
+                .addParameter(IsolateThread.class, "thread")
+                .build());
+        isolateClass.addMethod(createGetLastErrorFunction());
+        return isolateClass.build();
+    }
+
+    private static MethodSpec.Builder createBuiltinEntryPoint(String prefix, String methodName, CEntryPoint.Builtin builtin) {
+        return MethodSpec.methodBuilder(methodName)
+                .addAnnotation(AnnotationSpec.builder(CEntryPoint.class)
+                        .addMember("name", "$S", AnnotatedCLibClass.getCEntryName(true, prefix, "", methodName))
+                        .addMember("builtin", "$T.$L", CEntryPoint.Builtin.class, builtin.name())
+                        .build())
+                .addModifiers(PUBLIC, STATIC, NATIVE);
+    }
+
+    /**
+     * The last error slot lives is specific to each isolate heap, so one entry can serve all isolate
+     */
+    MethodSpec createGetLastErrorFunction() {
+        final String entryPointName = AnnotatedCLibClass.getCEntryName(true, getOptions().getCPrefix(), "", "getLastError");
+        final MethodSpec.Builder method = createCEntryPoint(entryPointName)
+                .returns(CCharPointer.class);
+        addGuardedInvocation(
+                method,
+                CodeBlock.of("$T.toTempCharPointer($T.getLastError(false))", CTypes, ExceptionHandlers),
+                DataType.CHAR_POINTER
+        );
+        return method.build();
+    }
+
+    TypeSpec generateEntryPointWrapper(AnnotatedCLibClass apiClass) {
 
         // Generate simple class
         final TypeSpec.Builder cEntriesClass = TypeSpec.classBuilder(apiClass.getWrapperType())
@@ -127,10 +199,7 @@ public class CEntryPointGenerator extends AbstractGenerator {
         }
 
         // Build class
-        return JavaFile.builder(apiClass.getWrapperType().packageName(), cEntriesClass.build())
-                .indent("    ")
-                .skipJavaLangImports(true)
-                .build();
+        return cEntriesClass.build();
 
     }
 
@@ -177,10 +246,14 @@ public class CEntryPointGenerator extends AbstractGenerator {
         }
     }
 
+    private final TreeSet<String> wrapperPackages = new TreeSet<>();
+
     // Info about the annotated class
     private final static String getRegisterMethod = "_registerInstance";
     private final static String getInstanceMethod = "_getInstance";
     private static final String ISOLATE_NAME = "_isolate";
+    private static final String ISOLATE_API_CLASS_NAME = "_Isolates$CEntries";
+    private static final String LAST_ERROR_CLASS_NAME = "_LastError$CEntries";
 
     public static final String INTERNAL_PREFIX = "__";
 

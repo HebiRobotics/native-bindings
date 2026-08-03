@@ -308,13 +308,6 @@
   "bindings_tests.Isolated.getCounter": {
     "inputs": []
   },
-  "bindings_tests.Isolated.getLastError": {
-    "inputs": [],
-    "outputs": [{
-        "name": "obj",
-        "type": ["char"]
-      }]
-  },
   "bindings_tests.Isolated.increment": {
     "inputs": []
   },

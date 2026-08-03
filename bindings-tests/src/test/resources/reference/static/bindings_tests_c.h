@@ -132,7 +132,6 @@ DLL_PUBLIC void bindings_tests_Isolated_increment();
 DLL_PUBLIC int bindings_tests_Isolated_getCounter();
 DLL_PUBLIC void bindings_tests_Isolated_reset();
 DLL_PUBLIC int bindings_tests_Isolated_alwaysFails();
-DLL_PUBLIC const char* bindings_tests_Isolated_getLastError();
 
 // ==== Math ====
 DLL_PUBLIC int bindings_tests_Math_negate(int value);
@@ -173,6 +172,10 @@ DLL_PUBLIC const char* bindings_tests_Strings_empty();
 DLL_PUBLIC const char* bindings_tests_Strings_nullString();
 DLL_PUBLIC const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 DLL_PUBLIC const char* bindings_tests_Strings_repeat(const char* value, size_t times);
+
+// ==== Last Error ====
+DLL_PUBLIC const char* bindings_tests_getLastError();
+DLL_PUBLIC const char* bindings_tests_secondary_getLastError();
 
 DLL_PUBLIC void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {

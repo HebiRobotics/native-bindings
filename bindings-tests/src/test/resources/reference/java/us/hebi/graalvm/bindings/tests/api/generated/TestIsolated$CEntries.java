@@ -2,10 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestIsolated;
 
 public final class TestIsolated$CEntries {
@@ -53,18 +50,6 @@ public final class TestIsolated$CEntries {
         } catch (Throwable throwable) {
             ExceptionHandlers.setLastError(throwable);
             return ExceptionHandlers.returnErrorStatusCode(throwable);
-        }
-    }
-
-    @CEntryPoint(
-            name = "__bindings_tests_Isolated_getLastError"
-    )
-    public static CCharPointer bindings_tests_Isolated_getLastError(IsolateThread _isolate) {
-        try {
-            return CTypes.toTempCharPointer(TestIsolated.getLastError());
-        } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
-            return WordFactory.nullPointer();
         }
     }
 }

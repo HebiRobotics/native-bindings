@@ -1,5 +1,6 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
+import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.util.*;
@@ -118,14 +119,49 @@ public class GeneratorUtil {
         }
     }
 
+    /**
+     * The default isolate (empty name) plus all named per-class isolates,
+     * sorted so that the generated output stays deterministic.
+     */
+    public static List<String> getIsolateNames(LibraryDescription lib) {
+        var names = new TreeSet<String>();
+        names.add("");
+        for (ClassDescription clazz : lib.getClasses()) {
+            clazz.tryGetIsolateName().ifPresent(names::add);
+        }
+        return new ArrayList<>(names);
+    }
+
+    /**
+     * The public C symbol of the last error accessor for the given isolate. The
+     * isolate name rides in the class-name slot, so the default isolate yields
+     * lib_getLastError and a named one lib_secondary_getLastError.
+     */
+    public static String getLastErrorCName(LibraryDescription lib, String isolateName) {
+        return AnnotatedCLibClass.getCEntryName(true, lib.getCPrefix(), isolateName, "getLastError");
+    }
+
+    /**
+     * All C-symbols that are part of the public C ABI
+     */
     public static List<String> getAllCMethodSymbols(LibraryDescription lib) {
-        List<String> symbols = new ArrayList<>();
+        List<String> symbols = new ArrayList<>(getLastErrorSymbols(lib));
         for (var clazz : lib.getClasses()) {
             for (MethodDescription method : clazz.getMethods()) {
                 symbols.add(method.getCName());
             }
             clazz.tryGetCDestructorName().ifPresent(symbols::add);
             clazz.tryGetToParentCastMethod().map(MethodDescription::getCName).ifPresent(symbols::add);
+        }
+
+        return symbols;
+    }
+
+    public static List<String> getLastErrorSymbols(LibraryDescription lib) {
+        // One error accessor per isolate
+        List<String> symbols = new ArrayList<>();
+        for (String isolateName : getIsolateNames(lib)) {
+            symbols.add(getLastErrorCName(lib, isolateName));
         }
         return symbols;
     }

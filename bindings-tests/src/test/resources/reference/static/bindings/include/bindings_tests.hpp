@@ -334,8 +334,8 @@ void clearLastError() noexcept;
 /**
  * @details 
  * Message of the last exception thrown on the calling thread, or an empty
- * string if there has not been one. The language wrappers call this to turn
- * a failed call into a native exception.
+ * string if there has not been one. Same content as the generated library
+ * level accessor, exported as an ordinary method.
  */
 std::string getLastError() noexcept;
 } // namespace errors
@@ -411,11 +411,6 @@ void reset() noexcept;
  * @throw always
  */
 void alwaysFails();
-
-/**
- * @brief Last error for the calling thread within the secondary isolate.
- */
-std::string getLastError() noexcept;
 } // namespace isolated
 
 
@@ -686,7 +681,6 @@ extern "C" {
   int bindings_tests_Isolated_getCounter();
   void bindings_tests_Isolated_reset();
   int bindings_tests_Isolated_alwaysFails();
-  const char* bindings_tests_Isolated_getLastError();
   int bindings_tests_Math_negate(int);
   unsigned short bindings_tests_Math_nextChar(unsigned short);
   char bindings_tests_Math_addInt8(char, char);
@@ -988,10 +982,6 @@ inline void isolated::alwaysFails() {
   if (status_ != 0) {
     throw Exception("Encountered error in Isolated::alwaysFails");
   }
-}
-inline std::string isolated::getLastError() noexcept {
-  auto ptr = bindings_tests_Isolated_getLastError();
-  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 
 // Math

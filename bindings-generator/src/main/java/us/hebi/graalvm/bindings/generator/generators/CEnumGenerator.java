@@ -51,7 +51,7 @@ public class CEnumGenerator extends AbstractGenerator {
         // Java wrapper
         var targetEnumClass = getCEnumWrapperClassName(sourceEnum);
         var cEnumClass = generateJavaCEnumWrapper(sourceEnum, targetEnumClass, desc);
-        createSourceFile(targetEnumClass, cEnumClass);
+        createSourceFile(targetEnumClass.packageName(), cEnumClass);
 
     }
 

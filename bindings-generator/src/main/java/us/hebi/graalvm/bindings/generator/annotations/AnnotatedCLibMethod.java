@@ -5,7 +5,6 @@ import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
-import us.hebi.graalvm.bindings.annotations.CLibLastErrorProvider;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.MethodFlag;
@@ -161,17 +160,6 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
                 .map(CLibMethod::property)
                 .filter(not(Objects::isNull))
                 .filter(not(String::isEmpty));
-    }
-
-    public boolean isLastErrorProvider() {
-        if (AnnotationUtil.getAnnotation(element, CLibLastErrorProvider.class).isPresent()) {
-            checkState(
-                    isStatic() && getParameters().isEmpty() && getReturnType().getDataType() == DataType.CHAR_POINTER,
-                    "Error provider must be a static no-args method returning char* (or String)"
-            );
-            return true;
-        }
-        return false;
     }
 
     private static MethodOverload toMessage(CLibMethod.MethodOverload annotation) {

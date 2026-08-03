@@ -122,7 +122,6 @@ Add the runtime to your dependencies and the generator to your processor path:
 | `@CLibEnum` | enum | Exports an enum as a 4 byte C int keyed on ordinal |
 | `@CLibTypeDef` | interface | Declares a C type alias, used for function pointer callbacks |
 | `@CLibComment` | type, method, parameter | Documentation, propagated to doxygen, Python docstrings, and MATLAB help |
-| `@CLibLastErrorProvider` | static method | Names the method that returns the last error. One per isolate |
 | `@CDefault` | parameter | Default value, surfaced by the C++, Python and MATLAB wrappers |
 | `@CSizeType` | int or long type use | Maps to `size_t` in C while staying an int or long in Java |
 | `@CLibIndex` | integral type use | Marks an index, so wrappers for one-based languages convert it. Java and C stay zero based |
