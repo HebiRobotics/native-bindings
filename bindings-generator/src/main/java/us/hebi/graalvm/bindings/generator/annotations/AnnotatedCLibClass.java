@@ -84,6 +84,10 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         return annotation.value();
     }
 
+    public TypeElement getElement() {
+        return element;
+    }
+
     public boolean enableInstancing() {
         return annotation.enableInstancing();
     }

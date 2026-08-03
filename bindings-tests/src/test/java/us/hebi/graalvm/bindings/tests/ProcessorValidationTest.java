@@ -158,6 +158,46 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("@CLibClass requires a top-level or static nested class");
     }
 
+    @Test
+    public void rejectsDuplicateClassName() {
+        assertThat(compile(source("Twins", """
+                @CLibClass("Twin")
+                public class Twins {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+
+                    @CLibClass("Twin")
+                    public static class Other {
+                        @CLibMethod(flags = Noexcept)
+                        public static int value() { return 2; }
+                    }
+                }
+                """))).hadErrorContaining("Duplicate @CLibClass value 'Twin'");
+    }
+
+    @Test
+    public void rejectsDuplicateEnumName() {
+        assertThat(compile(source("Palettes", """
+                @CLibClass("Palettes")
+                public class Palettes {
+                    @CLibEnum("Color")
+                    public enum Color { Red }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Color first() { return Color.Red; }
+
+                    @CLibClass("OtherPalette")
+                    public static class Other {
+                        @CLibEnum("Color")
+                        public enum Shade { Dark }
+
+                        @CLibMethod(flags = Noexcept)
+                        public static Shade first() { return Shade.Dark; }
+                    }
+                }
+                """))).hadErrorContaining("Duplicate @CLibEnum value 'Color'");
+    }
+
     private Compilation compile(JavaFileObject source) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred

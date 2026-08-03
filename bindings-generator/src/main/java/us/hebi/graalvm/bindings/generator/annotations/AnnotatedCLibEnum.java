@@ -58,8 +58,12 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
         return AnnotationUtil.getCPrefix(getOptions(), annotation.prefix());
     }
 
-    private String getName() {
+    public String getName() {
         return annotation.value();
+    }
+
+    public TypeElement getElement() {
+        return element;
     }
 
     public ClassName getClassName() {

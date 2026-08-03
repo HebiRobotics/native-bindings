@@ -32,7 +32,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static javax.tools.Diagnostic.Kind.*;
@@ -115,6 +117,8 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
             return;
         }
 
+        checkNamesAreUnique(apiClass);
+
         // Process this class
         for (AbstractGenerator generator : generators) {
             generator.process(apiClass, processingEnv);
@@ -143,6 +147,30 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
                 throw new RuntimeException(ioe);
             }
 
+        }
+    }
+
+    /**
+     * The annotation value names the type in every target language, so two declarations
+     * sharing one produce duplicate C symbols, wrapper files that overwrite each other and
+     * an unstable sort in the descriptor. Unlike the generated Java names, these are the
+     * author's own and no mangling can keep them apart, so the only fix is to reject them.
+     * Without this check the first symptom is a swallowed FilerException from
+     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file".
+     */
+    private void checkNamesAreUnique(AnnotatedCLibClass apiClass) {
+        checkNameIsUnique(classNames, "@CLibClass", apiClass.getName(), apiClass.getElement());
+        for (var nestedEnum : apiClass.getNestedEnums()) {
+            checkNameIsUnique(enumNames, "@CLibEnum", nestedEnum.getName(), nestedEnum.getElement());
+        }
+    }
+
+    private static void checkNameIsUnique(Map<String, String> takenNames, String annotation, String value, TypeElement element) {
+        String declaredBy = element.getQualifiedName().toString();
+        String previous = takenNames.putIfAbsent(value, declaredBy);
+        if (previous != null && !previous.equals(declaredBy)) {
+            throw new ProcessingException(element, "Duplicate %s value '%s', already declared by %s",
+                    annotation, value, previous);
         }
     }
 
@@ -177,6 +205,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
             return "bindings";
         return "bindings." + dir;
     }
+
+    private final Map<String, String> classNames = new HashMap<>();
+    private final Map<String, String> enumNames = new HashMap<>();
 
     final LibraryDescriptionGenerator apiDescription = new LibraryDescriptionGenerator();
     final CEnumGenerator enumGenerator = new CEnumGenerator();
