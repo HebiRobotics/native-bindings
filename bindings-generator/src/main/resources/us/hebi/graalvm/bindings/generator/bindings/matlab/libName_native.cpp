@@ -41,6 +41,15 @@ inline T getScalar(const mxArray* arg, const char* name) {
     return static_cast<T>(mxGetScalar(arg));
 }
 
+// Only the generated wrappers can reach the gateway, so this guards against a generator
+// bug rather than user error. Every case indexes prhs directly.
+inline void checkArgCount(int nrhs, int expected, const char* name) {
+    if (nrhs - 1 != expected) {
+        mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "'%s' expects %d argument(s), but received %d.",
+                          name, expected, nrhs - 1);
+    }
+}
+
 template <typename T, typename S>
 inline void copyData(T* dest, const void* src, size_t n) {
     auto s = static_cast<const S*>(src);

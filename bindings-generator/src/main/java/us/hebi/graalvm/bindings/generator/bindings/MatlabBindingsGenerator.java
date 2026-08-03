@@ -225,7 +225,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("PRE", "")
                 .set("POST", "")
                 .set("CALL", "%%CNAME%%(%%ARGS%%);")
-                .set("RETURN_VALUE", "_value");
+                .set("RETURN_VALUE", "_value")
+                .set("ARG_COUNT", "0");
 
         // Find a collision-free hash seed
         List<String> symbols = GeneratorUtil.getAllCMethodSymbols(lib);
@@ -236,6 +237,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         Consumer<IndentingTextRenderer> addCase = (template) -> {
             template.beginControlFlow("case /* hash32_fnv1a(\"%%CNAME%%\") */ %%HASH%%: {");
             template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");");
+            template.addLine("checkArgCount(nrhs, %%ARG_COUNT%%, \"%%CNAME%%\");");
             template.addLine("%%PRE%%%%CALL%%%%POST%%");
             template.addLine("break;").unindent().addLine("}");
         };
@@ -270,6 +272,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 }
                 addCase.accept(vars.set("CNAME", method.getCName())
                         .set("HASH", computeHash.apply(method.getCName()))
+                        .set("ARG_COUNT", String.valueOf(index - FIRST_INDEX))
                         .set("PRE", pre.toString())
                         .set("POST", post.toString())
                         .set("TYPES", joiner.join(types))
@@ -283,6 +286,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
                             .set("CNAME", clazz.getCDestructorName())
                             .set("HASH", computeHash.apply(clazz.getCDestructorName()))
+                            .set("ARG_COUNT", "1")
                     );
                 }
                 if (clazz.hasToParentCastMethod()) {
@@ -292,6 +296,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             .set("CNAME", clazz.getToParentCastMethod().getCName())
                             .set("HASH", computeHash.apply(clazz.getToParentCastMethod().getCName()))
                             .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
+                            .set("ARG_COUNT", "1")
                             .set("CALL", "if (nlhs > 0) plhs[0] = createMexPointer(%%CNAME%%(%%ARGS%%));"));
                 }
             }
