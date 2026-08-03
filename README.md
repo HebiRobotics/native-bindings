@@ -111,7 +111,27 @@ Add the runtime to your dependencies and the generator to your processor path:
 | `bindings.cPrefix` | derived from namespace | Prefix for every exported C symbol |
 | `bindings.libVersion` | `0.0.0` | Semantic version reported by the generated version accessors |
 | `bindings.libBuild` | `0` | Build number reported alongside the version |
+| `bindings.downloadUrl` | none | Base url of the directory holding the release archives. Empty means the generated loaders never download |
 | `bindings.enableGraphics` | `false` | Emits the macOS main thread handover needed by UI libraries |
+
+### Finding the binary at runtime
+
+The Python loader, the C++ `<libName>.cmake` and the MATLAB `locate_binary.m` search the
+same two places in the same order: `lib/<platform>/` next to the generated files, and then
+a shared per-user cache in `<os cache dir>/<libName>/<version>-build<libBuild>/`.
+
+With `bindings.downloadUrl` set they also fetch
+`<downloadUrl>/<libName>-<libVersion>-<platform>.zip` into that cache and extract it. The
+option is the directory holding the archives rather than a pattern, so anything that varies
+per release belongs in the url the build assembles:
+
+```xml
+<arg>-Abindings.downloadUrl=https://example.com/download/${lib.name}/snapshot/${lib.build}</arg>
+```
+
+Without it no download code is generated at all, and a missing binary is an error naming
+the path that was searched. That is the default because a library that does not publish
+release archives should not ship a downloader aimed at somebody else's server.
 
 ## Annotations
 
@@ -224,7 +244,8 @@ The scripts then copy the built library into
 `bindings-tests/target/image/static/bindings/lib/<platform>/` and, if it was built, the
 MEX gateway into `bindings-tests/target/image/static/bindings/+bindings_tests/private/`.
 Those copies matter: the generated Python and MATLAB loaders look there first, and without
-them they fall back to downloading a release binary.
+them they fall back to the shared cache and, if `bindings.downloadUrl` is set, to
+downloading a release binary.
 
 `run-tests.bat` / `run-tests.sh` configure and run each suite in place and report which
 ones failed. The equivalent manual commands, from the `bindings-tests` module root:
@@ -271,9 +292,6 @@ time and therefore cannot live in a source tree that has to compile.
 These are pre-existing behaviours carried over from the original implementation. They
 are documented rather than fixed so that the extraction stayed behaviour preserving.
 
-- **The binary download URL is hardcoded** to `files.hebi.us` in the Python loader, the
-  C++ cmake, and the MATLAB `locate_binary.m`. This has to become an option before the
-  generated bindings are useful to anyone else.
 - **A class may declare at most one constructor.** The MATLAB generator asserts this,
   because it cannot overload on the first argument of a classdef constructor. Use
   `@CDefault` for the no-argument case.

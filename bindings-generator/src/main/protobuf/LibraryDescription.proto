@@ -13,6 +13,7 @@ message LibraryDescription {
   optional string name = 1 [default = "hebi"];
   optional string version = 2 [default = "0.0.0"]; // major.minor.patch semantic version
   optional string build = 3 [default = "0"];
+  optional string download_url = 4; // base url of the directory holding the release archives. Empty disables downloads.
 
   optional string c_prefix = 5; // prefix for all C methods to ensure uniqueness
   repeated string namespace = 8;

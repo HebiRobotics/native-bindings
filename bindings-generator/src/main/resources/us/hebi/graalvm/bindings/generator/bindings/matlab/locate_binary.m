@@ -49,25 +49,7 @@ if isempty(cachedInfo)
         rootDir = fullfile(downloadDir, libName);
         binDir = fullfile(rootDir, 'lib', platform);
         binPath = fullfile(binDir, libFile);
-
-        % Otherwise download it into a shared dir. We use the OS cache
-        % so that the binaries can be shared and don't pollute the root dir.
-        if ~exist(binPath, 'file')
-
-            dlName = [libName '-' version '-' platform '.zip'];
-            url = ['https://files.hebi.us/download/' libName '/snapshot/' buildNumber '/' dlName];
-            if ~exist(downloadDir, 'dir'), mkdir(downloadDir); end
-
-            fprintf('Downloading %s\n', url);
-            zipFilePath = fullfile(downloadDir, dlName);
-            websave(zipFilePath, url);
-
-            fprintf('Extracting to %s\n', downloadDir);
-            unzip(zipFilePath, downloadDir);
-            delete(zipFilePath);
-
-        end
-
+%%DOWNLOAD_BLOCK%%
     end
 
     % Sanity Check

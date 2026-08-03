@@ -52,7 +52,7 @@ def load_library():
 
             # Build download url
             dl_name = f"{lib_name}-{version}-{lib_platform}.zip"
-            url = f"https://files.hebi.us/download/{lib_name}/snapshot/{build_number}/{dl_name}"
+            url = f"https://example.com/download/bindings_tests/snapshot/42/{dl_name}"
 
             # Download zip file
             print(f"Downloading {url}")

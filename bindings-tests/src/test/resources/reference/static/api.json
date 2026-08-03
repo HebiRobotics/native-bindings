@@ -2,6 +2,7 @@
   "name": "bindings_tests",
   "version": "1.2.3",
   "build": "42",
+  "downloadUrl": "https://example.com/download/bindings_tests/snapshot/42",
   "cPrefix": "bindings_tests",
   "namespace": ["bindings", "tests"],
   "classes": [{

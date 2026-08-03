@@ -116,6 +116,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         description.setName(options.getLibName());
         description.setVersion(options.getLibVersion());
         description.setBuild(options.getLibBuild());
+        options.getDownloadUrl().ifPresent(description::setDownloadUrl);
         for (var namespace : options.getNamespace().split("\\.")) {
             description.getMutableNamespace().next().copyFrom(namespace);
         }

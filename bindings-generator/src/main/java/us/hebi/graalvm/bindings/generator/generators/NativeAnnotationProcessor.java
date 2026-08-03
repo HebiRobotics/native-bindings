@@ -46,6 +46,7 @@ import static javax.tools.Diagnostic.Kind.*;
         EnvProcessor.OPTION_LIB_NAME,
         EnvProcessor.OPTION_LIB_VERSION,
         EnvProcessor.OPTION_LIB_BUILD,
+        EnvProcessor.OPTION_DOWNLOAD_URL,
         EnvProcessor.OPTION_NAMESPACE,
         EnvProcessor.OPTION_C_PREFIX,
         EnvProcessor.OPTION_ENABLE_GRAPHICS

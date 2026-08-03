@@ -50,6 +50,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         var privateDir = directory + "/private";
         filer.createFile(privateDir, "locate_binary.m", w -> w.write(createBinaryLocatorSource()));
         filer.createFile(privateDir, "build_native.m", w -> w.write(createBuildNativeSource()));
+        if (lib.hasDownloadUrl()) {
+            filer.createFile(privateDir, "download_binary.m", w -> w.write(createDownloadBinarySource()));
+        }
         filer.createFile(privateDir, getDispatchFunctionName() + ".m", w -> w.write(createFallbackDispatchSource()));
         filer.createFile(privateDir, getDispatchFunctionName() + ".cpp", w -> w.write(createMexDispatchSource()));
         // filer.createFile(privateDir, getNamespacePrefix() + "_matlab.h", w -> w.write(createAntiMacroHeader())); // Note: was used for calllib
@@ -73,7 +76,35 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     private String createBinaryLocatorSource() {
-        return withLibVars().addResourceContent(getClass(), "matlab/locate_binary.m").render();
+        return withLibVars()
+                .set("DOWNLOAD_BLOCK", createDownloadBlock())
+                .addResourceContent(getClass(), "matlab/locate_binary.m")
+                .render();
+    }
+
+    /**
+     * The call into the generated download_binary. Libraries that do not publish their
+     * binaries leave the url empty and get a locator that only looks locally.
+     */
+    private String createDownloadBlock() {
+        if (!lib.hasDownloadUrl()) {
+            return "";
+        }
+        return """
+
+                        % Otherwise download it into a shared dir. We use the OS cache
+                        % so that the binaries can be shared and don't pollute the root dir.
+                        if ~exist(binPath, 'file')
+                            download_binary(downloadDir, [libName '-' version '-' platform '.zip']);
+                        end
+                """;
+    }
+
+    private String createDownloadBinarySource() {
+        return withLibVars()
+                .set("DOWNLOAD_URL", lib.getDownloadUrl())
+                .addResourceContent(getClass(), "matlab/download_binary.m")
+                .render();
     }
 
     private String createBuildNativeSource() {
