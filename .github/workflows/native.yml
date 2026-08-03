@@ -6,7 +6,9 @@ name: native
 
 on:
   push:
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
@@ -128,9 +130,12 @@ jobs:
       # ---- MATLAB ----
       # Not available on every runner, so a missing license does not fail the job.
       # MATLAB has no arm64 Linux runner image, but macos-latest is supported.
+      # Hosted runners are only licensed for public repos, so skip the install
+      # entirely while this repo is private.
 
       - name: Set up MATLAB
         id: setup-matlab
+        if: github.event.repository.private == false
         continue-on-error: true
         uses: matlab-actions/setup-matlab@v2
         with:

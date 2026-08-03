@@ -60,12 +60,14 @@ if (MSVC)
     add_custom_command(OUTPUT ${MERGED_ARCHIVE}
             COMMAND ${_lib_tool} /NOLOGO "/OUT:${MERGED_ARCHIVE}" "$\<TARGET_FILE:<libName>_static>" ${GRAALVM_ARCHIVES}
             DEPENDS <libName>_static ${GRAALVM_ARCHIVES}
-            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}"
+            VERBATIM)
 elseif (APPLE)
     add_custom_command(OUTPUT ${MERGED_ARCHIVE}
             COMMAND libtool -static -no_warning_for_no_symbols -o ${MERGED_ARCHIVE} "$\<TARGET_FILE:<libName>_static>" ${GRAALVM_ARCHIVES}
             DEPENDS <libName>_static ${GRAALVM_ARCHIVES}
-            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}"
+            VERBATIM)
 else ()
     # binutils ar merges archives only through an MRI script
     set(MERGE_SCRIPT ${MERGED_ARCHIVE_DIR}/merge.mri)
@@ -78,7 +80,8 @@ else ()
     add_custom_command(OUTPUT ${MERGED_ARCHIVE}
             COMMAND sh -c "${CMAKE_AR} -M \< ${MERGE_SCRIPT}"
             DEPENDS <libName>_static ${GRAALVM_ARCHIVES} ${MERGE_SCRIPT}
-            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}"
+            VERBATIM)
 endif ()
 add_custom_target(<libName>_merged DEPENDS ${MERGED_ARCHIVE})
 
