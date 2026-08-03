@@ -853,7 +853,9 @@ Landed 2026-08-03. What shipped, and where it deviates from the notes below:
   `<lib>_dynamic.hpp`, whose runtime loading only applies to the shared library),
   `lib/<platform>/` with the merged archive, `syslibs.txt` and `manifest.json`,
   `src/` (shim sources plus the export-annotated header), `cmake/` (config and
-  config-version), and zips it as `<lib>-<version>-static-<platform>.zip`.
+  config-version), and zips it as `<lib>-<version>-<platform>-static.zip` (the
+  `-static` suffix goes last so the release CI globs on `*_<arch>.zip` and
+  `*-all.zip` never match a static zip).
 - The config defines `<lib>::static` with the full link contract from *Integration*:
   include dirs, syslibs, `/NODEFAULTLIB:LIBCMT` or `-Wl,-z,noexecstack`,
   `IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"`, the archive name computed inside, and a
@@ -1014,7 +1016,7 @@ does want a static package.
 ### Package layout
 
 ```
-<lib>-<version>-static-<platform>/
+<lib>-<version>-<platform>-static/
   include/
     <lib>_c.h            <lib>.hpp        # GraalVM-free since item 9, typedefs live in the shim
   lib/<platform>/
