@@ -661,11 +661,24 @@ The `@CLibIndex` swap landed 2026-08-03: `NativeGridWindow` annotates row/col, t
 `MATLAB_FIX_INDEX` overloads are deleted, and the source repo's reference harness
 pins the regenerated wrapper.
 
-Still open, in this repo's court:
+Nothing left open in this repo's court.
 
-1. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
-   them in 16 places to match the hand-written `hebi.h` ABI. Add a `Test*` class that
-   pins both.
+Closed 2026-08-04: **`cPrefix` and `useCamelCase` coverage**. `TestNaming` pins both,
+exported as `custom_prefix_Naming_*` with snake case method names, instantiable so the
+handle typedef picks up the prefix too. No generator bug turned up, the reference diff
+was purely additive and all four suites pass. What it pins is that both options rename C
+symbols and stop there:
+
+- The class name is not case converted, only method names are, so the symbol reads
+  `custom_prefix_Naming_get_start_value`. That matches native-sdk's
+  `hebi_solver_NumericalSolver_set_max_iterations`.
+- The C++ namespace, the Python module and the MATLAB package still come from the
+  library name, and every wrapper keeps the names it would have had without either
+  option. C is the only language that sees the difference, so the C suite is where a
+  regression would fail to link.
+- The MEX dispatch, the ctypes registrations and `<lib>_dynamic.hpp` all resolve the
+  custom symbol, which is what would break if anything derived a name from the
+  library-wide prefix instead of the method's `cName`.
 
 Closed: porting `checkEquals` to the runtime mocks (author decision 2026-08-03). The
 mocks already expose `toArray()`, so a test compares with the assertion library it
@@ -1885,6 +1898,54 @@ rather than writing new ones.
 **Effort:** small. The catch site is a few lines, the throw conversion is mechanical and
 the compiler finds every site. Worth doing before external users arrive, since a stack
 trace with no source location is what they meet on their first mistake.
+
+---
+
+## 17. Shapes a hebi.h-compatible consumer needs
+
+Recorded 2026-08-04 from the hebi.h survey in `../HEBI-Java/.claude/plans.md` item B.20,
+which carries the findings and the phasing. hebi.h (~153 functions) is almost entirely
+the generator's existing model, opaque handles plus scalars plus status returns. The
+generator-side gaps, in the order that plan wants them:
+
+- **Scalar out-parameters.** `HebiStatusCode get(handle, enum field, float* value)`
+  returns a status and writes the value through a pointer. New shape, small: a
+  pointer-typed parameter the entry point writes once, no ownership questions.
+- **External `@CStruct` passthrough.** Consumer-declared GraalVM `@CStruct` interfaces
+  (against a fixed external header via `@CContext`) accepted as parameter types. This is
+  the `DoubleSpan` mechanism generalized to types the generator did not declare itself,
+  and it removes any need for struct codegen when the C header already exists. Arrays of
+  structs arrive via `addressOf(int)` accessors, unions as overlapping accessors, both
+  already sketched in native-sdk's `NativeStructs.java`.
+- **Callbacks**, item 1. hebi.h needs the stateful handler form
+  (`handler(fbk, void* user_data)` registered per group) and a synchronous computation
+  callback (the IK objective, called re-entrantly during a solve).
+- **Output spans / caller buffers**, item 4. hebi.h's string protocol
+  (`char* buffer, size_t* length`, zero-size call as size query) is the convention
+  item 4 already chose, and its matrix outputs are caller-owned `double*` buffers.
+- **`cPrefix`/`useCamelCase` coverage**: closed 2026-08-04, `TestNaming` under item 3
+  pins both. Every hebi.h symbol depends on them.
+
+Idea, recorded with the above: a `@CLibReturnStructByValue` marker for methods whose C
+signature should return a struct by value. The mechanism already exists, it is exactly
+how the span return crosses (item 4): the entry point cannot return a struct, so it
+gets a trailing out-pointer, and the C shim declares a stack local, passes its address,
+and returns it by value. Today that shim shape is hard-wired to the span struct. The
+annotation would promote it to any external `@CStruct` type, so a method could return a
+`HebiVector3f` or a quaternion as a value with no heap allocation and no ownership
+question, and hebi.h shapes like `hebiTrajectoryGetState`-adjacent small-vector returns
+become expressible directly. Design points to settle when picking this up: the Java
+side declares the struct as a fillable parameter (the entry point writes through the
+pointer, mirroring `spanOut`), value semantics only, meaning the struct must not
+contain pointers into the per-thread scratch buffer unless the method documents the
+span contract, and the wrappers map it to real value types (C++ returns the struct
+itself, Python a ctypes structure, MATLAB a scalar struct). Composes with the external
+passthrough bullet above, which contributes the type, while this contributes the
+return position.
+
+Explicitly not a generator concern: hebi.h's `Ref`/`Metadata` direct-memory field
+access. That is a storage-layout commitment in the consumer's core (B.20 phase P4),
+not a binding shape.
 
 ---
 
