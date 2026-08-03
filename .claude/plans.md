@@ -19,9 +19,10 @@ that would catch a regression, and the one item it reorders is item 4.
 
 Sections are ordered by topic, not by priority. See **Sequencing** at the end.
 
-**Items 3 and 6 are done.** Item 7 was attempted and reverted, see its notes. Everything
-else is still a proposal. **Read *Reading the items together* before picking anything up**,
-it records the cross-item constraints and the order they imply.
+**Items 3, 6, 7 and 9 are done.** Items 7 and 9 landed together 2026-08-03, see the
+status notes in their sections for what shipped and how it deviates from the proposal.
+Everything else is still a proposal. **Read *Reading the items together* before picking
+anything up**, it records the cross-item constraints and the order they imply.
 
 ---
 
@@ -680,7 +681,33 @@ Release notes owed when the migrated library ships:
 
 ---
 
-## 7. Replacing `@CLibLastErrorProvider` with a generated per-isolate accessor
+## 7. Replacing `@CLibLastErrorProvider` with a generated per-isolate accessor (IMPLEMENTED)
+
+Landed 2026-08-03 together with item 9, re-implemented from scratch after the earlier
+revert. What shipped, where it deviates from the notes below:
+
+- The accessor is emitted as its own generated class, `_LastError$CEntries`, separate
+  from item 9's `_Isolates$CEntries` (author decision, supersedes "same generated
+  class"). One `@CEntryPoint` named `__<lib>_getLastError` for the whole library, per
+  isolate C wrappers `<lib>_getLastError` and `<lib>_<isolate>_getLastError` emitted
+  directly by `CBindingsGenerator.writeLastErrorAccessors` rather than through
+  `SignatureBuilder`, exactly because of the internal-symbol trap recorded below.
+- Naming stayed camelCase. The snake_case proposal in item 9 was rejected, existing
+  library-level symbols (`getLibraryVersion` etc.) are unchanged.
+- The annotation, `isLastErrorProvider`, the proto field (120, now reserved), the three
+  validation tests and the README row are deleted. `TestErrors.getLastError` and
+  `TestIsolated.getLastError` stay as ordinary annotated methods.
+- Of the two ways forward below, option 1 was chosen in its minimal form: the wrappers
+  use the generated symbol internally for their error messages (`getLastErrorMethod`
+  now computes the name via `GeneratorUtil.getLastErrorCName` and never returns null),
+  and no new user-facing wrapper accessors were generated. The finding itself stands:
+  value-returning throwing methods still do not throw in any wrapper, and the polling
+  contract plus the allocation-free predicate remain open follow-ups.
+- The C suite pins the cross-isolate behaviour: a failure in the secondary isolate is
+  visible through `bindings_tests_secondary_getLastError` and does not leak into
+  `bindings_tests_getLastError`.
+
+The notes below are kept for the reasoning record.
 
 Attempted and reverted. The work is sound but the commit was too large, so it needs
 splitting. Everything below was verified against the reference files before the revert.
@@ -983,7 +1010,33 @@ together*.
 
 ---
 
-## 9. Prefixing the GraalVM isolate API
+## 9. Prefixing the GraalVM isolate API (IMPLEMENTED)
+
+Landed 2026-08-03 together with item 7. What shipped, and the answers to the open
+questions below:
+
+- `CEntryPointGenerator.finish()` emits `_Isolates$CEntries` with the six builtin
+  aliases into the lexicographically first generated package. Names are camelCase
+  (`<lib>_createIsolate`, ...), matching the existing library-level convention rather
+  than the snake_case proposed below, and `getLibraryVersion`/`getHeaderVersion` are
+  unchanged (author decision).
+- The alias declarations and the per-library opaque typedefs (`<cPrefix>_isolate_t`,
+  `<cPrefix>_isolatethread_t`) live in the shim `.cpp`, not in the public header, so
+  users cannot manage the isolate lifecycle manually (author decision 2026-08-03,
+  they briefly shipped in the header as an "Isolate Management" section).
+  `graal_isolate.h` is no longer shipped, and the shim template plus
+  `SignatureBuilder` use the prefixed names throughout. The alias declarations carry
+  no DLL_PUBLIC, the image exports the entry points itself (verified with dumpbin on
+  the stage 2 DLL). The symbols remain exported, only undeclared.
+- **Open question answered: the default `graal_*` symbols do NOT disappear.** Both name
+  sets are emitted into the static lib and exported from the shared library, verified
+  with `dumpbin /symbols` and `/exports`. Prefixing therefore delivers the clean public
+  API, and true two-image collision freedom still needs item 8's localize/rename pass.
+- The C suite runs a scratch isolate through the full lifecycle (create, getIsolate,
+  getCurrentThread, detach, attach, tearDown) against the aliases, declaring the
+  symbols itself since the header no longer does.
+
+The notes below are kept for the reasoning record.
 
 **Why.** A static image exports the generic GraalVM C API, so two images in one binary
 collide. This is not specific to one deployment. Once this project is open sourced, anyone
@@ -1447,9 +1500,10 @@ A. Foundation            4 (spans, now with the output span)   with   11 (C++ ga
                          additive, unblocks 2 and 5.
                          The gate lands with it or nothing asserts the output span.
 
-B. One breaking release  9 (isolate API)      then   7 (last error)
-                         every public rename in a single release, 9 first so 7 is
-                         named once. Retry 7 with its three commit split.
+B. One breaking release  9 (isolate API)      then   7 (last error)     DONE 2026-08-03
+                         landed together. The only ABI breaks are the wrappers now
+                         calling <lib>_getLastError and graal_isolate.h no longer
+                         shipping; existing symbols kept their names.
 
 C. Parallelisable        1 (callbacks)   and   8 (static packaging)
                          independent of each other. 1 is ABI-neutral, 8 needs only 9.
