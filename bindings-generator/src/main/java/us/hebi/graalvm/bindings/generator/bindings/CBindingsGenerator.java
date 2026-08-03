@@ -220,7 +220,6 @@ public class CBindingsGenerator extends BindingGenerator {
             writer.write("\n");
             writer.write(feature.getCHeader(false));
         }
-        writer.write(getIsolateApiHeader());
 
         // Fix exports
         var content = writer.toString();
@@ -252,6 +251,7 @@ public class CBindingsGenerator extends BindingGenerator {
         }
 
         fileWriter.write(loadTemplate("c/libName_c.cpp")
+                .add("isolateApi", getIsolateApiDeclarations())
                 .add("isolates", isolates.toString().trim())
                 .add("libName", lib.getName())
                 .add("cPrefix", lib.getCPrefix())
@@ -281,18 +281,11 @@ public class CBindingsGenerator extends BindingGenerator {
     /**
      * Library-specific aliases for the GraalVM isolate C API. The image exports the
      * generic graal_* symbols as well, but the aliases are what the generated code
-     * calls so that two generated libraries can be linked into the same binary. The
-     * definitions live in the image and are exported by native-image itself, so the
-     * declarations carry no DLL_PUBLIC.
+     * calls so that two generated libraries can be linked into the same binary.
+     * (not part of the user-facing C ABI)
      */
-    private String getIsolateApiHeader() {
+    private String getIsolateApiDeclarations() {
         return IndentingTextRenderer.of("""
-
-                        // ==== Isolate Management ====
-
-                        // Opaque handles to the embedded VM. An isolate and its per-thread
-                        // attachments get created lazily on the first library call, so these
-                        // functions are only needed for manual lifecycle control.
                         typedef struct %%PREFIX%%_isolate_s %%ISOLATE_TYPE%%;
                         typedef struct %%PREFIX%%_isolatethread_s %%THREAD_TYPE%%;
 
@@ -301,8 +294,7 @@ public class CBindingsGenerator extends BindingGenerator {
                         %%THREAD_TYPE%%* %%PREFIX%%_attachThread(%%ISOLATE_TYPE%%* isolate);
                         %%THREAD_TYPE%%* %%PREFIX%%_getCurrentThread(%%ISOLATE_TYPE%%* isolate);
                         int %%PREFIX%%_detachThread(%%THREAD_TYPE%%* thread);
-                        int %%PREFIX%%_tearDownIsolate(%%THREAD_TYPE%%* thread);
-                        """)
+                        int %%PREFIX%%_tearDownIsolate(%%THREAD_TYPE%%* thread);""")
                 .set("ISOLATE_TYPE", getIsolateType())
                 .set("THREAD_TYPE", getIsolateThreadType())
                 .set("PREFIX", lib.getCPrefix())

@@ -458,12 +458,27 @@ static void test_isolated(void) {
 /* Isolate management                                                  */
 /* ------------------------------------------------------------------ */
 
+/*
+ * The prefixed aliases of the GraalVM isolate API are exported by the image
+ * but kept out of the public header on purpose, so this test declares the
+ * symbols it links against itself.
+ */
+typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
+typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+
+bindings_tests_isolatethread_t* bindings_tests_createIsolate(void);
+bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
+bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
+int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
+
 static void test_isolate_api(void) {
     /*
-     * The prefixed aliases of the GraalVM isolate API. Creating another isolate
-     * of the same image is supported, so this runs a scratch isolate through the
-     * full lifecycle. The isolates behind the wrappers stay untouched: tearing
-     * down the shared global isolate would break every later call.
+     * Creating another isolate of the same image is supported, so this runs a
+     * scratch isolate through the full lifecycle. The isolates behind the
+     * wrappers stay untouched: tearing down the shared global isolate would
+     * break every later call.
      */
     bindings_tests_isolatethread_t* thread = bindings_tests_createIsolate();
     assert(thread != NULL);

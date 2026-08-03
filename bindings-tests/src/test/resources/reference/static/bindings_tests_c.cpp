@@ -1,5 +1,18 @@
 #include "bindings_tests_c.h"
 
+// Aliases for the built-in GraalVM isolate API to avoid naming conflicts
+extern "C" {
+typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
+typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+
+bindings_tests_isolatethread_t* bindings_tests_createIsolate();
+bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
+bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
+int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
+}
+
 namespace {
 namespace isolate {
 

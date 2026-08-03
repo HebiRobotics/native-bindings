@@ -1,5 +1,10 @@
 #include "<libName>_c.h"
 
+// Aliases for the built-in GraalVM isolate API to avoid naming conflicts
+extern "C" {
+<isolateApi>
+}
+
 namespace {
 namespace isolate {
 
