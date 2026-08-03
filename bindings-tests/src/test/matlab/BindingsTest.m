@@ -47,6 +47,7 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Math.addInt32(2, 3), 5);
 
             % 2^33 + 1. Catches platforms that truncate a Java long to 32 bit.
+            % Still a double, the value is well below the 2^53 mantissa limit.
             testCase.verifyEqual(bindings_tests.Math.addInt64(8589934592, 1), 8589934593);
 
             testCase.verifyEqual(bindings_tests.Math.addFloat32(0.5, 0.25), 0.75);
@@ -56,9 +57,10 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Math.sizeToInt32(7), 7);
 
             testCase.verifyEqual(bindings_tests.Math.maxInt32(), 2147483647);
-            % Both sides round to the same double, so this compares the rounded
-            % value rather than the exact 63 bit cap.
-            testCase.verifyEqual(bindings_tests.Math.maxSize(), 9223372036854775807);
+            % Past the mantissa, so this one comes back as uint64 and compares the
+            % exact 63 bit cap. The literal cannot be written directly, MATLAB parses
+            % it as a double and rounds it up to 2^63 before the conversion sees it.
+            testCase.verifyEqual(bindings_tests.Math.maxSize(), uint64(intmax('int64')));
 
             % A wrong type on a scalar parameter raises in the MEX gateway
             % instead of producing garbage through mxGetScalar. Unlike the

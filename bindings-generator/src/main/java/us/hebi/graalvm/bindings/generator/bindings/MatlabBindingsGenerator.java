@@ -199,8 +199,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private String getCToMex(TypeDescription type) {
         return switch (type.getDataType()) {
             // Numbers and Booleans
-            case ENUM, BOOL, INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, CHAR16, VOID_WITH_ERROR_CODE ->
+            case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16, VOID_WITH_ERROR_CODE ->
                     "createMexScalar(%%RETURN_VALUE%%)";
+
+            // Too wide for the 53 bit mantissa of MATLAB's default double
+            case INT64 -> "createMexInt64(%%RETURN_VALUE%%)";
+            case SIZE_T -> "createMexSize(%%RETURN_VALUE%%)";
 
             // Opaque Handles and Pointers
             case OBJECT_HANDLE, VOID_POINTER -> "createMexPointer(%%RETURN_VALUE%%)";

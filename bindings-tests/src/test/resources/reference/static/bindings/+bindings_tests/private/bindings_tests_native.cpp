@@ -194,9 +194,31 @@ inline mxArray* createMexPointer(const void* c_ptr) {
 template <typename T>
 inline mxArray* createMexScalar(T value) {
     // MATLAB saves all numbers as double by default. Going with something else can
-    // cerate issues. This gives us 2^53 bits for integers before loss of precision,
-    // which is fine for everything but pointers.
+    // create issues. This gives us 2^53 bits for integers before loss of precision,
+    // which is fine for everything up to 32 bit. Wider types get their own class below.
     return mxCreateDoubleScalar(static_cast<double>(value));
+}
+
+// 2^53, the largest integer a double holds exactly
+static const int64_t MAX_EXACT_DOUBLE_INT = 9007199254740992LL;
+
+// 64 bit integers stay double while they fit the mantissa
+inline mxArray* createMexInt64(int64_t value) {
+    if (value <= MAX_EXACT_DOUBLE_INT && value >= -MAX_EXACT_DOUBLE_INT) {
+        return mxCreateDoubleScalar(static_cast<double>(value));
+    }
+    mxArray* array = mxCreateNumericMatrix(1, 1, mxINT64_CLASS, mxREAL);
+    ((int64_t*)mxGetData(array))[0] = value;
+    return array;
+}
+
+inline mxArray* createMexSize(size_t value) {
+    if ((uint64_t) value <= (uint64_t) MAX_EXACT_DOUBLE_INT) {
+        return mxCreateDoubleScalar(static_cast<double>(value));
+    }
+    mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
+    return array;
 }
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
@@ -671,7 +693,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 1, "bindings_tests_Indices_echoSize");
             size_t index = getScalar<size_t>(prhs[1], "index");
             size_t _value = bindings_tests_Indices_echoSize(index);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexSize(_value);
             break;
         }
 
@@ -753,7 +775,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             long long a = getScalar<long long>(prhs[1], "a");
             long long b = getScalar<long long>(prhs[2], "b");
             long long _value = bindings_tests_Math_addInt64(a, b);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexInt64(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Math_addFloat32") */ 524086999: {
@@ -780,7 +802,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             size_t a = getScalar<size_t>(prhs[1], "a");
             size_t b = getScalar<size_t>(prhs[2], "b");
             size_t _value = bindings_tests_Math_addSize(a, b);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexSize(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Math_sizeToInt32") */ 3376500095: {
@@ -802,7 +824,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto bindings_tests_Math_maxSize = libLoader.getFunc<size_t(*)()>("bindings_tests_Math_maxSize");
             checkArgCount(nrhs, 0, "bindings_tests_Math_maxSize");
             size_t _value = bindings_tests_Math_maxSize();
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexSize(_value);
             break;
         }
 
@@ -933,7 +955,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 1, "bindings_tests_Strings_utf8Length");
             MatlabString value(prhs[1]);
             size_t _value = bindings_tests_Strings_utf8Length(value);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexSize(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Strings_utf16Length") */ 724693977: {
@@ -941,7 +963,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 1, "bindings_tests_Strings_utf16Length");
             MatlabString value(prhs[1]);
             size_t _value = bindings_tests_Strings_utf16Length(value);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            if (nlhs > 0) plhs[0] = createMexSize(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Strings_empty") */ 2645586654: {

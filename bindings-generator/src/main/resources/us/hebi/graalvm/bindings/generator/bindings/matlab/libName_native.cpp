@@ -194,9 +194,31 @@ inline mxArray* createMexPointer(const void* c_ptr) {
 template <typename T>
 inline mxArray* createMexScalar(T value) {
     // MATLAB saves all numbers as double by default. Going with something else can
-    // cerate issues. This gives us 2^53 bits for integers before loss of precision,
-    // which is fine for everything but pointers.
+    // create issues. This gives us 2^53 bits for integers before loss of precision,
+    // which is fine for everything up to 32 bit. Wider types get their own class below.
     return mxCreateDoubleScalar(static_cast<double>(value));
+}
+
+// 2^53, the largest integer a double holds exactly
+static const int64_t MAX_EXACT_DOUBLE_INT = 9007199254740992LL;
+
+// 64 bit integers stay double while they fit the mantissa
+inline mxArray* createMexInt64(int64_t value) {
+    if (value <= MAX_EXACT_DOUBLE_INT && value >= -MAX_EXACT_DOUBLE_INT) {
+        return mxCreateDoubleScalar(static_cast<double>(value));
+    }
+    mxArray* array = mxCreateNumericMatrix(1, 1, mxINT64_CLASS, mxREAL);
+    ((int64_t*)mxGetData(array))[0] = value;
+    return array;
+}
+
+inline mxArray* createMexSize(size_t value) {
+    if ((uint64_t) value <= (uint64_t) MAX_EXACT_DOUBLE_INT) {
+        return mxCreateDoubleScalar(static_cast<double>(value));
+    }
+    mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
+    return array;
 }
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
