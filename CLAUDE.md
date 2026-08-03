@@ -144,11 +144,13 @@ A new generated shape is judged against this. If a feature can only be expressed
 call allocation, it needs an allocation free alternative alongside it.
 
 Where the current output does allocate per call, all of it in the string and span return
-paths, and none of it yet fixed:
+paths:
 
-- `CTypes.toTempDoublePointer` calls `ByteBuffer.asDoubleBuffer()` on every call, which
-  builds a fresh view buffer. The view does not escape, so partial escape analysis may
-  remove it, but that is not a property to rely on. Cache the view next to the `ByteBuffer`.
+- Fixed 2026-08-03: `CTypes.toTempDoublePointer` used to call `ByteBuffer.asDoubleBuffer()`
+  on every call, building a fresh view object. The buffer, its double view and its address
+  now live together in a per-thread `DoubleBufferView`, so the call path allocates only
+  when the buffer has to grow. The `ByteBuffer` field is what keeps the memory alive, the
+  cleaner hangs off it rather than off the view.
 - A `double[]` return allocates that array in Java on every call and discards it right after
   copying it into the scratch buffer. A caller provided output span removes the allocation
   and the copy together.
@@ -309,13 +311,6 @@ Open:
 3. Only leaf classes may declare constructors.
 4. Structs are unsupported, except the span struct as the one special case.
    `@CExternalEnums` is declared but never read.
-5. `LibraryDescription.proto` still says `package hebi.api.proto` and
-   `default = "hebi"` for the library name. The package rename only regenerates the
-   model classes. The name default interacts with the omit-what-matches-default
-   encoding: a library actually named `hebi` gets its name omitted from `api.json` and
-   resolved from the default on read, so changing the default changes what older
-   `api.json` files mean. Change it before the format has external consumers, with a
-   reference update.
 ## Working style
 
 - Small, reviewable changes. One issue at a time. A nine-file change to make one string

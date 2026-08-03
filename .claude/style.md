@@ -44,6 +44,9 @@ The codebase reads like a lab notebook:
   comments instead of becoming speculative code.
 - Never write narration ("// increment the counter"), and never write comments
   addressed to a reviewer about the change itself.
+- Keep it short. One or two sentences carry a constraint or an incident, and the
+  supporting argument belongs in `.claude/plans.md` rather than in a javadoc block.
+  A comment that reads like a commit message has outgrown its place.
 
 ## Class anatomy
 

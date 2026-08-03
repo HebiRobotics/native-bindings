@@ -19,9 +19,9 @@ that would catch a regression, and the one item it reorders is item 4.
 
 Sections are ordered by topic, not by priority. See **Sequencing** at the end.
 
-**Items 3, 6, 7 and 9 are done.** Items 7 and 9 landed together 2026-08-03, see the
-status notes in their sections for what shipped and how it deviates from the proposal.
-Everything else is still a proposal. **Read *Reading the items together* before picking
+**Items 3, 6, 7, 8, 9, 12 and 14 are done.** Items 7 and 9 landed together 2026-08-03,
+see the status notes in their sections for what shipped and how it deviates from the
+proposal. Everything else is still a proposal. **Read *Reading the items together* before picking
 anything up**, it records the cross-item constraints and the order they imply.
 
 ---
@@ -516,13 +516,12 @@ Consequences for the plan above:
 - The processor validation grows a case: an output span parameter on a method that also
   declares an array return is almost certainly a mistake, so reject it.
 
-Two fixes in the existing scratch buffer path belong with this item, since it is the only
-item that touches them:
+One fix in the existing scratch buffer path belongs with this item, since it is the only
+item that touches it. The other one landed early, on 2026-08-03: `toTempDoublePointer` no
+longer calls `ByteBuffer.asDoubleBuffer()` per call, the view and the address are cached
+next to the buffer in a per-thread `DoubleBufferView`. That class is the shape the holder
+below should generalise rather than replace.
 
-- `CTypes.toTempDoublePointer` calls `ByteBuffer.asDoubleBuffer()` on every call, which
-  builds a fresh view object. The view does not escape so partial escape analysis may
-  remove it, but that is not a property to design around. Cache the view next to the
-  `ByteBuffer`.
 - One `ThreadLocal` per element type is six thread local lookups and six independently
   grown buffers. Use one holder object per thread carrying the buffer and its typed views,
   so a thread that only ever touches doubles still allocates once.
@@ -667,13 +666,20 @@ Still open, in this repo's court:
 1. **`cPrefix` and `useCamelCase` have zero test coverage here**, and native-sdk uses
    them in 16 places to match the hand-written `hebi.h` ABI. Add a `Test*` class that
    pins both.
-2. **Port `checkEquals` to the runtime mocks.** The old mock helpers were not
-   extracted, so the native-sdk tests carry a local copy per test class.
+
+Closed: porting `checkEquals` to the runtime mocks (author decision 2026-08-03). The
+mocks already expose `toArray()`, so a test compares with the assertion library it
+already uses and needs nothing from the runtime artifact. `CDoublePointerMockTest` and
+`CArrayConverterTest` are how that reads.
 
 Release notes owed when the migrated library ships:
 
 - `Runtime.m` `runOnUiThread` no longer echoes `userData` as a MATLAB output. Callers
   that captured the return break.
+- MATLAB gets `int64` or `uint64` back from an `int64` or `size_t` return whose value
+  exceeds 2^53, where it used to get a silently rounded double. Anything below that is
+  unchanged. Callers comparing such a value against a double literal have to cast
+  (item 12 fix 4).
 - The `@CLibIndex` swap: the hand-written clamp absorbed an explicit MATLAB `0`, the
   generated conversion does not, so `addLineChart(0, 0)` now reaches Java as `-1, -1`.
   Zero was never a valid one-based index, so silent absorption becomes a detectable
@@ -1362,7 +1368,12 @@ empty diff.
 
 ---
 
-## 11. An allocation gate
+## 11. An allocation gate (OPTIONAL, LOW PRIORITY)
+
+Demoted to an optional note 2026-08-04 (author decision): not all users are in
+zero-allocation spaces, so the policy stays maintained by review rather than by a test.
+Pick this up only if an allocation regression actually ships. It no longer gates or
+accompanies item 4.
 
 The allocation policy has no enforcement. The reference file check compares text, so it
 cannot see that a generated wrapper allocates, and every language suite asserts values
@@ -1399,30 +1410,32 @@ files, and nothing drives the generated `$CEntries` from the JVM. The mock word 
 (`CDoublePointerMock`, `DoubleSpanMock`) allocate by construction, so a JVM mode assertion
 would measure the mock rather than the real path.
 
-Three options, in order of preference:
+Two options, both wanting a decision from the author before anyone writes code:
 
 1. **Measure in the image.** Most faithful, since it is the code that ships. Needs a
    native-image allocation counter and a test entry point that runs the loop inside the
    image, which is new machinery in a repo that currently has no in-image test harness.
 2. **Measure in JVM mode with real word types.** Would need the mocks replaced by something
    allocation free, which is a change to `bindings-runtime` for the benefit of a test.
-3. **Assert on the generated source instead.** Cheap and immediate: check that no entry
-   point for a method without a String or array return contains a `new` expression, or more
-   simply that the set of `CTypes` helpers it calls is on an allowlist. Catches the
-   generator regressing, not the runtime helpers.
 
-Option 3 is worth doing first regardless, because it costs almost nothing and covers the
-generator, which is what actually changes. Options 1 and 2 both want a decision from the
-author before anyone writes code.
+**Considered and rejected: asserting on the generated source**, by scanning entry points
+for `new` expressions or holding the `CTypes` helpers they call to an allowlist. It looked
+like the cheap first step, and it is the wrong shape for a generator that other people
+will use (author decision 2026-08-03). Zero allocation is a property this project's own
+consumers need, not a property every annotated API wants, and a source-level assertion
+turns it into a rule the generator enforces on everyone. A library whose author is happy
+allocating on a return path would be failing a test it never asked for, and the pressure
+would be to shape the generated code around the check. Measure the paths that claim to be
+allocation free, in the language where the claim is made, and leave the rest alone.
 
 C needs nothing. It never allocates and the header has no place to hide one.
 
-**Effort:** small for the C++ half, and it should land with item 4 so the output span has
-something asserting its whole point. The Java half is a separate decision.
+**Effort:** small for the C++ half. The Java half is a separate decision. Neither is
+scheduled, see the demotion note above.
 
 ---
 
-## 12. The MEX gateway, as reviewed
+## 12. The MEX gateway, as reviewed (IMPLEMENTED)
 
 Not a feature. A record of what the gateway does well and the four things worth changing,
 so the callback work in item 1 does not have to rediscover them.
@@ -1470,20 +1483,17 @@ so the callback work in item 1 does not have to rediscover them.
    the generated wrappers always pass the right count. It guards against a generator bug,
    not a user error. Worth adding because the generator knows the arity and it is one line
    per case, but it is hygiene rather than the fix that matters.
-3. **The `uint32` raw hash entry path is dead code.** The generated `.m` files pass the name
-   string, so every MATLAB call builds a char array and runs FNV-1a over it. Wiring the
-   literal hash into the `.m` files would skip both. The tradeoff is worth stating before
-   anyone does it: embedded hashes mean the seed search rewrites every `.m` file whenever a
-   method is added, and worse, a stale `.m` against a new MEX would fail by hashing to a
-   different function rather than by raising "not found". Names fail loudly, hashes can fail
-   silently. **Recommendation: keep the names and delete the raw hash path**, unless a
-   MATLAB profile shows the hashing actually matters, which for a dozen ASCII characters is
-   unlikely.
+3. **The `uint32` raw hash entry path is unused by the generated wrappers, and stays.**
+   The generated `.m` files pass the name string, so every MATLAB call builds a char array
+   and runs FNV-1a over it. The raw path exists so the cost of that can be measured against
+   the alternative (author decision 2026-08-03, it is deliberate, do not delete it). What
+   would be wrong is switching the generated `.m` files over to embedded hashes: the seed
+   search rewrites every `.m` file whenever a method is added, and a stale `.m` against a
+   new MEX would fail by hashing to a different function rather than by raising "not
+   found". Names fail loudly, hashes can fail silently.
 4. **`createMexScalar` casts every return to double**, so an `int64` or `size_t` return
    above 2^53 loses precision silently. Pointers already avoid this via the separate uint64
-   path. The comment acknowledges the limit, so this is a known tradeoff rather than an
-   oversight, but it deserves a line in the known gaps list because it is invisible at the
-   call site.
+   path. The comment acknowledges the limit, but it is invisible at the call site.
 
 ### On allocation
 
@@ -1500,13 +1510,45 @@ mx-allocated leaks, which is why item 1's risk list names `mexCallMATLABWithTrap
 **Effort:** small. Items 1 and 2 are the only ones worth doing on their own, and both are
 one generated line per case.
 
-**Status:** fix 1 landed 2026-08-03. `getScalar` takes the parameter name and rejects
+**Status:** fixes 1, 2 and 4 landed 2026-08-03, fix 3 is closed as won't-do per the
+author decision recorded in its entry above.
+
+Fix 2: `checkArgCount(nrhs, <arity>, "<symbol>")` is emitted as the first line of every
+case, before any `prhs` access, and raises `<lib>:InvalidInput` naming the symbol and both
+counts. The arity comes from the same index the parameter marshalling walks, so the
+receiver and the count cannot drift apart. Nothing pins it in the suites, and nothing can:
+the gateway sits in a `private/` subfolder, so no test outside `+<lib>/` can call it with
+a wrong count, which is the same reason this guards a generator bug rather than a user
+error. What the MATLAB suite does prove is the absence of false positives, since every
+generated wrapper call passes through the new check.
+
+Fix 4: `INT64` and `SIZE_T` returns no longer go through `createMexScalar`. They get
+`createMexInt64` and `createMexSize`, which **stay with a double while the value fits the
+53 bit mantissa** and only fall back to a 1x1 `mxINT64_CLASS` or `mxUINT64_CLASS` array
+when it would round. The class is value dependent on purpose (author decision
+2026-08-03): a non-double return class creates issues downstream in MATLAB code, so it is
+worth having only where the alternative is losing the value silently. The bound is
+symmetric, since doubles are sign magnitude and the representable set is mirrored.
+
+Which helper to call is decided in the generator's `getCToMex` rather than by a C++
+template, because the descriptor is where the type is known and a template dispatching on
+`sizeof` would have had to guess at `size_t` on macOS, where it is a distinct type from
+`uint64_t`.
+
+`maxSize` is the case that shows why the fix was needed, and the only assertion in
+`BindingsTest.m` whose class changed: it used to compare two doubles that had both rounded
+up to 2^63, and now compares the exact `intmax('int64')`. The literal cannot be written
+directly in MATLAB at all, since the parser rounds it before any conversion sees it. The
+other 64 bit returns in the suite are small enough to stay double, and `verifyEqual` is
+class strict, so those assertions pin the double path. Worth a release note when a library
+that returns values past the mantissa ships this.
+
+Fix 1 landed earlier the same day. `getScalar` takes the parameter name and rejects
 anything `mxGetScalar` is not defined for: a class other than numeric, logical or char,
 a complex value, or anything but exactly one element. It raises `<lib>:TypeError` naming
 the parameter. Logical and char stay accepted because BOOL and CHAR16 parameters cross
 through the same helper. Pinned in `BindingsTest.testMath` via `verifyError`, which works
 here because the gateway error carries an identifier while the wrapper errors do not.
-Fixes 2 to 4 remain open.
 
 ---
 
@@ -1852,7 +1894,12 @@ Release blockers, separate from the feature items above. None of these is large,
 none should wait until a release is imminent. Assessed 2026-08-02 against the source
 repo (`../HEBI-Java`, see its `.claude/plans.md` Part A for the full evaluation).
 
-1. **License.** The README says `TODO`. Nothing else can ship first.
+1. **License. Deferred, not a blocker** (author decision 2026-08-04). The README still
+   says `TODO`. Nothing is published outside the company yet, so the choice is not needed
+   initially and can be added later without reworking anything. Keep it off the critical
+   path. The same reasoning applies to the `THIRD-PARTY-NOTICES.txt` work parked on
+   `packaging/license-notice` in item 8, which is likewise owed only once the static
+   package is published externally.
 2. **Download URL option.** Done 2026-08-03. `-Abindings.downloadUrl` carries the base
    url of the directory holding the release archives, through `download_url` on
    `LibraryDescription` so the wrappers stay derivable from `api.json` alone, and the
@@ -1892,18 +1939,28 @@ repo (`../HEBI-Java`, see its `.claude/plans.md` Part A for the full evaluation)
    ...generated.Color$$CEnum". Existing enum wrapper files are renamed by the fix, which
    is the whole of its reference churn outside the new enum itself.
 
-   One latent collision is left, and it is the one no name mangling can solve, because the
-   names are the author's rather than derived: two classes sharing a `@CLibClass` value, or
-   two enums sharing a `@CLibEnum` value, produce duplicate C symbols and an unstable sort
-   in `ProtoSortUtil`, with no check anywhere. Nesting makes it easier to write by accident,
-   since the enclosing Java type no longer keeps the declarations visibly apart. It
-   currently surfaces, if at all, as a swallowed `FilerException` from `AbstractGenerator`
-   reported as a bare "Attempt to recreate a file" with no location. A duplicate-value check
-   over the registry, raised as a proper diagnostic, is the fix.
+   The one latent collision left over from this, the one no name mangling can solve because
+   the names are the author's rather than derived, is now rejected (2026-08-03). Two classes
+   sharing a `@CLibClass` value, or two enums sharing a `@CLibEnum` value, produced duplicate
+   C symbols, wrapper files that overwrite each other and an unstable sort in `ProtoSortUtil`,
+   and surfaced at best as a swallowed `FilerException` reported as a bare "Attempt to
+   recreate a file" with no location. `NativeAnnotationProcessor` now keeps a value to
+   declaring-class map per annotation, checked before the generators run, and throws a
+   `ProcessingException` naming both declarations. It keys on the annotation value alone
+   rather than on the emitted C symbol, because the value is what names the type in C++,
+   Python and MATLAB, where two classes with different `cPrefix` values would still collide.
+   Re-registering the same declaration is not a duplicate, which keeps it safe across
+   rounds. `rejectsDuplicateClassName` and `rejectsDuplicateEnumName` pin both.
 4. **`compiler-linux.sh` log header.** Done. The `%LOG_FILE%` literal is fixed in the
    generated `compiler-linux.sh` and `compiler-osx.sh`, with the reference files updated.
-5. **Proto remnants.** CLAUDE.md gap 5. `package hebi.api.proto` and the `"hebi"` name
-   default should change before `api.json` has external consumers, not after.
+5. **Proto remnants.** Done 2026-08-04, by hand. `LibraryDescription.proto` declares
+   `package us.hebi.graalvm.bindings.model`, matching `java_package`, and the library
+   name default is `""` rather than `"hebi"`. The default is the part that mattered:
+   under the omit-what-matches-default encoding a library actually named `hebi` used to
+   have its name omitted from `api.json` and resolved from the default on read, so the
+   change had to land before the format has external consumers. Nothing depended on the
+   old default, `EnvProcessor.getLibName` falls back to `"lib"` on its own, and the
+   reference files came out unchanged because no test library was ever named `hebi`.
 6. **Decide which documents ship.** Mostly handled: the root now carries only `README.md`
    and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved out to
    the charts blog notes kept outside the repo. What remains is the call on `.claude/` itself,
@@ -1963,8 +2020,8 @@ is enough to build and verify the packaging.
 | 1, 4 into 10 | Both add per-language branches. Converging before them means converging twice. |
 | 2 with 8 | A statically linked extension gives a self-contained wheel with no separate shared library. Both also extend the same stage 2 `CMakeLists.txt`, so expect a merge point. |
 | 3 into 5 | Julia is one-based, so `@CLibIndex` is a prerequisite. Already landed. |
-| 4 into 11 | The output span is the reason the gate exists. Land the C++ half with item 4 or nothing asserts it. |
-| 8 into 11 | The gate should link the static package, so loader symbol resolution stays out of the measured loop. |
+| 4 into 11 | The output span is the reason the gate exists. If the gate is ever built, its C++ half asserts item 4's shapes. |
+| 8 into 11 | If the gate is ever built, it should link the static package, so loader symbol resolution stays out of the measured loop. |
 | 12 into 1 | The gateway review records the longjmp and validation constraints the callback trampoline runs into. |
 | 15a into 2 | The wheel is the extension's distribution half. Building it against the pure ctypes wrapper leaves item 2 as only the code. |
 | 10 into 11 | Once the shared shape carries "allocates", the gate can assert per method instead of per hand-picked case. |
@@ -1980,9 +2037,8 @@ rather than a change to the existing one.
 Grouped, because the ordering constraint is mostly between groups rather than within them.
 
 ```
-A. Foundation            4 (spans, now with the output span)   with   11 (C++ gate)
+A. Foundation            4 (spans, now with the output span)
                          additive, unblocks 2 and 5.
-                         The gate lands with it or nothing asserts the output span.
 
 B. One breaking release  9 (isolate API)      then   7 (last error)     DONE 2026-08-03
                          landed together. The only ABI breaks are the wrappers now
@@ -2002,18 +2058,18 @@ E. Larger, optional      2 (Python extension)   then   5 (other languages)
 
     3 (@CLibIndex)       DONE
     6 (migration)        DONE, its two leftovers are small and slot anywhere
-    12 (MEX review)      fix 1 (getScalar validation) DONE. Fix 2 (nrhs check)
-                         remains, one generated line per case, depends on nothing.
+    12 (MEX review)      DONE. Fixes 1, 2 and 4 landed, fix 3 closed as won't-do.
     15 (packaging)       15a (wheels) goes before 2 and de-risks it. 15b (toolbox)
                          waits on the source repo's B.8 and stays out of this repo.
     16 (diagnostics)     independent and small, wanted before external users arrive
+    11 (allocation gate) OPTIONAL, LOW PRIORITY. Only if a regression ships.
 ```
 
 The one genuine judgement call is the order within **C**: whether the static packaging
 or the callbacks matter first. Nothing else in the order changes.
 
-The allocation policy did not reorder the groups. It grew item 4, which was already first,
-and added item 11 next to it.
+The allocation policy did not reorder the groups. It grew item 4, which was already
+first. The gate it proposed (item 11) is optional and unscheduled.
 
 ## Verification, for every item
 
