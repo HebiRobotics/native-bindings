@@ -133,15 +133,6 @@ public class GeneratorUtil {
     }
 
     /**
-     * The public C symbol of the last error accessor for the given isolate. The
-     * isolate name rides in the class-name slot, so the default isolate yields
-     * lib_getLastError and a named one lib_secondary_getLastError.
-     */
-    public static String getLastErrorCName(LibraryDescription lib, String isolateName) {
-        return AnnotatedCLibClass.getCEntryName(true, lib.getCPrefix(), isolateName, "getLastError");
-    }
-
-    /**
      * All C-symbols that are part of the public C ABI
      */
     public static List<String> getAllCMethodSymbols(LibraryDescription lib) {
@@ -164,6 +155,15 @@ public class GeneratorUtil {
             symbols.add(getLastErrorCName(lib, isolateName));
         }
         return symbols;
+    }
+
+    /**
+     * The public C symbol of the last error accessor for the given isolate. The
+     * isolate name rides in the class-name slot, so the default isolate yields
+     * lib_getLastError and a named one lib_secondary_getLastError.
+     */
+    public static String getLastErrorCName(LibraryDescription lib, String isolateName) {
+        return AnnotatedCLibClass.getCEntryName(true, lib.getCPrefix(), isolateName, "getLastError");
     }
 
     /**

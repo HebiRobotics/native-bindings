@@ -152,11 +152,6 @@ message MethodDescription {
   optional MethodOverload python_overload = 11;
   optional MethodOverload matlab_overload = 12;
 
-  // 120 was is_last_error_provider, removed when the generator started emitting
-  // the last error accessor itself
-  reserved 120;
-  reserved "is_last_error_provider";
-
 }
 
 message MethodOverload {
