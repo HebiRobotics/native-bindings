@@ -192,8 +192,8 @@ Under PowerShell, `-D` arguments have to be quoted (`"-Dbindings.updateReference
 or Maven parses the part after the dot as a lifecycle phase.
 
 The machine is Windows with MSVC already on `PATH` (do not add vcvars handling), CMake,
-Python and MATLAB R2022a at `C:\Program Files\MATLAB\R2022a`. The build scripts derive
-`MATLABROOT` from `matlab` on `PATH`.
+Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
+`PATH`, and the MEX SDK (headers and import libs) can be found in `${MATLABROOT}`.
 
 ## Things that have already bitten
 

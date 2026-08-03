@@ -1594,6 +1594,99 @@ general-purpose Java library binding. Build on item 1, do not attempt before it.
 
 ---
 
+## 14. A clean-room MEX mini-SDK, so building MEX needs no MATLAB (IMPLEMENTED)
+
+Landed 2026-08-03, same day as proposed. What shipped:
+
+- Three resources under `c/mex-sdk/` in bindings-generator, emitted next to
+  `mex.cmake` into `<output>/mex-sdk/`: a minimal `mex.h` written from the
+  documented C API (28 functions, `mxClassID`, `mxComplexity`, `mwSize`,
+  `mxChar`), plus `libmx.def` and `libmex.def` listing the import symbols.
+- The gateway compiled with `MATLAB_DEFAULT_RELEASE=R2018a` binds the versioned
+  `_800` exports (verified against the R2018b headers), so the mini header
+  declares the `_800` names directly and maps the documented names onto them
+  with defines. Both def files list only `_800` symbols.
+- `add_mex_target` falls back to the bundled SDK when `MATLABROOT` is unset:
+  include dir `mex-sdk/`, and on Windows import libraries generated at configure
+  time via `lib /def:` (or `dlltool` for MinGW). `MATLABROOT` stays the override
+  for building against a real installation.
+- The MEX target in the generated `CMakeLists.txt` is now unconditional rather
+  than gated on `MATLABROOT`, and `native.yml` dropped the internal SDK download
+  entirely.
+- Verified 2026-08-03: a bundled-SDK build's imports are name-identical to a
+  build against a real R2018b tree (only the import hints differ, which the
+  loader ignores), and the MATLAB suite passes in R2022a loading the
+  bundled-SDK MEX.
+
+Open follow-ups: item 1's MATLAB callbacks will add `mexCallMATLAB` relatives to
+the used subset, extend header and def files together. The dumpbin import diff
+against a real tree is manual, worth automating if the subset ever churns.
+
+The notes below are kept for the reasoning record.
+
+**Status today (superseded).** Building the MEX gateway does not need a MATLAB
+install, only the `extern/include` headers and, on Windows, the `libmex.lib` and
+`libmx.lib` import libraries, all of which can be found in `${MATLABROOT}`. CI
+fetched a five-file zip of exactly those files from an internal server and
+pointed `MATLABROOT` at it.
+
+**Why the zip cannot ship with the library.** Those files are MathWorks-copyrighted and
+the MathWorks license grants no redistribution right, there is no freely redistributable
+MEX SDK the way there is a Windows SDK. An internal download for our own CI is
+low-risk, publishing the files in an open-source repo or a Maven artifact is plain
+redistribution and was decided against 2026-08-03. Engineering analysis, not legal
+advice, same caveat as the notices note in item 8.
+
+**The legitimate route** is a mini-SDK written from scratch, shipped as generator
+resources next to `mex.cmake`:
+
+- **Import libraries, the easy part and Windows-only.** `mex.cmake` links import libs
+  only on Windows, macOS uses `-undefined dynamic_lookup` and Linux resolves against
+  the MATLAB process. A `.def` file listing the exported symbol names is a statement
+  of fact, not copyrightable expression, and `lib /def:libmx.def /machine:x64`
+  produces a working import library. MinGW has shipped MATLAB import libs built this
+  way for years.
+- **The header, the real work.** The generated gateway touches a small, stable slice
+  of the C Matrix and MEX API: `mxArray` accessors and constructors, the numeric and
+  char conversions in the `MatlabArray` and `MatlabString` helpers, and
+  `mexErrMsgIdAndTxt`. A minimal header declaring only that subset, written from the
+  documented API rather than copied from `mex.h`, covers it. GNU Octave's
+  independently written headers prove the approach, but they are GPL, write our own
+  rather than vendoring theirs.
+
+With both in place, `add_mex_target` works with no `MATLABROOT` at all: default to the
+bundled mini-SDK and keep `MATLABROOT` as the override for anyone building against a
+real installation. `native.yml` then drops the internal download, which also removes
+the last private-infrastructure dependency from the public CI.
+
+### Files
+
+- New resources next to the cmake templates: the minimal header, `libmex.def` and
+  `libmx.def`, and the `lib.exe` invocation in `mex.cmake` guarded on `WIN32` and on
+  `MATLABROOT` being unset.
+- `.github/workflows/native.yml`, remove the mex-sdk download step.
+
+### Risks
+
+- Clean-room discipline is the whole defense. The header must be written from the
+  documented API reference, and the commit message should say so. Anyone touching it
+  must not paste from `mex.h`.
+- The gateway compiles with `MATLAB_DEFAULT_RELEASE=R2018a`, the interleaved-complex
+  API. The mini-header has to declare that variant's types and keep working when a
+  user's real `MATLABROOT` overrides it, so pin both paths in CI once a licensed
+  runner is available.
+- Item 1's MATLAB callbacks add `mexCallMATLAB` and friends to the used subset. Land
+  this after the callback surface is known, or the header grows twice.
+- MEX files built against the mini-SDK must be bit-compatible with ones built against
+  a real R2018b tree. The cheap check is building both in CI and diffing the imports
+  with dumpbin.
+
+**Effort:** small for the def files, medium for the header. Worth doing before the
+repo goes public so the CI has no internal download reference, but not a release
+blocker as long as the download stays internal.
+
+---
+
 ## Before open sourcing
 
 Release blockers, separate from the feature items above. None of these is large, and
