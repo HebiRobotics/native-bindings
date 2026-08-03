@@ -97,6 +97,29 @@ static void test_counter(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Naming (cPrefix and useCamelCase)                                   */
+/* ------------------------------------------------------------------ */
+
+static void test_naming(void) {
+    custom_prefix_NamingPtr naming;
+
+    /*
+     * The symbols themselves are the assertion. This is the only language that sees
+     * them, and nothing links if the generator gets either option wrong: the class
+     * carries a prefix of its own instead of the library one, and its method names
+     * are snake case. Only the method names convert, the class name stays as written.
+     */
+    assert(custom_prefix_Naming_add_two_numbers(2, 3) == 5);
+
+    naming = custom_prefix_Naming_create(7);
+    assert(naming != NULL);
+    assert(custom_prefix_Naming_get_start_value(naming) == 7);
+    custom_prefix_Naming_release(naming);
+
+    printf("naming ok\n");
+}
+
+/* ------------------------------------------------------------------ */
 /* Strings                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -545,6 +568,7 @@ static void test_callbacks(void) {
 int main(void) {
     test_math();
     test_counter();
+    test_naming();
     test_strings();
     test_arrays();
     test_spans();

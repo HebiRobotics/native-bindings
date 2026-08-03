@@ -112,6 +112,10 @@ class struct_Counter_(Structure):
     pass
 CounterPtr = POINTER(struct_Counter_)
 
+class struct_Naming_(Structure):
+    pass
+NamingPtr = POINTER(struct_Naming_)
+
 class struct_Shape_(Structure):
     pass
 ShapePtr = POINTER(struct_Shape_)
@@ -181,6 +185,16 @@ libbindings_tests.bindings_tests_Counter_resetClosedCount.argtypes = []
 libbindings_tests.bindings_tests_Counter_resetClosedCount.restype = None
 libbindings_tests.bindings_tests_Counter_release.argtypes = [CounterPtr]
 libbindings_tests.bindings_tests_Counter_release.restype = None
+
+# ==== Naming ====
+libbindings_tests.custom_prefix_Naming_create.argtypes = [c_int]
+libbindings_tests.custom_prefix_Naming_create.restype = NamingPtr
+libbindings_tests.custom_prefix_Naming_get_start_value.argtypes = [NamingPtr]
+libbindings_tests.custom_prefix_Naming_get_start_value.restype = c_int
+libbindings_tests.custom_prefix_Naming_add_two_numbers.argtypes = [c_int, c_int]
+libbindings_tests.custom_prefix_Naming_add_two_numbers.restype = c_int
+libbindings_tests.custom_prefix_Naming_release.argtypes = [NamingPtr]
+libbindings_tests.custom_prefix_Naming_release.restype = None
 
 # ==== Shape ====
 libbindings_tests.bindings_tests_Shape_getName.argtypes = [ShapePtr]
@@ -439,6 +453,48 @@ class Counter:
     def reset_closed_count(cls) -> None:
         """Resets the released counter, so tests do not depend on execution order."""
         libbindings_tests.bindings_tests_Counter_resetClosedCount()
+
+
+class Naming:
+    """A counter exported under a custom prefix in snake case."""
+
+    __slots__ = ('ptr',)
+
+    def __init__(self, start_value: int = 0) -> None:
+        """Creates an instance holding the given value, or zero by default.
+
+        Args:
+            start_value:
+
+        Raises:
+            Exception: on internal errors
+        """
+        ptr_ = libbindings_tests.custom_prefix_Naming_create(start_value)
+        if not ptr_:
+            raise RuntimeError(f'Failed to create Naming in Naming::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+        self.ptr = ptr_
+
+    def __del__(self):
+        if self.ptr is not None:
+            libbindings_tests.custom_prefix_Naming_release(self.ptr)
+        self.ptr = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    def get_start_value(self) -> int:
+        """An instance method whose name needs more than one word to show the conversion."""
+        return libbindings_tests.custom_prefix_Naming_get_start_value(self.ptr)
+
+    @classmethod
+    def add_two_numbers(cls, first: int, second: int) -> int:
+        """A static method, so the conversion is pinned for both kinds of call.
+
+        Args:
+            first:
+            second:
+        """
+        return libbindings_tests.custom_prefix_Naming_add_two_numbers(first, second)
 
 
 class Shape:

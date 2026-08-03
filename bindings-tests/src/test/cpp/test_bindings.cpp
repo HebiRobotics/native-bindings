@@ -88,6 +88,23 @@ static void testCounter() {
 }
 
 // ---------------------------------------------------------------------------
+// Naming (cPrefix and useCamelCase)
+// ---------------------------------------------------------------------------
+
+static void testNaming() {
+  // Both options rename C symbols only. The wrapper is the assertion that they stop
+  // there: the class sits in the same namespace as every other one and keeps its
+  // camel case methods, even though it links against custom_prefix_Naming_*.
+  bt::Naming naming(7);
+  CHECK(naming.getStartValue() == 7);
+
+  bt::Naming defaultNaming;
+  CHECK(defaultNaming.getStartValue() == 0);
+
+  CHECK(bt::Naming::addTwoNumbers(2, 3) == 5);
+}
+
+// ---------------------------------------------------------------------------
 // Strings
 // ---------------------------------------------------------------------------
 
@@ -421,6 +438,7 @@ static void testCallbacks() {
 int main() {
   testMath();
   testCounter();
+  testNaming();
   testStrings();
   testArrays();
   testSpans();

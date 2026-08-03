@@ -49,6 +49,7 @@ enum class Marker : int32_t {
 
 // ==== Forward Declarations ====
 class Counter;
+class Naming;
 class Shape;
 class Circle;
 class Square;
@@ -56,6 +57,7 @@ using IndexCallbackFunction = void (*)(void* userData, int index);
 
 namespace internal {
 using CounterPtr = struct Counter_*;
+using NamingPtr = struct Naming_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
@@ -108,6 +110,41 @@ public:
 private:
   void cleanup() noexcept;
   internal::CounterPtr ptr_{};
+};
+
+
+/**
+ * @brief A counter exported under a custom prefix in snake case.
+ */
+class Naming {
+public:
+
+  /**
+   * @brief Creates an instance holding the given value, or zero by default.
+   *
+   * @param startValue 
+   * @throw on internal errors
+   */
+  Naming(int startValue = 0);
+
+  /**
+   * @brief An instance method whose name needs more than one word to show the conversion.
+   */
+  int getStartValue() const noexcept;
+
+  /**
+   * @brief A static method, so the conversion is pinned for both kinds of call.
+   *
+   * @param first 
+   * @param second 
+   */
+  static int addTwoNumbers(int first, int second) noexcept;
+  Naming(Naming&& from) noexcept;
+  Naming& operator=(Naming&& from) noexcept;
+  ~Naming() noexcept;
+private:
+  void cleanup() noexcept;
+  internal::NamingPtr ptr_{};
 };
 
 
@@ -727,6 +764,41 @@ inline Counter& Counter::operator=(Counter&& from) noexcept {
   return *this;
 };
 inline Counter::~Counter() noexcept {
+  cleanup();
+}
+
+// Naming
+inline Naming::Naming(int startValue) {
+  static auto custom_prefix_Naming_create = DynamicLookup::instance().getFunc<internal::NamingPtr(*)(int)>("custom_prefix_Naming_create");
+  ptr_ = custom_prefix_Naming_create(startValue);
+  if (!ptr_) {
+    throw Exception("Could not create Naming");
+  }
+}
+inline int Naming::getStartValue() const noexcept {
+  static auto custom_prefix_Naming_get_start_value = DynamicLookup::instance().getFunc<int(*)(internal::NamingPtr)>("custom_prefix_Naming_get_start_value");
+  return custom_prefix_Naming_get_start_value(ptr_);
+}
+inline int Naming::addTwoNumbers(int first, int second) noexcept {
+  static auto custom_prefix_Naming_add_two_numbers = DynamicLookup::instance().getFunc<int(*)(int, int)>("custom_prefix_Naming_add_two_numbers");
+  return custom_prefix_Naming_add_two_numbers(first, second);
+}
+inline void Naming::cleanup() noexcept {
+  if (ptr_ != nullptr) {
+    static auto custom_prefix_Naming_release = DynamicLookup::instance().getFunc<void(*)(internal::NamingPtr)>("custom_prefix_Naming_release");
+    custom_prefix_Naming_release(ptr_);
+  }
+}
+inline Naming::Naming(Naming&& from) noexcept : ptr_(from.ptr_) {
+  from.ptr_ = nullptr;
+};
+inline Naming& Naming::operator=(Naming&& from) noexcept {
+  cleanup();
+  ptr_ = from.ptr_;
+  from.ptr_ = nullptr;
+  return *this;
+};
+inline Naming::~Naming() noexcept {
   cleanup();
 }
 

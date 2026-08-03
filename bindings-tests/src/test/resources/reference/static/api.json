@@ -109,6 +109,63 @@
     }]
   }, {
     "type": {
+      "cPrefix": "custom_prefix_",
+      "typeName": "Naming",
+      "comment": "A counter exported under a custom prefix in snake case.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "cDestructorName": "custom_prefix_Naming_release",
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "custom_prefix_Naming_create",
+      "returnType": {
+        "cPrefix": "custom_prefix_",
+        "typeName": "Naming",
+        "comment": "A counter exported under a custom prefix in snake case.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "paramName": "startValue",
+        "lowerUnderscoreParamName": "start_value",
+        "defaultValue": "0",
+        "dataType": "INT32"
+      }],
+      "isConstructor": true,
+      "documentation": "Creates an instance holding the given value, or zero by default."
+    }, {
+      "name": "getStartValue",
+      "lowerUnderscoreName": "get_start_value",
+      "cName": "custom_prefix_Naming_get_start_value",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "documentation": "An instance method whose name needs more than one word to show the conversion.",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "addTwoNumbers",
+      "lowerUnderscoreName": "add_two_numbers",
+      "isStatic": true,
+      "cName": "custom_prefix_Naming_add_two_numbers",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "paramName": "first",
+        "lowerUnderscoreParamName": "first",
+        "dataType": "INT32"
+      }, {
+        "paramName": "second",
+        "lowerUnderscoreParamName": "second",
+        "dataType": "INT32"
+      }],
+      "documentation": "A static method, so the conversion is pinned for both kinds of call.",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
       "cPrefix": "bindings_tests_",
       "typeName": "Shape",
       "comment": "Base class for the shape hierarchy.",

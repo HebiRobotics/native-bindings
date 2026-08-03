@@ -99,6 +99,22 @@ class CounterTest(unittest.TestCase):
         self.assertEqual(2, bindings_tests.Counter.get_closed_count())
 
 
+class NamingTest(unittest.TestCase):
+    """cPrefix and useCamelCase, which rename C symbols and nothing else."""
+
+    def test_wrapper_is_unaffected(self):
+        naming = bindings_tests.Naming(7)
+        self.assertEqual(7, naming.get_start_value())
+        self.assertEqual(0, bindings_tests.Naming().get_start_value())
+        self.assertEqual(5, bindings_tests.Naming.add_two_numbers(2, 3))
+
+    def test_symbols_carry_the_custom_prefix(self):
+        # Python is snake case regardless, so the wrapper alone cannot tell the two
+        # options apart. The registered symbol can, and it is what the C suite links.
+        self.assertTrue(hasattr(bindings_tests.libbindings_tests, "custom_prefix_Naming_get_start_value"))
+        self.assertFalse(hasattr(bindings_tests.libbindings_tests, "bindings_tests_Naming_getStartValue"))
+
+
 class StringsTest(unittest.TestCase):
     """String marshalling in both directions, plus char** arrays."""
 

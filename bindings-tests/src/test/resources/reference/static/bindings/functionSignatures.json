@@ -436,6 +436,34 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Naming": {
+    "inputs": [{
+        "kind": "ordered",
+        "name": "startValue",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Naming"]
+      }]
+  },
+  "bindings_tests.Naming.addTwoNumbers": {
+    "inputs": [{
+        "kind": "required",
+        "name": "first",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "second",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Naming.getStartValue": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Naming"
+      }]
+  },
   "bindings_tests.Overloads.answer": {
     "inputs": [{
         "kind": "required",

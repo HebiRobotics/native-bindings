@@ -372,6 +372,38 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
 
+        // Naming
+        case /* hash32_fnv1a("custom_prefix_Naming_create") */ 2391897161: {
+            static auto custom_prefix_Naming_create = libLoader.getFunc<void*(*)(int)>("custom_prefix_Naming_create");
+            checkArgCount(nrhs, 1, "custom_prefix_Naming_create");
+            int startValue = getScalar<int>(prhs[1], "startValue");
+            void* _value = custom_prefix_Naming_create(startValue);
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
+            break;
+        }
+        case /* hash32_fnv1a("custom_prefix_Naming_get_start_value") */ 4190131410: {
+            static auto custom_prefix_Naming_get_start_value = libLoader.getFunc<int(*)(void*)>("custom_prefix_Naming_get_start_value");
+            checkArgCount(nrhs, 1, "custom_prefix_Naming_get_start_value");
+            int _value = custom_prefix_Naming_get_start_value(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("custom_prefix_Naming_add_two_numbers") */ 1497470220: {
+            static auto custom_prefix_Naming_add_two_numbers = libLoader.getFunc<int(*)(int, int)>("custom_prefix_Naming_add_two_numbers");
+            checkArgCount(nrhs, 2, "custom_prefix_Naming_add_two_numbers");
+            int first = getScalar<int>(prhs[1], "first");
+            int second = getScalar<int>(prhs[2], "second");
+            int _value = custom_prefix_Naming_add_two_numbers(first, second);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("custom_prefix_Naming_release") */ 2972985146: {
+            static auto custom_prefix_Naming_release = libLoader.getFunc<void(*)(void*)>("custom_prefix_Naming_release");
+            checkArgCount(nrhs, 1, "custom_prefix_Naming_release");
+            custom_prefix_Naming_release(getPtr<void*>(prhs[1]));
+            break;
+        }
+
         // Shape
         case /* hash32_fnv1a("bindings_tests_Shape_getName") */ 109245415: {
             static auto bindings_tests_Shape_getName = libLoader.getFunc<const char*(*)(void*)>("bindings_tests_Shape_getName");

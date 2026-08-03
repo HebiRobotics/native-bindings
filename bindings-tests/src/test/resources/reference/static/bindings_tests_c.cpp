@@ -101,6 +101,24 @@ void bindings_tests_Counter_release(bindings_tests_CounterPtr obj) {
     __bindings_tests_Counter_release(isolate::global(), obj);
 }
 
+// ==== Naming ====
+custom_prefix_NamingPtr __custom_prefix_Naming_create(bindings_tests_isolatethread_t* isolate, int startValue);
+custom_prefix_NamingPtr custom_prefix_Naming_create(int startValue) {
+    return __custom_prefix_Naming_create(isolate::global(), startValue);
+}
+int __custom_prefix_Naming_get_start_value(bindings_tests_isolatethread_t* isolate, custom_prefix_NamingPtr obj);
+int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj) {
+    return __custom_prefix_Naming_get_start_value(isolate::global(), obj);
+}
+int __custom_prefix_Naming_add_two_numbers(bindings_tests_isolatethread_t* isolate, int first, int second);
+int custom_prefix_Naming_add_two_numbers(int first, int second) {
+    return __custom_prefix_Naming_add_two_numbers(isolate::global(), first, second);
+}
+void __custom_prefix_Naming_release(bindings_tests_isolatethread_t* isolate, custom_prefix_NamingPtr obj);
+void custom_prefix_Naming_release(custom_prefix_NamingPtr obj) {
+    __custom_prefix_Naming_release(isolate::global(), obj);
+}
+
 // ==== Shape ====
 const char* __bindings_tests_Shape_getName(bindings_tests_isolatethread_t* isolate, bindings_tests_ShapePtr obj);
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj) {

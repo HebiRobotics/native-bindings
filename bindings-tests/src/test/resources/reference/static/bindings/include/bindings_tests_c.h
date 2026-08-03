@@ -12,6 +12,7 @@ typedef void* IndexCallbackFunction; // Callbacks are not supported
 #endif
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
+typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
@@ -68,6 +69,12 @@ int bindings_tests_Counter_isClosed(bindings_tests_CounterPtr obj);
 int bindings_tests_Counter_getClosedCount();
 void bindings_tests_Counter_resetClosedCount();
 void bindings_tests_Counter_release(bindings_tests_CounterPtr obj);
+
+// ==== Naming ====
+custom_prefix_NamingPtr custom_prefix_Naming_create(int startValue);
+int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
+int custom_prefix_Naming_add_two_numbers(int first, int second);
+void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
 
 // ==== Shape ====
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj);

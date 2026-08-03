@@ -98,6 +98,23 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Counter.getClosedCount(), 2);
         end
 
+        function testNaming(testCase)
+            % cPrefix and useCamelCase rename C symbols only. The classdef is
+            % generated from the library name and the Java method names either way,
+            % so it looks like every other class while dispatching on
+            % custom_prefix_Naming_*. The C suite is where the symbols are asserted.
+            naming = bindings_tests.Naming(7);
+            testCase.verifyEqual(naming.getStartValue(), 7);
+
+            defaultNaming = bindings_tests.Naming();
+            testCase.verifyEqual(defaultNaming.getStartValue(), 0);
+
+            testCase.verifyEqual(bindings_tests.Naming.addTwoNumbers(2, 3), 5);
+
+            delete(naming);
+            delete(defaultNaming);
+        end
+
         function testStrings(testCase)
             % String marshalling in both directions, plus char** arrays
             testCase.verifyEqual(bindings_tests.Strings.echo('hello'), 'hello');
