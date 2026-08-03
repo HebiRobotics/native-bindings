@@ -1586,7 +1586,7 @@ general-purpose Java library binding. Build on item 1, do not attempt before it.
   C++ begin/end).
 - Nullable handle returns (`evaluateSingle` returning empty) likely work as the
   null handle but are unpinned, add a bindings-tests case.
-- The nested-class hang (CLAUDE.md gap 6, release blocker 3 under *Before open
+- The nested-class hang (CLAUDE.md gap 5, release blocker 3 under *Before open
   sourcing*): a richer API makes annotated inner classes near-certain, fix the
   rejection first, allowing them stays a separate investigation.
 - Explicitly not needed for Saxon: the varargs/variant marshalling planned for the
@@ -1696,14 +1696,23 @@ none should wait until a release is imminent. Assessed 2026-08-02 against the so
 repo (`../HEBI-Java`, see its `.claude/plans.md` Part A for the full evaluation).
 
 1. **License.** The README says `TODO`. Nothing else can ship first.
-2. **Download URL option.** CLAUDE.md gap 5. The generated loaders point every consumer
-   at `files.hebi.us`. The reverted attempt showed the wrong shape, the right one is a
-   single `%%DOWNLOAD_URL%%` token.
-3. **Nested class rejection.** CLAUDE.md gap 6. First external users will annotate an
+2. **Download URL option.** Done 2026-08-03. `-Abindings.downloadUrl` carries the base
+   url of the directory holding the release archives, through `download_url` on
+   `LibraryDescription` so the wrappers stay derivable from `api.json` alone, and the
+   loaders append `<libName>-<libVersion>-<platform>.zip`. Anything that varies per
+   release lives in the url the consuming build assembles, which is why no placeholder
+   syntax was needed. **Unset generates no downloader at all**, in any language: the
+   bundled and shared-cache lookups stay and a missing binary is a plain error. The cmake
+   template uses `<if(downloadUrl)>`, the Python loader a `%%DOWNLOAD_BLOCK%%` splice, and
+   MATLAB a generated private `download_binary.m` that `locate_binary.m` only calls when
+   it exists. `bindings-tests` sets an `example.com` url so the reference files keep
+   covering the download path, and `DownloadUrlOptionTest` drives the processor with and
+   without the option to pin both shapes.
+3. **Nested class rejection.** CLAUDE.md gap 5. First external users will annotate an
    inner class within a week, and today that hangs the compile with no message.
 4. **`compiler-linux.sh` log header.** Done. The `%LOG_FILE%` literal is fixed in the
    generated `compiler-linux.sh` and `compiler-osx.sh`, with the reference files updated.
-5. **Proto remnants.** CLAUDE.md gap 7. `package hebi.api.proto` and the `"hebi"` name
+5. **Proto remnants.** CLAUDE.md gap 6. `package hebi.api.proto` and the `"hebi"` name
    default should change before `api.json` has external consumers, not after.
 6. **Decide which documents ship.** Mostly handled: the root now carries only `README.md`
    and `CLAUDE.md`, the working notes moved to `.claude/`, and the blog plan moved out to

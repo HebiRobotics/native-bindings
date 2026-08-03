@@ -243,6 +243,10 @@ Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
   artifacts (`.lib` files, `libs.cmake`, the compiler wrappers) into the compared
   `target/image/static` directory, so a plain `mvn verify` false-fails on "the set of
   generated files changed".
+- **javac maps `-Akey=` to a null value, not to an empty string.** An unset property in a
+  consuming pom produces exactly that, so an option whose empty value is meaningful has to
+  read the map directly instead of relying on `getOrDefault`, which only fires when the key
+  is absent. `getDownloadUrl` is the one that bit.
 - **Word types must not be compared to `null`.** `pointer == null` is a native-image
   build error ("Should not compare Word to Object"). Use `isNull()`.
 - **`@CStruct` interfaces may only contain annotated accessors.** Default or static
@@ -287,15 +291,11 @@ Open:
 3. Only leaf classes may declare constructors.
 4. Structs are unsupported, except the span struct as the one special case.
    `@CExternalEnums` is declared but never read.
-5. The download URL is hardcoded to `files.hebi.us` in the Python loader, the C++ cmake
-   and `locate_binary.m`. A configurable version was written and reverted for being too
-   large to review. If revisited, keep it to one `%%DOWNLOAD_URL%%` token in the existing
-   templates rather than adding a proto field and splitting the cmake template.
-6. A nested `@CLibClass` sends the processor into an infinite loop with no error. Known
+5. A nested `@CLibClass` sends the processor into an infinite loop with no error. Known
    since the original implementation, the commented-out handling is still in
    `NativeAnnotationProcessor`. The cheap fix is rejecting nested classes with a compile
    error, allowing them is a separate investigation.
-7. `LibraryDescription.proto` still says `package hebi.api.proto` and
+6. `LibraryDescription.proto` still says `package hebi.api.proto` and
    `default = "hebi"` for the library name. The package rename only regenerates the
    model classes. The name default interacts with the omit-what-matches-default
    encoding: a library actually named `hebi` gets its name omitted from `api.json` and
