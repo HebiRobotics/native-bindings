@@ -125,16 +125,27 @@ jobs:
         with:
           release: R2024b
 
-      - name: Run the MATLAB suite
+      # setup-matlab only installs MATLAB. The license checkout happens on first
+      # launch, and hosted runners are only licensed for public repos, so probe with
+      # a no-op command before gating the real suite on it.
+      - name: Check for a MATLAB license
+        id: matlab-license
         if: steps.setup-matlab.outcome == 'success'
+        continue-on-error: true
+        uses: matlab-actions/run-command@v2
+        with:
+          command: disp(version)
+
+      - name: Run the MATLAB suite
+        if: steps.matlab-license.outcome == 'success'
         uses: matlab-actions/run-tests@v2
         with:
           source-folder: bindings-tests/src/test/matlab
           select-by-folder: bindings-tests/src/test/matlab
 
       - name: Report a skipped MATLAB run
-        if: steps.setup-matlab.outcome != 'success'
-        run: echo "MATLAB is not available on this runner, so the MATLAB suite was skipped."
+        if: steps.matlab-license.outcome != 'success'
+        run: echo "MATLAB is not licensed or not available on this runner, so the MATLAB suite was skipped."
 
       - name: Upload the generated bindings on failure
         if: failure()
