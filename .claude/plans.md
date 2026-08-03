@@ -1266,6 +1266,92 @@ one generated line per case.
 
 ---
 
+## 13. SaxonC-shaped consumers: polymorphic returns and callback objects
+
+Recorded 2026-08-03 after evaluating what it would take to cover the Saxon s9api
+surface. SaxonC is the same recipe as this project (Java behind a native-image C ABI
+with C/C++/Python wrappers, theirs hand-built), so it is both a plausible future
+consumer and the best available benchmark for binding an existing object-oriented
+Java library rather than a C-style API authored for generation. Two features
+dominate, the rest of the gap list is small.
+
+### 13a. Polymorphic returns: `getType` plus checked downcasts
+
+The heart of s9api is a hierarchy (`XdmValue > XdmItem > XdmNode / XdmAtomicValue /
+XdmFunctionItem`) where nearly every method returns the base type and the caller
+inspects and downcasts. The registry already shares handles per root hierarchy and
+the generators already emit upcasts (`<lib>_Circle_to_Shape`), but no test API method
+returns a base-type handle, no type tag crosses the ABI, and nothing generates casts
+downward. native-charts never needed any of this, its inheritance exists to share
+methods, not to return polymorphic values.
+
+The feature, all derivable from the hierarchy the processor already sees:
+
+- A generated per-root enum with one constant per concrete class, and a
+  `<lib>_<Root>_getType(handle)` entry point (Java side: a lookup of the object's
+  class in a generated map).
+- A checked downcast per subclass, `<lib>_<Root>_as_<Sub>(handle)`, returning the
+  null handle on type mismatch (Java side: `instanceof` check, same handle back).
+- Wrapper-side materialization, which is the part beyond the raw enum: generated
+  factories that wrap a returned base-type handle as the correct subclass at wrap
+  time (Python `_wrap` switching on `getType` so `isinstance` works, C++
+  `as<T>()` returning an optional, MATLAB a `wrapXdmItem` private helper). Users
+  of the wrappers should never switch on the enum by hand.
+- A base-type return in the test API (`TestShape` factory returning `Shape`) to pin
+  wrapping, null returns, and cast failure in all four languages.
+
+Effort: moderate, mostly wrapper templates and reference churn. No new runtime
+mechanism, the registry already answers `instanceof`.
+
+### 13b. Host-implemented interfaces (callback objects)
+
+`ErrorReporter`, `MessageListener`, `URIResolver`, `Destination`, and
+`ExtensionFunction` are interfaces the user implements and the library calls. Item 1
+covers a single C function pointer with primitive arguments passed per call. This
+needs four things beyond it:
+
+- **A vtable struct** per annotated interface: function pointers plus `user_data`,
+  since interfaces bundle methods.
+- **Handle-typed callback parameters.** The generated Java adapter registers the
+  Java object as a handle before invoking the pointer and releases it after
+  (callback-scoped lifetime), so user code receives a live `XdmNode` handle.
+- **Handle-typed callback returns** for the `ExtensionFunction` shape
+  (`XdmValue call(XdmValue[] args)`), which also wants the handle span from the
+  item 4 family.
+- **Registration-scoped keepalive.** `setMessageListener` stores the callback
+  beyond the call, so the wrapper-side keepalive rules (Python CFUNCTYPE refs, C++
+  storing the struct) move from call-scoped to registration-scoped, and
+  deregistration must exist.
+
+The synchronous-only contract from item 1 (fires on the calling thread, completes
+before return) carries over unchanged and remains what makes MATLAB possible.
+Effort: large, this is the single biggest feature separating the generator from
+general-purpose Java library binding. Build on item 1, do not attempt before it.
+
+### 13c. The rest of the Saxon gap list
+
+- Multiple constructors and non-leaf constructors (`QName` has several, `Processor`
+  is not a leaf). The overload machinery exists for methods, extend it to
+  constructors. Lifts CLAUDE.md open gaps 2 and 3.
+- Structured errors: `SaxonApiException` carries code, message, line and column.
+  Cheapest shape is a last-error info class reachable through existing handle
+  machinery, plus typed exceptions in the wrappers.
+- Byte spans for parsing documents from memory (item 4 covers this).
+- Iterator sugar: `XdmSequenceIterator` works today as a handle class with
+  `next`/`hasNext`, the feature is only idiomatic mapping (Python `__iter__`,
+  C++ begin/end).
+- Nullable handle returns (`evaluateSingle` returning empty) likely work as the
+  null handle but are unpinned, add a bindings-tests case.
+- The nested-class hang (CLAUDE.md gap 6, release blocker 3 under *Before open
+  sourcing*): a richer API makes annotated inner classes near-certain, fix the
+  rejection first, allowing them stays a separate investigation.
+- Explicitly not needed for Saxon: the varargs/variant marshalling planned for the
+  MATLAB SDK item in the source repo. Saxon's key-value surfaces are plain
+  `setProperty(String, String)` / `setParameter(QName, XdmValue)` methods. The two
+  feature sets are complementary.
+
+---
+
 ## Before open sourcing
 
 Release blockers, separate from the feature items above. None of these is large, and
