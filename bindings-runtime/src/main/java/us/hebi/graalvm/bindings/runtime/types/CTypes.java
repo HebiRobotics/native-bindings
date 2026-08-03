@@ -11,6 +11,7 @@ import us.hebi.graalvm.bindings.runtime.Configuration;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.DoubleBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -63,26 +64,39 @@ public class CTypes {
     private static final ThreadLocal<ByteBuffer> utf8StringBuffer = new ThreadLocal<ByteBuffer>();
 
     /**
-     * Copies a double array into a per-thread scratch buffer for returning it as a span.
-     * Mirrors {@link #toTempCString(byte[], int, int)}: the returned address is only valid
-     * until this thread's next call and has to be copied immediately. null maps to nullptr,
-     * an empty array to a valid zero-length address.
+     * Copies a double array into a per-thread temporary buffer for returning it as a span.
+     * The returned address is only valid until this thread's next call and has to be copied
+     * immediately. null maps to nullptr, an empty array to a valid zero-length address.
      */
     public static CDoublePointer toTempDoublePointer(double[] values) {
         if (values == null) return WordFactory.nullPointer();
-        int numBytes = values.length * Double.BYTES;
-        ByteBuffer buffer = doubleArrayBuffer.get();
-        if (buffer == null || buffer.capacity() < numBytes) {
-            buffer = ByteBuffer.allocateDirect(Math.max(numBytes, 128 * Double.BYTES));
-            buffer.order(ByteOrder.nativeOrder());
+        DoubleBufferView buffer = doubleArrayBuffer.get();
+        if (buffer == null || buffer.doubleView.capacity() < values.length) {
+            buffer = new DoubleBufferView(Math.max(values.length, 128));
             doubleArrayBuffer.set(buffer);
         }
-        Buffer6.rewind(buffer);
-        buffer.asDoubleBuffer().put(values);
-        return WordFactory.pointer(DirectBuffer6.getAddress(buffer));
+        Buffer6.rewind(buffer.doubleView);
+        buffer.doubleView.put(values);
+        return WordFactory.pointer(buffer.address);
     }
 
-    private static final ThreadLocal<ByteBuffer> doubleArrayBuffer = new ThreadLocal<ByteBuffer>();
+    /* caches the double view on top of the native buffer */
+    private static final class DoubleBufferView {
+
+        DoubleBufferView(int numDoubles) {
+            buffer = ByteBuffer.allocateDirect(numDoubles * Double.BYTES);
+            buffer.order(ByteOrder.nativeOrder());
+            doubleView = buffer.asDoubleBuffer();
+            address = DirectBuffer6.getAddress(buffer);
+        }
+
+        final ByteBuffer buffer;
+        final DoubleBuffer doubleView;
+        final long address;
+
+    }
+
+    private static final ThreadLocal<DoubleBufferView> doubleArrayBuffer = new ThreadLocal<DoubleBufferView>();
 
     public static int capSizeToInt(long size_t) {
         // Anything over 31 bits gets capped to the max
