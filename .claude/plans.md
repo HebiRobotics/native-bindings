@@ -836,11 +836,111 @@ Whichever of the two ways forward is taken, the accessor needs an allocation fre
 
 ---
 
-## 8. Packaging the static build for C and C++ consumers
+## 8. Packaging the static build for C and C++ consumers (IMPLEMENTED)
+
+Landed 2026-08-03. What shipped, and where it deviates from the notes below:
+
+- The wrappers deduplicate the archives, and the Linux `libs.cmake` wraps the loose
+  list in `--start-group`/`--end-group`. `syslibs.txt` is written by stage 2 from the
+  classified `GRAALVM_LIBS`, not by the wrappers as proposed below, keeping the
+  wrappers minimal and the classification in one place.
+- Stage 2 always builds the merged archive (`lib.exe`, `libtool`, `ar -M` with a
+  `file(GENERATE)` MRI script) and the shared library links it plus the system libs,
+  exactly the layering described above. `-force_load` archives stay on the link line
+  and trigger a warning in the package step.
+- `BUILD_STATIC_PACKAGE` (default ON, mirroring `BUILD_RELEASE_PACKAGE`) stages
+  `include/` (the undecorated `<lib>_c.h` and `<lib>.hpp`, without
+  `<lib>_dynamic.hpp`, whose runtime loading only applies to the shared library),
+  `lib/<platform>/` with the merged archive, `syslibs.txt` and `manifest.json`,
+  `src/` (shim sources plus the export-annotated header), `cmake/` (config and
+  config-version), and zips it as `<lib>-<version>-static-<platform>.zip`.
+- The config defines `<lib>::static` with the full link contract from *Integration*:
+  include dirs, syslibs, `/NODEFAULTLIB:LIBCMT` or `-Wl,-z,noexecstack`,
+  `IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"`, the archive name computed inside, and a
+  `FATAL_ERROR` listing the packaged platforms on a miss. There is no separate
+  `<lib>-targets.cmake`, everything lives in the config file.
+- The consumer test lives in `bindings-tests/src/test/static/` with a pure C leg and
+  a C++ leg, run by `scripts/build-native.*` after staging. The pure C leg caught a
+  real bug on its first run: the header-defined `getHeaderVersion` had external
+  linkage and collided with the shim's copy in the archive (`LNK2005`). It is now
+  `static __inline`, which never changed the shared ABI because the symbol was never
+  `DLL_PUBLIC`.
+
+Still open, in decreasing importance: the localize/rename pass (which remains the
+actual two-image collision fix and needs `llvm-objcopy` on Windows), the
+dumpbin-derived CRT requirement in `manifest.json` plus the config-side check (the
+manifest currently records the shim's `CMAKE_MSVC_RUNTIME_LIBRARY` only), the Windows
+Debug-configuration consumer leg, the `-all` bundle assembly in CI, and
+`THIRD-PARTY-NOTICES.txt`, whose implementation is parked on the branch
+`packaging/license-notice`, see the redistribution note below.
+The `src/` escape hatch ships the shim sources but no
+build file, `<lib>_static.cmake` still assumes the loose archives next to it. On
+MSVC the shim compiles with `/Zi`, so its member references a build-tree PDB and
+consumers may see harmless `LNK4099` warnings, compile it with `/Z7` instead.
+
+Redistribution of the merged GraalVM and JavaFX archives is permitted, checked
+2026-08-03 against the license files in the Liberica NIK distribution. Everything
+merged is GPLv2 with the Classpath Exception, the same code the shared library
+already redistributes in linked form, and unmodified redistribution is what every
+JDK vendor and jlink-bundled application does. The obligation it carries, a
+generated notices file, is implemented but **parked on the branch
+`packaging/license-notice`** (author decision 2026-08-03): it cluttered the
+wrappers and the CMake template, and the distribution-root discovery needs
+testing on Linux and macOS before it can be trusted. What the branch contains,
+verified working on Windows: the wrappers record the archive source paths in
+`sources.txt`, stage 2 walks up to the distribution root (identified by the
+`release` file plus `legal/`, because `lib/svm` carries its own copy of the
+license text, and backslash paths need `file(TO_CMAKE_PATH)` before
+`get_filename_component` will split them), and generates
+`THIRD-PARTY-NOTICES.txt` next to the manifest in `lib/<platform>/`, per
+platform because the archive list and distribution differ per build, with the
+provenance header, the full GPLv2+CPE text and every `legal/java.base` notice,
+while `manifest.json` gains the distribution as vendor plus runtime version.
+Known gap on the branch: only `java.base` notices are included, correct for the
+C-only merges, but a package merging JavaFX archives needs the `javafx.*` and
+`java.desktop` notices (freetype, harfbuzz) added. Until the branch merges, the
+static package ships no notices file, which has to be resolved before it is
+published outside the company. Engineering analysis, not legal advice, have it
+checked before a commercial release.
+
+On merging archives being safe: it is member concatenation plus a rebuilt index,
+not a partial link, so lazy pull-in semantics match the loose list in link order.
+The Windows hazards were checked 2026-08-03: zero LTCG (`/GL`) objects in any JDK
+or svm archive (verified with dumpbin over all 54, plain x64 COFF throughout, so
+no toolset lock-in), import libraries are structurally excluded from the merge by
+the EXISTS classification, and duplicate symbols resolve first-wins exactly as
+the ordered link line did.
+
+The C++ JavaFX archives change none of this, and splitting them out of the merge
+would buy nothing. Their CRT pin and C++ runtime injection are `.drectve`
+directives per member (verified: `RuntimeLibrary=MD_DynamicRelease` plus
+`/DEFAULTLIB:msvcprt` in 25 glass members, 6 prism_d3d, 1 each javafx_font and
+sunmscapi, zero in the plain C JDK libs), members survive merging verbatim, and
+the directives fire lazily only when a member is pulled, identically in both
+layouts. The pin follows what the image reaches, not which archive carries the
+code, and the image is one object, so a split package could never be consumed
+half at a time anyway. The splits that do matter exist already: `-force_load`
+members stay loose, and the planned manifest CRT field reads the merged archive.
+
+The notes below are kept for the reasoning record.
 
 **Why.** `hebi-charts` links the shared library, but the original goal was replacing parts
 of the HEBI Python and C++ C ABI. Those consumers link the wrappers into their own binary.
 The static flavour is already produced, it just is not packaged.
+
+**Two products, published separately.** Stage 2 should produce two packages from one
+layered build: the static package (merged archive plus metadata) and the shared package
+(today's release zip), with the shared library itself linked from the static archive, see
+*Layering the shared library on the static package* below. Which of the two a library
+publishes is a CI choice over identical build output, not a build difference:
+
+- `native-charts` publishes only the shared package. A static flavour would drag 157 MB
+  of archives including JavaFX, its C++ compiled libs pin the release CRT through
+  `/FAILIFMISMATCH`, and the Python and MATLAB wrappers need a shared library anyway.
+  Nothing rules it out later, the layering makes it a toggle rather than a design change.
+- `native-sdk` publishes only the static package. The shared library is still built on
+  every run, because the Python ctypes wrapper, the MEX gateway and the C and C++ suites
+  all load or link it during testing, it just does not ship.
 
 ### What exists today
 
@@ -857,6 +957,10 @@ Verified against `bindings-tests/target/image/static` and the real
 - `publish-native-charts.yml` already has the shape this needs: a per-platform `compile`
   job, then a `package` job that assembles a headers-only zip and an `-all` zip from the
   platform zips.
+- The generated `.hpp` declares plain `extern "C"` prototypes and binds at link time, the
+  dlopen path is the separate `_dynamic.hpp`. Static C++ consumption therefore needs no
+  header changes. Since item 9 the isolate typedefs live in the shim, so `include/` is
+  already GraalVM-free.
 
 **The gap:** the release zip only contains the shared library. Everything static stays in
 the build tree.
@@ -876,14 +980,24 @@ does want a static package.
 ### Problems to fix along the way
 
 1. **`libs.cmake` lists every GraalVM archive twice.** The linker command line repeats them
-   and the wrapper appends each `.lib` it sees. Harmless with MSVC, and on Linux repetition
-   is how circular archive dependencies get resolved, but right now it is accidental rather
-   than deliberate. Deduplicate, and on Linux wrap the group in
-   `-Wl,--start-group ... -Wl,--end-group` instead of relying on the repeat.
+   and the wrapper appends each `.lib` it sees. This was hygiene, the merge step promotes
+   it to a prerequisite: `lib.exe` and `ar -M` fed the same archive twice produce duplicate
+   members or fail outright, so deduplicate before merging. The Linux ordering concern
+   shrinks in exchange, since `ld` resolves references between members of a single archive
+   to fixpoint, the merged archive needs no `--start-group` and only the unmerged `src/`
+   escape hatch keeps the wrapped group.
 2. **`libs.cmake` is CMake-only.** The consuming C and C++ libraries may not use CMake.
 3. **The consumer compiles the shim.** `<lib>_c.cpp` needs C++ only for the
    `static thread_local ThreadHandle` that detaches isolate threads on exit. It uses no STL,
    so the C++ ABI surface is `__cxa_thread_atexit` and static init guards, nothing more.
+   Precompiling the shim into the merged archive moves the compile out of the consumer's
+   build, but the runtime dependency stays and has to be part of the package contract: a
+   pure C consumer linking with a C driver gets undefined symbols. Declare it, with
+   `IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"` on the imported target so CMake links the C++
+   runtime, and `-lstdc++` / `-lc++` in `syslibs.txt` for everyone else. The bigger win, if
+   the shim gets touched anyway, is compiling it as C with `pthread_key` / `FlsAlloc`
+   destructors for the thread detach, which makes the package genuinely C-only and deletes
+   the question.
 4. **Intel Mac static link fails on zlib symbols (reported 2026-08-02).** Linking the
    hand-packaged static bundle into the Core repo fails on osx_amd64 with undefined
    `_crc32`, `_deflate`, ... referenced from
@@ -902,22 +1016,30 @@ does want a static package.
 ```
 <lib>-<version>-static-<platform>/
   include/
-    <lib>_c.h            <lib>.hpp
-                         # graal_isolate.h only until item 9 lands, then our own typedefs
+    <lib>_c.h            <lib>.hpp        # GraalVM-free since item 9, typedefs live in the shim
   lib/<platform>/
     lib<lib>_static.a    # merged: compiled shim + image + every GraalVM archive
     syslibs.txt          # one system lib per line, link order preserved
     manifest.json        # platform, version, build, archives merged, system libs,
                          # toolchain and C++ runtime flavour used
+    THIRD-PARTY-NOTICES.txt   # per platform, the archive list and distribution differ
+                              # (implementation parked on branch packaging/license-notice)
   src/
     <lib>_c.cpp          <lib>_objc.m               <lib>_static.cmake
   cmake/
-    <lib>-config.cmake   <lib>-targets.cmake
-  THIRD-PARTY-NOTICES.txt
+    <lib>-config.cmake   <lib>-config-version.cmake   <lib>-targets.cmake
 ```
 
 The `-all` bundle is the same tree with one `lib/<platform>/` per platform, sharing a single
-`include/` and `src/`.
+`include/` and `src/`. The platform directory names follow the existing
+`<prefix>_<suffix>` scheme (`osx_amd64`, `win_amd64`, ...), which happens to match the
+Core repo's `third_party/hebi/ndk/lib/<platform>/` layout. Keep that identity deliberate,
+it lets the tree drop into that repo unchanged.
+
+One coherence fix: the shipped `<lib>_static.cmake` expects the shim, `libs.cmake` and the
+loose archives next to it in `${CMAKE_CURRENT_LIST_DIR}`, but the package separates `src/`
+from `lib/<platform>/` and ships only the merged archive. The `src/` escape hatch needs a
+package-layout variant, as listed it does not run.
 
 ### Merging the archives
 
@@ -933,6 +1055,28 @@ Do this in **stage 2 CMake**, not in the compiler wrapper. The wrapper runs insi
 native-image's link step and should stay minimal, and the shim has to be compiled first,
 which is something only stage 2 does.
 
+### Layering the shared library on the static package
+
+The shared library is the static package plus exports, so stage 2 should build it that
+way instead of linking the loose `GRAALVM_LIBS` a second time: compile `<lib>_c.cpp` as
+the shared target's own source, exactly as today, and link the merged archive plus the
+system libs in place of the archive list.
+
+No `--whole-archive` is needed, and that hinges on archive member semantics worth writing
+down next to the target: the shim object satisfies the exported wrapper symbols and
+references the `__` entry points, which pulls the image member out of the merged archive,
+and the archive's own precompiled shim member is never pulled because nothing unresolved
+points at it. The image member carries its export records the same way it does today,
+where `libs.cmake` already links it as an archive member.
+
+What the layering buys:
+
+- The shared package becomes the first consumer of the static package, so every stage 2
+  run verifies the merge instead of only the dedicated consumer test.
+- Publishing becomes a per-library CI choice over identical build output, per *Why*.
+- One canonical link line. A `LNK2038` or a missing system lib surfaces in stage 2 rather
+  than in a consumer's build.
+
 ### Integration
 
 CMake consumers get the idiomatic path:
@@ -943,40 +1087,72 @@ target_link_libraries(app PRIVATE hebi_charts::static)
 ```
 
 `<lib>-config.cmake` picks `lib/<platform>/` using the same platform detection already in
-the stage 2 `CMakeLists.txt`, then defines an IMPORTED STATIC target carrying
-`INTERFACE_INCLUDE_DIRECTORIES` and the system libs as `INTERFACE_LINK_LIBRARIES`.
+the stage 2 `CMakeLists.txt`, then defines an IMPORTED STATIC target. The target has to
+carry the whole link contract, because a `find_package` consumer never sees
+`target_add_<lib>_static` or `opts.cmake`:
+
+- `INTERFACE_INCLUDE_DIRECTORIES`, and the system libs from `syslibs.txt` as
+  `INTERFACE_LINK_LIBRARIES`.
+- `INTERFACE_LINK_OPTIONS` with the consumer-mandatory subset of `GRAALVM_OPTS`, decided
+  per flag: `/NODEFAULTLIB:LIBCMT` and the Linux `-Wl,-z,noexecstack` carry over (the
+  Graal objects lack `.note.GNU-stack`, so the consumer's link is where that bites),
+  while `/INCREMENTAL:NO` and `/FILEALIGN:4096` are stage 2 concerns and must not leak.
+- `IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"` per problem 3, until the shim is C.
+- The archive file name computed inside the config, `lib<lib>_static.a` against
+  `<lib>_static.lib`, so the consumer never spells it.
+
+On the MSVC runtime: **check, do not pin.** A config file cannot set properties on the
+consumer's targets, and the native-sdk finding in the bitten list shows the algorithms
+library carries no `/FAILIFMISMATCH` records and links the debug CRT fine, so a hard
+`MultiThreadedDLL` default would break exactly this consumer's Debug configuration.
+Record the requirement in `manifest.json` instead, derived at package time from
+`dumpbin /directives` over the merged archive, and have the config fail with a clear
+message only when a requirement exists and the consumer's choice contradicts it.
+
+Two failure modes to handle loudly rather than let decay into a broken path deep in the
+link: an unknown platform (the stage 2 detection leaves `CMAKE_PLATFORM` undefined off
+the linux/osx/win by amd64/arm64 grid, which must become a `FATAL_ERROR` listing the
+`lib/<platform>/` directories actually present) and a version mismatch, which is what the
+standard `<lib>-config-version.cmake` exists for. Cross-compilation works because the
+detection keys off `CMAKE_SYSTEM_NAME` and `CMAKE_SYSTEM_PROCESSOR`, which toolchain
+files set, and that is a property to keep, since the Core repo cross-builds.
 
 Everyone else reads `syslibs.txt` and `manifest.json`, one system lib per line in link
 order.
 
 ### Where the code goes
 
-- New resource template `c/libName-config.cmake` next to the existing cmake templates,
-  emitted from `CBindingsGenerator.writeTo` alongside `<lib>_static.cmake`.
+- New resource templates `c/libName-config.cmake` and `c/libName-config-version.cmake`
+  next to the existing cmake templates, emitted from `CBindingsGenerator.writeTo`
+  alongside `<lib>_static.cmake`.
 - Extend the `c/CMakeLists.txt` template with a `BUILD_STATIC_PACKAGE` option that merges
   the archives, writes `syslibs.txt` and `manifest.json`, stages the tree and zips it.
   Mirror the existing `BUILD_RELEASE_PACKAGE` block rather than inventing a new shape.
 - Compiler wrappers: deduplicate, and record system libs into their own list so the package
   step does not have to re-parse `libs.cmake`.
 - CI: add the static zip to the per-platform upload, and assemble a static `-all` in the
-  existing `package` job.
+  existing `package` job. Which zips a library publishes is decided there, per *Why*.
 
 ### Risks, worst first
 
 - **A second static image in the same process.** Two Graal images in one binary both export
-  the generic `graal_*` API, which is a hard duplicate-symbol error. **Item 9 is the fix**
-  and should land first. Even with prefixes, each image still initialises its own isolate,
-  so test two libraries in one process before promising the pattern.
+  the generic `graal_*` API, which is a hard duplicate-symbol error. Item 9 landed but did
+  not remove them, both name sets are still emitted, so the localize pass below is the
+  actual fix rather than hygiene. Even with prefixes, each image still initialises its own
+  isolate, so test two libraries in one process before promising the pattern.
 - **Symbol visibility.** The JDK's static `zip` archive carries zlib, so the merged archive
   defines `deflate`, `inflate` and friends. HEBI links libz dynamically rather than
   statically, so this is not a duplicate-definition error. It is the quieter version: the
   linker resolves the consumer's own zlib calls against the archive's bundled copy instead
   of the system library. Almost always harmless, since it is the same library, but it should
   be a deliberate outcome rather than a surprise. Localizing everything except the generated
-  entry points, with `objcopy --localize-hidden` or a symbol allowlist, removes the question
-  and is worth doing as hygiene.
-- **MSVC runtime flavour.** The prebuilt archive bakes one of the runtime options. Document
-  which, and point at the `src/` escape hatch for the other.
+  entry points, with `objcopy --localize-hidden` or a symbol allowlist, removes both this
+  and the leftover `graal_*` names in one stroke, so it is part of the item rather than
+  optional polish. One toolchain note: binutils `objcopy` does not handle COFF, the
+  Windows leg needs `llvm-objcopy`.
+- **MSVC runtime flavour.** Superseded by the manifest approach under *Integration*: record
+  what the archive requires, check instead of pinning, and note that recompiling the shim
+  from `src/` changes only the shim's CRT, not the prebuilt archives'.
 - **macOS specifics.** `libtool -static` warns on duplicate members, and the ObjC shim has
   to be compiled and merged too, which means `enable_language(OBJC)` in the package step.
 
@@ -1003,10 +1179,15 @@ that does `find_package` against the staged static package and links
 and run with no shared library present at all, which is the property the whole package
 exists to provide.
 
+Three legs, not one: the C++ consumer above, a pure C executable compiled and linked with
+the C driver only, which pins the C++ runtime contract from problem 3, and on Windows one
+Debug-configuration build, which pins the CRT check. Once the shared library is layered on
+the static package, every stage 2 run additionally verifies the merge itself.
+
 **Effort:** medium, and low risk now that size and zlib are both settled. The packaging is
-mechanical. Its only hard gate is item 9, which removes the `graal_*` collision. It does not
-depend on item 6, because the static consumer is a separate library, see *Reading the items
-together*.
+mechanical. Item 9 landed and delivered the clean public API, the `graal_*` collision now
+falls to this item's localize pass. It does not depend on item 6, because the static
+consumer is a separate library, see *Reading the items together*.
 
 ---
 
@@ -1317,6 +1498,14 @@ mx-allocated leaks, which is why item 1's risk list names `mexCallMATLABWithTrap
 **Effort:** small. Items 1 and 2 are the only ones worth doing on their own, and both are
 one generated line per case.
 
+**Status:** fix 1 landed 2026-08-03. `getScalar` takes the parameter name and rejects
+anything `mxGetScalar` is not defined for: a class other than numeric, logical or char,
+a complex value, or anything but exactly one element. It raises `<lib>:TypeError` naming
+the parameter. Logical and char stay accepted because BOOL and CHAR16 parameters cross
+through the same helper. Pinned in `BindingsTest.testMath` via `verifyError`, which works
+here because the gateway error carries an identifier while the wrapper errors do not.
+Fixes 2 to 4 remain open.
+
 ---
 
 ## 13. SaxonC-shaped consumers: polymorphic returns and callback objects
@@ -1472,7 +1661,7 @@ is enough to build and verify the packaging.
 | 9 into 7 | Both rename library-level symbols. Land as one release or `getLastError` is renamed twice. |
 | 9 into 1 | The MEX dispatch hash table covers every symbol. Renaming after adding callback cases means redoing that work. |
 | 9 into 2 | The Python extension binds C symbols by name, so it should be written against the final names. |
-| 9 into 8 | Removes the duplicate `graal_*` symbols that otherwise make two static images unlinkable. |
+| 9 into 8 | Gave the shim prefixed names to call, but both name sets are still emitted, so the two-image collision fix is item 8's localize pass. |
 | 4 into 2 | The extension's buffer-protocol path is the span path. Spans first avoids writing it twice. |
 | 4 into 1 | A callback taking a span cannot be marshalled by the MEX gateway. Item 1's rejection list needs a span case once item 4 lands. |
 | 4 into 5 | Julia passes structs by value natively, so spans work unchanged there. |
@@ -1505,8 +1694,9 @@ B. One breaking release  9 (isolate API)      then   7 (last error)     DONE 202
                          calling <lib>_getLastError and graal_isolate.h no longer
                          shipping; existing symbols kept their names.
 
-C. Parallelisable        1 (callbacks)   and   8 (static packaging)
-                         independent of each other. 1 is ABI-neutral, 8 needs only 9.
+C. Parallelisable        1 (callbacks)   and   8 (static packaging)   8 DONE 2026-08-03
+                         1 is ABI-neutral and still open. 8 shipped without the
+                         localize pass, see the open list in its status note.
 
 D. Gated on the above    10 (generator convergence)
                          after 1 and 4, so it converges on the final shape
@@ -1517,8 +1707,8 @@ E. Larger, optional      2 (Python extension)   then   5 (other languages)
 
     3 (@CLibIndex)       DONE
     6 (migration)        DONE, its two leftovers are small and slot anywhere
-    12 (MEX review)      unblocked, slots anywhere. Its two worthwhile fixes are
-                         one generated line per case and depend on nothing.
+    12 (MEX review)      fix 1 (getScalar validation) DONE. Fix 2 (nrhs check)
+                         remains, one generated line per case, depends on nothing.
 ```
 
 The one genuine judgement call is the order within **C**: whether the static packaging

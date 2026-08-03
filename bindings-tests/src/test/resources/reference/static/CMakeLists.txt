@@ -1,18 +1,103 @@
 cmake_minimum_required(VERSION 3.17)
 project(BINDINGS_TESTS VERSION 1.2.3)
 
+# Find current platform
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_PLATFORM_PREFIX "linux")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(CMAKE_PLATFORM_PREFIX "osx")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CMAKE_PLATFORM_PREFIX "win")
+endif ()
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
+    set(CMAKE_PLATFORM_SUFFIX "amd64") # For 64-bit
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    set(CMAKE_PLATFORM_SUFFIX "arm64") # For ARM64
+endif ()
+
+set(CMAKE_PLATFORM "${CMAKE_PLATFORM_PREFIX}_${CMAKE_PLATFORM_SUFFIX}")
+message(STATUS "Building for platform: ${CMAKE_PLATFORM}")
+
 ###############################################################################
-# SHARED LIBRARY TARGET
+# MERGED STATIC ARCHIVE
 ###############################################################################
 # Load static lib and GraalVM definitions
 include(${CMAKE_CURRENT_LIST_DIR}/bindings_tests_static.cmake)
 
-# Create SHARED library (external release)
+# GRAALVM_LIBS mixes archive files with system libraries. The archives get
+# merged with the compiled shim into a single static library, which is what
+# the static package ships and what the shared library below links. The group
+# markers only matter for the loose list, ld resolves references between
+# members of a single archive to fixpoint. Archives marked -force_load keep
+# their whole-archive semantics only when linked as separate files, so they
+# stay on the link line.
+set(GRAALVM_ARCHIVES)
+set(GRAALVM_SYSLIBS)
+foreach (_item IN LISTS GRAALVM_LIBS)
+    if (_item MATCHES "^-Wl,--(start|end)-group$")
+        continue()
+    elseif (_item MATCHES "force_load")
+        list(APPEND GRAALVM_SYSLIBS ${_item})
+    elseif (EXISTS ${_item})
+        list(APPEND GRAALVM_ARCHIVES ${_item})
+    else ()
+        list(APPEND GRAALVM_SYSLIBS ${_item})
+    endif ()
+endforeach ()
+list(REMOVE_DUPLICATES GRAALVM_ARCHIVES)
+list(REMOVE_DUPLICATES GRAALVM_SYSLIBS)
+
+set(MERGED_ARCHIVE_DIR ${CMAKE_CURRENT_BINARY_DIR}/static)
+set(MERGED_ARCHIVE ${MERGED_ARCHIVE_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}bindings_tests_static${CMAKE_STATIC_LIBRARY_SUFFIX})
+file(MAKE_DIRECTORY ${MERGED_ARCHIVE_DIR})
+
+if (MSVC)
+    set(_lib_tool ${CMAKE_AR})
+    if (NOT _lib_tool)
+        set(_lib_tool lib.exe)
+    endif ()
+    add_custom_command(OUTPUT ${MERGED_ARCHIVE}
+            COMMAND ${_lib_tool} /NOLOGO "/OUT:${MERGED_ARCHIVE}" "$<TARGET_FILE:bindings_tests_static>" ${GRAALVM_ARCHIVES}
+            DEPENDS bindings_tests_static ${GRAALVM_ARCHIVES}
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+elseif (APPLE)
+    add_custom_command(OUTPUT ${MERGED_ARCHIVE}
+            COMMAND libtool -static -no_warning_for_no_symbols -o ${MERGED_ARCHIVE} "$<TARGET_FILE:bindings_tests_static>" ${GRAALVM_ARCHIVES}
+            DEPENDS bindings_tests_static ${GRAALVM_ARCHIVES}
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+else ()
+    # binutils ar merges archives only through an MRI script
+    set(MERGE_SCRIPT ${MERGED_ARCHIVE_DIR}/merge.mri)
+    set(_mri "create ${MERGED_ARCHIVE}\naddlib $<TARGET_FILE:bindings_tests_static>\n")
+    foreach (_archive IN LISTS GRAALVM_ARCHIVES)
+        string(APPEND _mri "addlib ${_archive}\n")
+    endforeach ()
+    string(APPEND _mri "save\nend\n")
+    file(GENERATE OUTPUT ${MERGE_SCRIPT} CONTENT "${_mri}")
+    add_custom_command(OUTPUT ${MERGED_ARCHIVE}
+            COMMAND sh -c "${CMAKE_AR} -M < ${MERGE_SCRIPT}"
+            DEPENDS bindings_tests_static ${GRAALVM_ARCHIVES} ${MERGE_SCRIPT}
+            COMMENT "Merging static archives into ${MERGED_ARCHIVE}")
+endif ()
+add_custom_target(bindings_tests_merged DEPENDS ${MERGED_ARCHIVE})
+
+###############################################################################
+# SHARED LIBRARY TARGET
+###############################################################################
+
+# Create SHARED library (external release). It links the merged archive rather
+# than the loose GRAALVM_LIBS, so every build verifies the artifact the static
+# package ships. The shim compiles as this target's own source: its object
+# provides the exported wrappers and pulls the image member out of the archive,
+# and the archive's own shim member is never pulled because nothing unresolved
+# points at it.
 add_library(bindings_tests SHARED ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_c.cpp)
 target_include_directories(bindings_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_compile_features(bindings_tests PUBLIC cxx_std_11)
-target_link_libraries(bindings_tests PRIVATE ${GRAALVM_LIBS})
+target_link_libraries(bindings_tests PRIVATE ${MERGED_ARCHIVE} ${GRAALVM_SYSLIBS})
 target_link_options(bindings_tests PRIVATE ${GRAALVM_OPTS})
+add_dependencies(bindings_tests bindings_tests_merged)
 
 # Platform specific additions
 if (APPLE)
@@ -38,24 +123,6 @@ set_target_properties(bindings_tests PROPERTIES
 ###############################################################################
 option(BUILD_RELEASE_PACKAGE "Build release package with bindings and ZIP archive" ON)
 if (BUILD_RELEASE_PACKAGE)
-
-    # Find current platform
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set(CMAKE_PLATFORM_PREFIX "linux")
-    elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-        set(CMAKE_PLATFORM_PREFIX "osx")
-    elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-        set(CMAKE_PLATFORM_PREFIX "win")
-    endif ()
-
-    if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
-        set(CMAKE_PLATFORM_SUFFIX "amd64") # For 64-bit
-    elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-        set(CMAKE_PLATFORM_SUFFIX "arm64") # For ARM64
-    endif ()
-
-    set(CMAKE_PLATFORM "${CMAKE_PLATFORM_PREFIX}_${CMAKE_PLATFORM_SUFFIX}")
-    message(STATUS "Building for platform: ${CMAKE_PLATFORM}")
 
     # Post process the shared library and move files to an adequate directory structure
     set(BINDINGS_DIR ${CMAKE_CURRENT_LIST_DIR}/bindings)
@@ -127,6 +194,82 @@ if (BUILD_RELEASE_PACKAGE)
             COMMAND ${CMAKE_COMMAND} -E remove ${ZIP_DIR}/${RELEASE_ZIP_NAME}
             COMMAND ${CMAKE_COMMAND} -E tar cvf "${ZIP_DIR}/${RELEASE_ZIP_NAME}" --format=zip -- .
             WORKING_DIRECTORY "${RELEASE_DIR}/.."
+    )
+
+endif ()
+
+###############################################################################
+# BUILD STATIC PACKAGE
+###############################################################################
+# A self-contained package for consumers that link the library into their own
+# binary: the merged archive, the user headers, the shim sources and a
+# find_package configuration. Mirrors the release package above.
+option(BUILD_STATIC_PACKAGE "Build prebuilt static library package and ZIP archive" ON)
+if (BUILD_STATIC_PACKAGE)
+
+    # System libraries the merged archive needs, one per line in link order.
+    # Consumers that do not use CMake read these instead of the config file.
+    list(JOIN GRAALVM_SYSLIBS "\n" _syslibs_content)
+    file(WRITE ${MERGED_ARCHIVE_DIR}/syslibs.txt "${_syslibs_content}\n")
+    foreach (_item IN LISTS GRAALVM_SYSLIBS)
+        if (_item MATCHES "force_load")
+            message(WARNING "The static package cannot ship ${_item}, "
+                    "whole-archive semantics are lost outside this build tree.")
+        endif ()
+    endforeach ()
+
+    # Record what the package was built from
+    set(MANIFEST_FILE ${MERGED_ARCHIVE_DIR}/manifest.json)
+    set(_manifest_archives ${CMAKE_STATIC_LIBRARY_PREFIX}bindings_tests_static${CMAKE_STATIC_LIBRARY_SUFFIX})
+    foreach (_archive IN LISTS GRAALVM_ARCHIVES)
+        get_filename_component(_name ${_archive} NAME)
+        list(APPEND _manifest_archives ${_name})
+    endforeach ()
+    list(JOIN _manifest_archives "\", \"" _manifest_archives)
+    list(JOIN GRAALVM_SYSLIBS "\", \"" _manifest_syslibs)
+    if (MSVC)
+        set(_manifest_runtime "\n  \"msvc_runtime\": \"${CMAKE_MSVC_RUNTIME_LIBRARY}\",")
+    else ()
+        set(_manifest_runtime "")
+    endif ()
+    file(WRITE ${MANIFEST_FILE} "{
+  \"name\": \"bindings_tests\",
+  \"version\": \"${PROJECT_VERSION}\",
+  \"platform\": \"${CMAKE_PLATFORM}\",
+  \"toolchain\": \"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\",${_manifest_runtime}
+  \"archives\": [\"${_manifest_archives}\"],
+  \"syslibs\": [\"${_manifest_syslibs}\"]
+}
+")
+
+    # Stage the package tree
+    set(STATIC_RELEASE_DIR ${CMAKE_CURRENT_BINARY_DIR}/release-static/bindings_tests/bindings_tests)
+    set(STATIC_RELEASE_LIB_DIR ${STATIC_RELEASE_DIR}/lib/${CMAKE_PLATFORM}/)
+    add_custom_command(TARGET bindings_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -rf ${STATIC_RELEASE_DIR}/..
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${STATIC_RELEASE_LIB_DIR} ${STATIC_RELEASE_DIR}/include ${STATIC_RELEASE_DIR}/src ${STATIC_RELEASE_DIR}/cmake
+
+            # The undecorated user headers, without bindings_tests_dynamic.hpp: the
+            # runtime loader only applies to the shared library
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/bindings/include/bindings_tests_c.h ${CMAKE_CURRENT_LIST_DIR}/bindings/include/bindings_tests.hpp ${STATIC_RELEASE_DIR}/include
+
+            # The merged archive plus its link metadata
+            COMMAND ${CMAKE_COMMAND} -E copy ${MERGED_ARCHIVE} ${MERGED_ARCHIVE_DIR}/syslibs.txt ${MANIFEST_FILE} ${STATIC_RELEASE_LIB_DIR}
+
+            # Shim sources for consumers that want to compile the shim themselves
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_c.cpp ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_c.h ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_objc.m ${STATIC_RELEASE_DIR}/src
+
+            # find_package entry point
+            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/bindings_tests-config.cmake ${CMAKE_CURRENT_LIST_DIR}/bindings_tests-config-version.cmake ${STATIC_RELEASE_DIR}/cmake
+    )
+
+    # Build a .zip release for each platform
+    set(STATIC_ZIP_DIR ${STATIC_RELEASE_DIR}/../..)
+    set(STATIC_ZIP_NAME "bindings_tests-${PROJECT_VERSION}-static-${CMAKE_PLATFORM}.zip")
+    add_custom_command(TARGET bindings_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E remove ${STATIC_ZIP_DIR}/${STATIC_ZIP_NAME}
+            COMMAND ${CMAKE_COMMAND} -E tar cvf "${STATIC_ZIP_DIR}/${STATIC_ZIP_NAME}" --format=zip -- .
+            WORKING_DIRECTORY "${STATIC_RELEASE_DIR}/.."
     )
 
 endif ()

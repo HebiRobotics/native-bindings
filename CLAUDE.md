@@ -273,7 +273,10 @@ as extra outputs (dropped, buffers are caller-owned and mutated in place like th
 arrays, the counterpart of Python's `convertCDefaultParamString`), the `%LOG_FILE%` literal
 in the generated `compiler-{linux,osx}.sh` log header, the C++ constructor
 factory colliding with wrapped methods (now a per-class free function in the internal
-namespace).
+namespace), the MEX target failing to build in a `Debug` configuration on MSVC (cl
+rejects the unconditional `/O2` against the configuration's `/RTC1` with "D8016",
+which broke IDE profiles defaulting to Debug, so `/O2` and `/DNDEBUG` now apply only
+outside Debug while `/MT` stays unconditional, its override being only a warning).
 
 Open:
 
@@ -299,12 +302,6 @@ Open:
    resolved from the default on read, so changing the default changes what older
    `api.json` files mean. Change it before the format has external consumers, with a
    reference update.
-8. The MEX target cannot be built in a `Debug` configuration on MSVC. `mex.cmake` adds
-   `/MT` and `/O2` unconditionally, which collides with the configuration's own `/MDd`,
-   `/Od` and `/RTC1`, and cl rejects `/RTC1` with `/O2` outright ("D8016"). The MEX file
-   is always shipped release-built, so the fix is to state that rather than to inherit
-   the configuration flags.
-
 ## Working style
 
 - Small, reviewable changes. One issue at a time. A nine-file change to make one string

@@ -49,11 +49,14 @@ function(add_mex_target TARGET_NAME)
 
     # Compiler options
     if(MSVC)
-        # MSVC compiler options
+        # MSVC compiler options. Shipped MEX files are always release-built, so the
+        # optimizer flags only apply outside Debug configurations: cl rejects /RTC1
+        # together with /O2 ("D8016"), which would break IDE profiles that default
+        # to Debug before they compile anything.
         target_compile_options(${TARGET_NAME} PRIVATE
                 /MT # statically link vcruntime
-                /O2 # maximize speed
-                /DNDEBUG # strip asserts
+                $<$<NOT:$<CONFIG:Debug>>:/O2> # maximize speed
+                $<$<NOT:$<CONFIG:Debug>>:/DNDEBUG> # strip asserts
         )
         target_link_options(${TARGET_NAME} PRIVATE "/EXPORT:mexFunction") # export manually due to mex.h breaking macro
         set(WIN_SUBDIR "microsoft")
