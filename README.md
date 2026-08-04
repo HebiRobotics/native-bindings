@@ -133,6 +133,31 @@ Without it no download code is generated at all, and a missing binary is an erro
 the path that was searched. That is the default because a library that does not publish
 release archives should not ship a downloader aimed at somebody else's server.
 
+### Linking the static package
+
+The static package ships one merged archive per platform next to a `find_package` config
+that carries the whole link contract, including the system libraries listed in
+`lib/<platform>/syslibs.txt`:
+
+```cmake
+find_package(<libName> REQUIRED PATHS path/to/package/cmake)
+target_link_libraries(app PRIVATE <libName>::static)
+```
+
+ELF only allows position independent objects inside a shared library, so everything in
+the archive is built that way and linking it into your own `.so` works out of the box.
+Two things to know if you step off that path:
+
+- **Recompiling the shim from `src/` needs `-fPIC`** whenever the result ends up in a
+  shared library. Without it the link fails on a relocation against the thread local in
+  the isolate helper, reported as `R_X86_64_TPOFF32` on x86_64 and as advice to
+  "recompile with -fPIC".
+- **A static zlib has to be position independent too.** Debian and Ubuntu ship an
+  x86_64 `libz.a` that is not, which is why the build falls back to listing `z` in
+  `syslibs.txt` rather than merging it, and why consumers on minimal images then need
+  the system zlib installed. Building zlib with `CFLAGS=-fPIC` and pointing
+  `BINDINGS_ZLIB_STATIC` at the result makes the archive self-contained instead.
+
 ## Annotations
 
 | Annotation | On | What it does |
