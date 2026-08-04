@@ -63,14 +63,21 @@ jobs:
       # Ubuntu's x86_64 libz.a is not position independent, so build one that is.
       - name: Build a position independent zlib
         if: runner.os == 'Linux'
+        # From the GitHub release rather than zlib.net, which has served error pages to
+        # the runners. Downloaded to a file and checked, so a bad body fails here instead
+        # of reaching tar as "not in gzip format".
         run: |
-          curl -sSL https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz | tar xz
+          curl -sSLf --retry 3 --retry-all-errors -o zlib.tar.gz \
+            "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz"
+          echo "${ZLIB_SHA256}  zlib.tar.gz" | sha256sum -c -
+          tar xzf zlib.tar.gz
           cd zlib-${ZLIB_VERSION}
           CFLAGS=-fPIC ./configure --static
           make -j"$(nproc)" libz.a
           echo "BINDINGS_ZLIB_STATIC=${PWD}/libz.a" >> "$GITHUB_ENV"
         env:
           ZLIB_VERSION: 1.3.1
+          ZLIB_SHA256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
       # Stage one. native-image runs through the generated target/image/static/compiler-<os>,
       # which also emits the static library and the cmake fragments into target/image/static.
