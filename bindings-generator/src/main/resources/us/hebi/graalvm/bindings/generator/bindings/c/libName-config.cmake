@@ -59,7 +59,11 @@ set_property(TARGET <libName>::static PROPERTY INTERFACE_LINK_LIBRARIES ${_<libN
 # Options the consumer's final link needs. Deliberately minimal, everything
 # else in the build's GRAALVM_OPTS only matters when linking the shared library.
 if(MSVC)
+    # The archive was built against the DLL C runtime, so the static one gets excluded
+    # and the DLL one linked in its place. Both lines are needed: a target that happens
+    # to reference nothing in the archive would otherwise end up with no C runtime.
     set_property(TARGET <libName>::static PROPERTY INTERFACE_LINK_OPTIONS "/NODEFAULTLIB:LIBCMT")
+    set_property(TARGET <libName>::static APPEND PROPERTY INTERFACE_LINK_LIBRARIES msvcrt)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The Graal image objects carry no .note.GNU-stack section
     set_property(TARGET <libName>::static PROPERTY INTERFACE_LINK_OPTIONS "-Wl,-z,noexecstack")
