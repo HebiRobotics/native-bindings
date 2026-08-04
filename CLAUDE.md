@@ -270,6 +270,38 @@ Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
 - **`@CStruct` interfaces may only contain annotated accessors.** Default or static
   methods fail the image build with "Unexpected method without annotation", which is why
   the span helpers live in the separate `Spans` class.
+- **The MEX gateway imports no CRT, so a toolset pin never applied to it.** `mex.cmake`
+  compiles `/MT` unconditionally, and `dumpbin /dependents` on a v143-built `.mexw64`
+  reports only `libmex.dll`, `libmx.dll` and `KERNEL32.dll`. The CRT constraint lives on
+  the shared library, which imports 8 symbols from `vcruntime140.dll`,
+  `__CxxFrameHandler4` from `vcruntime140_1.dll` and the OS UCRT, and no `msvcp140` at
+  all. MATLAB's `bin\win64` shadows System32 for anything loaded in its process, but its
+  `vcruntime140.dll` exports all 8 back to R2018b (14.11), and no MATLAB before R2022a
+  ships `vcruntime140_1.dll` so that one resolves from System32. That last one is the only
+  real deployment requirement: a VC++ 2019-or-newer redistributable. The source repo's CI
+  used to install VS2019 and pass `-T v142` for MATLAB `<R2022a` compatibility, which cost
+  6 to 8 minutes per Windows job and bought nothing. Removed 2026-08-04, verified by
+  running `BindingsTest` against v143 artifacts under R2018b and R2022a.
+- **No Matrix API function builds a char array from UTF-8.** `mxCreateString` takes
+  "either UTF-8 encoding or the local codepage encoding" in MATLAB's own header wording,
+  which means MATLAB's default character set, and that only became UTF-8 in R2020a.
+  `mxCreateStringFromNChars` is documented as local codepage outright. `mxArrayToUTF8String`
+  is the only encoding-explicit call and it runs the other way, which is why the input path
+  never had this problem while non-ASCII returns came back double encoded on older
+  releases. Fixed 2026-08-04: `createMexString` decodes to UTF-16 itself into an
+  `mxCreateCharArray` buffer. Do not replace it with a `mxCreateString` call or a callback
+  into `native2unicode`. The counting pass is what keeps it allocation free, and the write
+  is bounded by that count so malformed input truncates rather than overruns. A MATLAB test
+  asserting non-ASCII must build its input from code points, since MATLAB reads source
+  files as UTF-8 only from R2020a.
+- **`verifyEqual` compares empty shapes differently across releases.** A 1x0 char and a
+  0x0 char are equal to it on R2022a and different on R2018b, so an assertion about an
+  empty result passes on a new release and can still fail on an old one. Assert `isempty`
+  unless the shape is genuinely part of the contract.
+- **The clean-room `mex-sdk` exports exactly the subset the gateway uses.** A new `mx*` or
+  `mex*` call needs a line in both `mex-sdk/mex.h` (declaration plus the unsuffixed
+  `#define`) and the matching `.def`, or the CI build, which runs without `MATLABROOT`,
+  fails to link while the local build against a real MATLAB tree keeps working.
 - **The static library defaults to the release CRT on MSVC**, in `<lib>_static.cmake` and
   again on the consumer's target in `target_add_<lib>_static`, both only when the consumer
   has not chosen already. CMake honours `MSVC_RUNTIME_LIBRARY` only under `CMP0091 NEW`,
@@ -281,6 +313,21 @@ Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
   follows what the image reaches rather than whether it has a GUI, `sunmscapi` being the
   `java.base` crypto provider. The local suites only link the shared library, so nothing
   here covers this path.
+- **A CMake feature newer than the declared minimum is ignored in silence.** Every policy
+  introduced after `cmake_minimum_required` defaults to OLD, and the features behind those
+  policies then do nothing, with no warning and no error. **Adding such a feature means
+  raising the minimum in the generated `CMakeLists.txt`**, which is cheap because only
+  stage 2 builds that file, on a machine that just ran native-image. Consumers of the
+  prebuilt package never see it, they go through `<libName>-config.cmake`, which declares
+  no minimum and so has to keep working on whatever the consumer has (HEBI-Core builds in
+  an xdk toolchain image carrying CMake 3.18). Keep that split in mind before reaching for
+  a version guard: the guard belongs in the config file, the bump belongs in the project.
+  `MSVC_DEBUG_INFORMATION_FORMAT` is the worked example, 3.25 for CMP0141, and the policy
+  has to be in effect **before** `project()` or the default `/Zi` is already in the flags
+  by the time anything can ask for `/Z7`. Setting it from an included file afterwards
+  looks correct and changes nothing. Check the generated build files rather than the CMake
+  source, `/Zi` reaches a `.vcxproj` as `<DebugInformationFormat>ProgramDatabase` and
+  `/Z7` as `OldStyle`.
 
 ## Generator gaps the test API exposed
 

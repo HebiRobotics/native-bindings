@@ -895,9 +895,50 @@ Debug-configuration consumer leg, the `-all` bundle assembly in CI, and
 `THIRD-PARTY-NOTICES.txt`, whose implementation is parked on the branch
 `packaging/license-notice`, see the redistribution note below.
 The `src/` escape hatch ships the shim sources but no
-build file, `<lib>_static.cmake` still assumes the loose archives next to it. On
-MSVC the shim compiles with `/Zi`, so its member references a build-tree PDB and
-consumers may see harmless `LNK4099` warnings, compile it with `/Z7` instead.
+build file, `<lib>_static.cmake` still assumes the loose archives next to it.
+
+**Two shim compilation flags fixed (2026-08-04), both found by integrating hebi_ndk
+0.4.0 into HEBI-Core.** The shim was the only member of the merged archive built
+without `-fPIC`, which ELF does not allow inside a shared library, so any consumer
+linking the archive into one failed on a `TPOFF32` relocation against the thread local
+in `isolate::global()`. It was invisible here because the shared library target
+recompiles the shim as its own source and never pulls the archive's copy, and invisible
+on Windows because COFF has no such rule. Core hit it on both Linux legs, 1 of 137
+members on `linux_amd64` and 1 of 152 on `linux_arm64`. The `/Zi` to `/Z7` item above
+landed with it, since both are properties of the same target. `/Z7` comes from
+`MSVC_DEBUG_INFORMATION_FORMAT`, which needs CMP0141 in effect before `project()`, so
+the generated `CMakeLists.txt` moved from `cmake_minimum_required(VERSION 3.17)` to
+3.25 rather than carrying a policy guard. Only stage 2 builds that file and it runs on
+a machine that just ran native-image, so the bump costs nothing. Consumers of the
+prebuilt package are unaffected, `<lib>-config.cmake` declares no minimum. See the note
+in `CLAUDE.md` about features newer than the declared minimum, that split is the part
+worth remembering. Verified on Windows through both build stages, the two static
+consumer tests and all four suites, with `<DebugInformationFormat>` reading `OldStyle`
+for Debug and RelWithDebInfo in the generated `.vcxproj`, and on Linux by rebuilding
+the shim with `-fPIC` in the xdk container, where `libhebi.so` then links and Core's
+`ik` suite passes.
+
+**Static zlib on both Linux legs (2026-08-04).** `compiler-linux.sh` used to substitute
+a static `libz.a` only on aarch64, with a comment saying x86_64's was built without
+`-fPIC`. Still true, measured on `zlib1g-dev 1:1.2.11.dfsg-2ubuntu9.2`: linking Debian's
+x86_64 `libz.a` into a shared object fails with `R_X86_64_PC32 against z_errmsg`. So the
+architecture was never the real condition, the archive being position independent was.
+The wrapper now probes the candidate by linking it into a throwaway `.so`. The two
+paths are deliberately asymmetric: the default `/usr/lib/<arch>-linux-gnu/libz.a` falls
+back to `-lz` when the probe fails, while a `BINDINGS_ZLIB_STATIC` override that is
+missing or not position independent fails the build. An explicit request that cannot be
+honoured should not silently downgrade the package. Both CI workflows build a `-fPIC`
+zlib and point that variable at it, which takes seconds and no dependencies. The result is that `linux_amd64` stops
+exporting `z` in `syslibs.txt`, so consumers in minimal containers no longer need
+`zlib1g-dev`. That was a real failure and not a hypothetical: HEBI-Core's xdk toolchain
+image ships `libz.so.1` with no dev symlink, so the link died on `cannot find -lz`.
+macOS deliberately stays dynamic, `libz.dylib` is a guaranteed system library there and
+the SDK ships no static one. Windows never needed it, its zlib is already inside
+`zip.lib`. The gate was exercised in an ubuntu:22.04 container against all four
+outcomes, default path falling back, valid override, missing override and non
+position independent override, and it chose correctly each time. **A real Linux native-image run through the changed wrapper has
+not happened yet**, only the decision logic was tested, so the first CI run on a Linux
+leg is what confirms the substitution end to end.
 
 Redistribution of the merged GraalVM and JavaFX archives is permitted, checked
 2026-08-03 against the license files in the Liberica NIK distribution. Everything
@@ -1030,7 +1071,10 @@ does want a static package.
    linux/osx x86_64 leg to whatever CI consumes the static package, and until the
    package format ships, document `-lz` as a required system lib for macOS consumers.
    Alternative worth one look: if the image build can prove `java.util.zip` unreachable
-   for the algorithms library, `libzip.a` drops out entirely.
+   for the algorithms library, `libzip.a` drops out entirely. Status 2026-08-04: the
+   release CI (`publish-native-sdk.yml`) moved to Oracle GraalVM 25 with osx_amd64
+   pinned to 25.0.1 (the last macos-x64 release) and carries a comment pointing at this
+   item. The wrapper-side verification is still open.
 
 ### Package layout
 
@@ -1161,12 +1205,16 @@ order.
   not remove them, both name sets are still emitted, so the localize pass below is the
   actual fix rather than hygiene. Even with prefixes, each image still initialises its own
   isolate, so test two libraries in one process before promising the pattern.
-- **Symbol visibility.** The JDK's static `zip` archive carries zlib, so the merged archive
-  defines `deflate`, `inflate` and friends. HEBI links libz dynamically rather than
-  statically, so this is not a duplicate-definition error. It is the quieter version: the
-  linker resolves the consumer's own zlib calls against the archive's bundled copy instead
-  of the system library. Almost always harmless, since it is the same library, but it should
-  be a deliberate outcome rather than a surprise. Localizing everything except the generated
+- **Symbol visibility.** The merged archive defines `deflate`, `inflate` and friends
+  wherever a static zlib went into it, which since 2026-08-04 is every platform (measured
+  with `nm` over the 0.4.0 packages: `linux_arm64` defined them, `linux_amd64` carried
+  undefined references only, which is what the earlier wording here got backwards, it is
+  the merged `libz.a` that carries zlib and not the JDK's `zip` archive). That is not a
+  duplicate-definition error, it is the quieter version: the linker resolves the
+  consumer's own zlib calls against the archive's bundled copy instead of the system
+  library. Almost always harmless, since it is the same library, but it should be a
+  deliberate outcome rather than a surprise, and going static everywhere makes it the
+  normal case rather than an arm64 quirk. Localizing everything except the generated
   entry points, with `objcopy --localize-hidden` or a symbol allowlist, removes both this
   and the leftover `graal_*` names in one stroke, so it is part of the item rather than
   optional polish. One toolchain note: binutils `objcopy` does not handle COFF, the
@@ -1949,6 +1997,137 @@ not a binding shape.
 
 ---
 
+## 18. C++ failures are invisible: swallowed returns and a silent terminate
+
+Recorded 2026-08-04 from a user report. A failing call in C++ either continues with a
+plausible wrong value or takes the process down with no message on the console. Both
+halves are wrong in the same direction, the caller learns nothing. The C entry points are
+not at fault: `RuntimeClasses.addGuardedInvocation` has to catch `Throwable` so that
+nothing unwinds across the ABI, and `ExceptionHandlers.setLastError` keeps the exception
+available per thread. What is missing is the wrapper turning that back into something a
+C++ caller sees.
+
+### The three parts, smallest first
+
+**a. The message is a literal.** Both `throw Exception(...)` sites in
+`CppBindingsGenerator` (the constructor null check and the `VOID_WITH_ERROR_CODE` status
+check) format only the class and method name, so the Java exception message is dropped on
+the floor. Python and MATLAB both splice the last error into their messages already, via
+`getLastErrorMethod`, and C++ is the one wrapper that does not. Calling
+`<lib>_getLastError()` on the throw path costs nothing in steady state, failure paths are
+exempt from the allocation policy. Smallest of the three and worth doing on its own.
+
+**b. Value-returning throwing methods do not throw at all.** The open finding already
+recorded in item 7. `writeFunction` checks only `OBJECT_HANDLE` and
+`VOID_WITH_ERROR_CODE`. A throwing method returning `double` hands back the `0` that
+`getOnErrorReturnCode` wrote, a string return becomes an empty `std::string`, a span
+becomes an empty vector, and the caller carries on with data that looks legitimate. The
+obstacle is that `0` and `""` are legal results, so C needs an unambiguous failure signal
+next to the value. Two shapes to weigh:
+
+- a thread-local predicate the wrapper polls after each call, cheap to add and ABI
+  additive, at the cost of one extra call per wrapped call, which wants measuring
+  against the allocation policy's steady-state bar
+- moving the value into an out-parameter with a status return, which reuses the existing
+  `VOID_WITH_ERROR_CODE` machinery but changes the C signature of every such method
+
+Whatever lands stays behind `isThrowing(method)`, so `Noexcept` remains the opt-out.
+
+**c. An uncaught `Exception` terminates without printing `what()`.** This is what the
+user actually met, and it survives fixing a and b. An exception that escapes `main` calls
+`std::terminate`, and the default handler is not required to print anything. libstdc++
+does print `what()`, MSVC does not, so on the platform this repo builds on a correct
+throw with a correct message still reaches the user as a bare abort. Options, none picked
+yet: install a terminate handler from the generated header that rethrows, catches
+`Exception` and writes `what()` to `stderr`, which is a global side effect a library
+should not take unilaterally, or print on the throw path itself, which is noisy for a
+caller that does catch, or leave it to the consumer and say so loudly in the generated
+doxygen. The first is the only one that helps a caller who never planned to catch.
+
+### Verification
+
+The C++ suite has no negative case today. Add one per shape: a constructor that fails, a
+`VOID_WITH_ERROR_CODE` method that fails, and a value-returning throwing method, each
+asserting the caught `what()` contains the Java message rather than only the method name.
+`TestErrors` already supplies the failing methods. Part c needs a separate check that runs
+the binary and asserts on its stderr, since it is about an exception nobody catches.
+
+**Effort:** a is small and self-contained, b is a design decision first, c is a policy
+decision about what a generated library may do to a process it does not own.
+
+---
+
+## 19. MEX string returns are double-encoded on MATLAB before R2020a. DONE 2026-08-04
+
+Found 2026-08-04 while testing the v143 toolset against old MATLAB releases (see the
+CLAUDE.md note). The two directions of the MEX string conversion in `libName_native.cpp`
+did not agree on an encoding:
+
+- input uses `mxArrayToUTF8String`, which is explicit and correct on every release
+- output uses `mxCreateString(c_str)`, which interprets the bytes in MATLAB's **default
+  character set**, not UTF-8
+
+MATLAB only made UTF-8 the default in R2020a. On R2018b `feature('DefaultCharacterSet')`
+is `windows-1252`, so a UTF-8 byte string coming back from the library is decoded one byte
+per char and every non-ASCII character comes back double encoded: `naïve café` returns as
+`naÃ¯ve cafÃ©`. Pure ASCII is unaffected, which is why nothing noticed.
+
+Running `BindingsTest` under R2018b reproduces it: 11 of 12 tests pass, `testStrings` fails
+on the round trip at line 124. The two length assertions on lines 129 and 130 fail for a
+different and benign reason, R2018b reads the test file's own UTF-8 literal as
+windows-1252, so `'naïve'` is already 6 chars before it reaches the library and 8 UTF-8
+bytes is the right answer for what was actually passed. That half is a property of the
+source file, not of the generated code.
+
+**Fix as landed.** `createMexString` decodes the UTF-8 into UTF-16 itself and writes the
+code units into an `mxCreateCharArray` buffer. The C Matrix API offers nothing better:
+R2022a's own `matrix.h` documents `mxCreateString` as taking "either UTF-8 encoding or the
+local codepage encoding", `mxCreateStringFromNChars` as "presumed to be in the local
+codepage", and `mxCreateCharMatrixFromStrings` no better. `mxArrayToUTF8String` is the only
+encoding-explicit function in the header and it runs the other way. So a raw `mxChar`
+buffer is the only route that does not depend on the running release.
+
+Counting the code units in a first pass is what keeps it allocation free, leaving the
+`mxArray` that had to be created anyway as the only allocation. The counting pass adds two
+units for a lead byte `>= 0xF0` and one for every other non-continuation byte, and the
+writing pass is bounded by that count, so malformed input truncates instead of running off
+the end. The decode loop consumes whatever continuation bytes follow a lead byte rather
+than tracking an expected count, which is exact for valid UTF-8 and self-limiting
+otherwise.
+
+In the clean-room `mex-sdk` (`mex.h` and `libmx.def`) this swapped `mxCreateString_800`
+for `mxCreateCharArray_800`, since that SDK carries exactly the subset the gateway uses
+and the gateway no longer calls `mxCreateString` at all.
+
+An empty return is now whatever `mxCreateCharArray` makes of a zero length, a 1x0 char,
+where it used to be `mxCreateString("")`, a 0x0 char. Nothing depends on the shape yet
+(author decision 2026-08-04), so the special case that preserved it is gone and
+`testStrings` asserts `isempty` instead. Worth knowing that R2018b caught this and R2022a
+would not have: `verifyEqual` treats 1x0 and 0x0 char as equal on the newer release and as
+different on the older one, so the old-release run is the one that pins empty shapes.
+
+An intermediate version gated on non-ASCII content and sent the rest through
+`native2unicode` via `mexCallMATLAB`. It was shorter and needed no SDK change, but it put
+two throwaway `mxArray`s and an interpreter round trip on the path, and the manual decode
+turned out to be readable enough that paying that was not worth it.
+
+**Verified.** Green under R2018b and R2022a, with both the MEX built against a real
+MATLAB tree and the one built against the bundled clean-room SDK, which is what CI ships.
+`testStrings` now builds its non-ASCII input from code points rather than from a literal
+in the file, because MATLAB only reads source as UTF-8 from R2020a and the byte length
+assertions would otherwise be asking about the file's decoding rather than the library's
+behaviour. It also covers a non-BMP round trip. Run an old release with:
+
+```
+"C:\Program Files\MATLAB\R2018b\bin\matlab.exe" -nosplash -nodesktop -wait ^
+  -r "r = runtests('src/test/matlab'); exit(double(any([r.Failed])))"
+```
+
+`-batch` and `assertSuccess` do not exist before R2019a and R2020a respectively, which is
+why `run-tests.bat` cannot be pointed at an old release unchanged.
+
+---
+
 ## Before open sourcing
 
 Release blockers, separate from the feature items above. None of these is large, and
@@ -2123,6 +2302,8 @@ E. Larger, optional      2 (Python extension)   then   5 (other languages)
     15 (packaging)       15a (wheels) goes before 2 and de-risks it. 15b (toolbox)
                          waits on the source repo's B.8 and stays out of this repo.
     16 (diagnostics)     independent and small, wanted before external users arrive
+    18 (C++ failures)    independent. Part a is small and can go any time, b and c
+                         want a decision first.
     11 (allocation gate) OPTIONAL, LOW PRIORITY. Only if a regression ships.
 ```
 
