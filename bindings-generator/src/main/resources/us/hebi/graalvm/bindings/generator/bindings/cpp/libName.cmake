@@ -39,6 +39,7 @@ set(<projectName>_PLATFORM "${<projectName>_OS}_${<projectName>_ARCH}")
 set(<projectName>_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include/")
 set(<projectName>_LIB_FILE "${CMAKE_CURRENT_LIST_DIR}/lib/${<projectName>_PLATFORM}/${<projectName>_LIB_NAME}")
 set(<projectName>_LINK_FILE "${CMAKE_CURRENT_LIST_DIR}/lib/${<projectName>_PLATFORM}/${<projectName>_LINK_NAME}")
+<if(downloadUrl)>
 
 # Fall back to shared downloaded version in local cache
 if(NOT EXISTS "${<projectName>_LIB_FILE}")
@@ -53,6 +54,7 @@ if(NOT EXISTS "${<projectName>_LIB_FILE}")
   endif()
 
 endif()
+<endif>
 
 function(add_copy_<libName> target_name)
   add_custom_command(TARGET ${target_name} POST_BUILD
@@ -93,5 +95,22 @@ if(DOWNLOAD_<projectName> AND NOT EXISTS "${<projectName>_LIB_FILE}")
   message(STATUS "Removing temporary files")
   file(REMOVE "${<projectName>_DL_PATH}")
 
+endif()
+
+# ======== Fail early if the binaries are still missing ========
+if(NOT EXISTS "${<projectName>_LIB_FILE}")
+  message(FATAL_ERROR "Could not find the <libName> binaries for ${<projectName>_PLATFORM}. "
+                      "Expected them at ${<projectName>_LIB_FILE}. "
+                      "Enable DOWNLOAD_<projectName> to download them on demand, "
+                      "or bundle them next to this file.")
+endif()
+<else>
+
+# ======== Fail early if the binaries are missing ========
+if(NOT EXISTS "${<projectName>_LIB_FILE}")
+  message(FATAL_ERROR "Could not find the <libName> binaries for ${<projectName>_PLATFORM}. "
+                      "Expected them at ${<projectName>_LIB_FILE}. "
+                      "This package was built without a download url, so the "
+                      "binaries need to be bundled next to this file.")
 endif()
 <endif>

@@ -57,10 +57,14 @@ public class DownloadUrlOptionTest {
         assertFalse("download_binary.m must not be generated without a url",
                 Files.exists(path("bindings/+mylib/private/download_binary.m")));
 
-        // The bundled and cached lookups stay, only the download itself goes away
+        // The loaders keep looking in the download cache, a lookup that simply comes up empty
         assertContains(read("bindings/mylib.py"), "cache_home");
-        assertContains(read("bindings/mylib.cmake"), "MYLIB_CACHE_HOME");
         assertContains(read("bindings/+mylib/private/locate_binary.m"), "cacheHome");
+
+        // CMake instead points at the bundled location and fails there, because pointing the
+        // link at a cache directory nothing ever fills only moves the error to the linker
+        assertContainsNot(read("bindings/mylib.cmake"), "MYLIB_DOWNLOAD_DIR");
+        assertContains(read("bindings/mylib.cmake"), "message(FATAL_ERROR");
     }
 
     private static void assertContains(String content, String expected) {

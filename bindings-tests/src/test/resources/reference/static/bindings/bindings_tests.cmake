@@ -93,3 +93,11 @@ if(DOWNLOAD_BINDINGS_TESTS AND NOT EXISTS "${BINDINGS_TESTS_LIB_FILE}")
   file(REMOVE "${BINDINGS_TESTS_DL_PATH}")
 
 endif()
+
+# ======== Fail early if the binaries are still missing ========
+if(NOT EXISTS "${BINDINGS_TESTS_LIB_FILE}")
+  message(FATAL_ERROR "Could not find the bindings_tests binaries for ${BINDINGS_TESTS_PLATFORM}. "
+                      "Expected them at ${BINDINGS_TESTS_LIB_FILE}. "
+                      "Enable DOWNLOAD_BINDINGS_TESTS to download them on demand, "
+                      "or bundle them next to this file.")
+endif()
