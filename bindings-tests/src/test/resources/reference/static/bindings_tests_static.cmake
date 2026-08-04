@@ -14,6 +14,19 @@ target_include_directories(bindings_tests_static PRIVATE ${CMAKE_CURRENT_LIST_DI
 target_compile_features(bindings_tests_static PUBLIC cxx_std_11)
 target_link_libraries(bindings_tests_static PRIVATE ${GRAALVM_LIBS})
 
+# ELF only allows position independent objects inside a shared library, and consumers
+# link this archive into theirs. The GraalVM members already are, the shim is the one
+# that has to be told. Without it the consumer's link fails on a TPOFF32 relocation
+# against the thread local in the isolate helper.
+#
+# The archive gets shipped too, so on MSVC its objects have to carry their own debug
+# info. The default /Zi records the path of a PDB in this build tree, which a consumer
+# linking the archive does not have and reports as LNK4099. The property needs CMP0141,
+# which the generated CMakeLists.txt gets from its cmake_minimum_required.
+set_target_properties(bindings_tests_static PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>")
+
 # Platform specific additions
 if(APPLE)
     enable_language(OBJC)

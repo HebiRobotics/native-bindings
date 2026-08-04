@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.17)
+# 3.25 for CMP0141: /Z7 on Windows. Only stage 2 builds this file, so no minimum imposed on users.
+cmake_minimum_required(VERSION 3.25) 
 project(BINDINGS_TESTS VERSION 1.2.3)
 
 # Find current platform
