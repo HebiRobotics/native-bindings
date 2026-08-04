@@ -189,6 +189,7 @@
                                     native-image does not accept the path as a separate token.
                                 -->
                                 <buildArg>--native-compiler-path=${native.compiler}</buildArg>
+                                <buildArg>-EBINDINGS_ZLIB_STATIC</buildArg> <!-- pass env variable to the compiler-->
                                 <buildArg>-H:TempDirectory=${project.build.directory}/native-tmp</buildArg>
                                 <!-- The debug flag must not be folded into the image heap at build time -->
                                 <buildArg>--initialize-at-run-time=us.hebi.graalvm.bindings.runtime.Configuration</buildArg>

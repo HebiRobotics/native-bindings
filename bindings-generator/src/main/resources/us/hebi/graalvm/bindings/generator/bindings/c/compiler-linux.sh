@@ -46,7 +46,8 @@ echo "=====================================================" >> ${LOG_FILE}
 # system zlib installed. Minimal containers routinely do not have it, so merge a static
 # one whenever a usable one exists. Usable means position independent, because the
 # archive ends up inside a shared library.
-# ${BINDINGS_ZLIB_STATIC} overrides the path, so CI can build a valid -fPIC one.
+# ${BINDINGS_ZLIB_STATIC} overrides the path, so CI can build a valid -fPIC one. It only
+# arrives here if native-image was told to pass it on, via -EBINDINGS_ZLIB_STATIC.
 zlib_is_usable() {
     [ -f "$1" ] && gcc -shared -o /dev/null -Wl,--whole-archive "$1" -Wl,--no-whole-archive 2>/dev/null
 }

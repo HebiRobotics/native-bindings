@@ -157,6 +157,10 @@ Two things to know if you step off that path:
   `syslibs.txt` rather than merging it, and why consumers on minimal images then need
   the system zlib installed. Building zlib with `CFLAGS=-fPIC` and pointing
   `BINDINGS_ZLIB_STATIC` at the result makes the archive self-contained instead.
+  Exporting it is not enough: native-image runs the compiler with an environment of
+  its own, so the variable also has to be named in the build arguments as
+  `-EBINDINGS_ZLIB_STATIC`. Without that the wrapper reads it as unset and falls back
+  to the system archive, and the only sign is the `syslibs.txt` line it leaves behind.
 
 ## Annotations
 
