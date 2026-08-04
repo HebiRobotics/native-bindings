@@ -313,6 +313,13 @@ Python and MATLAB R2022a. The build scripts derive `MATLABROOT` from `matlab` on
   follows what the image reaches rather than whether it has a GUI, `sunmscapi` being the
   `java.base` crypto provider. The local suites only link the shared library, so nothing
   here covers this path.
+- **native-image does not pass its caller's environment to the compiler.** A variable
+  exported in the shell that runs Maven reaches the builder as unset, so the generated
+  compiler wrapper never sees it. Naming it in the build arguments as `-E<VAR>` forwards
+  the value from the invoking environment. Verified with a probe wrapper in
+  `ghcr.io/graalvm/native-image-community:25`: empty without the flag, correct with it.
+  `BINDINGS_ZLIB_STATIC` is the one this bit, and it failed quietly, the build succeeded
+  and only `syslibs.txt` recorded that zlib had not been merged.
 - **A CMake feature newer than the declared minimum is ignored in silence.** Every policy
   introduced after `cmake_minimum_required` defaults to OLD, and the features behind those
   policies then do nothing, with no warning and no error. **Adding such a feature means
