@@ -5,12 +5,7 @@
 extern "C" {
 #endif
 
-#ifndef MATLAB
 typedef void (*IndexCallbackFunction)(void* userData, int index);
-#else
-typedef void* IndexCallbackFunction; // Callbacks are not supported
-#endif
-
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;

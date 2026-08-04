@@ -206,8 +206,9 @@ endif ()
 # BUILD STATIC PACKAGE
 ###############################################################################
 # A self-contained package for consumers that link the library into their own
-# binary: the merged archive, the user headers, the shim sources and a
-# find_package configuration. Mirrors the release package above.
+# binary: the merged archive, the user headers and a find_package configuration.
+# Mirrors the release package above. The shim is compiled into the archive and
+# its sources stay here, so the isolate handling is not part of the API.
 option(BUILD_STATIC_PACKAGE "Build prebuilt static library package and ZIP archive" ON)
 if (BUILD_STATIC_PACKAGE)
 
@@ -251,7 +252,7 @@ if (BUILD_STATIC_PACKAGE)
     set(STATIC_RELEASE_LIB_DIR ${STATIC_RELEASE_DIR}/lib/${CMAKE_PLATFORM}/)
     add_custom_command(TARGET bindings_tests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E rm -rf ${STATIC_RELEASE_DIR}/..
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${STATIC_RELEASE_LIB_DIR} ${STATIC_RELEASE_DIR}/include ${STATIC_RELEASE_DIR}/src ${STATIC_RELEASE_DIR}/cmake
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${STATIC_RELEASE_LIB_DIR} ${STATIC_RELEASE_DIR}/include ${STATIC_RELEASE_DIR}/cmake
 
             # The undecorated user headers, without bindings_tests_dynamic.hpp: the
             # runtime loader only applies to the shared library
@@ -259,9 +260,6 @@ if (BUILD_STATIC_PACKAGE)
 
             # The merged archive plus its link metadata
             COMMAND ${CMAKE_COMMAND} -E copy ${MERGED_ARCHIVE} ${MERGED_ARCHIVE_DIR}/syslibs.txt ${MANIFEST_FILE} ${STATIC_RELEASE_LIB_DIR}
-
-            # Shim sources for consumers that want to compile the shim themselves
-            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_c.cpp ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_c.h ${CMAKE_CURRENT_LIST_DIR}/bindings_tests_objc.m ${STATIC_RELEASE_DIR}/src
 
             # find_package entry point
             COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/bindings_tests-config.cmake ${CMAKE_CURRENT_LIST_DIR}/bindings_tests-config-version.cmake ${STATIC_RELEASE_DIR}/cmake

@@ -55,7 +55,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
         filer.createFile(privateDir, getDispatchFunctionName() + ".m", w -> w.write(createFallbackDispatchSource()));
         filer.createFile(privateDir, getDispatchFunctionName() + ".cpp", w -> w.write(createMexDispatchSource()));
-        // filer.createFile(privateDir, getNamespacePrefix() + "_matlab.h", w -> w.write(createAntiMacroHeader())); // Note: was used for calllib
 
     }
 
@@ -109,10 +108,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String createBuildNativeSource() {
         return withLibVars().addResourceContent(getClass(), "matlab/build_native.m").render();
-    }
-
-    private String createAntiMacroHeader() {
-        return withLibVars().addResourceContent(getClass(), "matlab/libName_c_matlab.h").render();
     }
 
     private String createFallbackDispatchSource() {

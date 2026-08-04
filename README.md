@@ -144,14 +144,14 @@ find_package(<libName> REQUIRED PATHS path/to/package/cmake)
 target_link_libraries(app PRIVATE <libName>::static)
 ```
 
+The package ships no sources. The C shim that creates the isolate and attaches the
+calling thread is already compiled into the archive, and its symbols are hidden there,
+so an application links the documented API and nothing else. Isolate lifetime is not
+part of the contract.
+
 ELF only allows position independent objects inside a shared library, so everything in
 the archive is built that way and linking it into your own `.so` works out of the box.
-Two things to know if you step off that path:
 
-- **Recompiling the shim from `src/` needs `-fPIC`** whenever the result ends up in a
-  shared library. Without it the link fails on a relocation against the thread local in
-  the isolate helper, reported as `R_X86_64_TPOFF32` on x86_64 and as advice to
-  "recompile with -fPIC".
 - **A static zlib has to be position independent too.** Debian and Ubuntu ship an
   x86_64 `libz.a` that is not, which is why the build falls back to listing `z` in
   `syslibs.txt` rather than merging it, and why consumers on minimal images then need

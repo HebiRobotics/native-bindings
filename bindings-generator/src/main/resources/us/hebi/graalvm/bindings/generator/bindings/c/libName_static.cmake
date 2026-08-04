@@ -14,6 +14,13 @@ target_include_directories(<libName>_static PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_compile_features(<libName>_static PUBLIC cxx_std_11)
 target_link_libraries(<libName>_static PRIVATE ${GRAALVM_LIBS})
 
+# The consumer links this archive into their own binary, where the shim's entry points
+# are call targets rather than exports. The header only defines DLL_PUBLIC when nobody
+# else has, so pointing it at DLL_LOCAL keeps the same declarations and hides the
+# symbols: no dllexport on Windows, hidden visibility elsewhere. The GraalVM members
+# carry their own dllexport and are not covered by this.
+target_compile_definitions(<libName>_static PRIVATE DLL_PUBLIC=DLL_LOCAL)
+
 # ELF only allows position independent objects inside a shared library, and consumers
 # link this archive into theirs. The GraalVM members already are, the shim is the one
 # that has to be told. Without it the consumer's link fails on a TPOFF32 relocation

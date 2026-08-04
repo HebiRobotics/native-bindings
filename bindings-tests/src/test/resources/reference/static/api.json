@@ -1574,7 +1574,7 @@
   }],
   "typedefs": [{
     "name": "IndexCallbackFunction",
-    "cDefinition": "#ifndef MATLAB\ntypedef void (*IndexCallbackFunction)(void* userData, int index);\n#else\ntypedef void* IndexCallbackFunction; // Callbacks are not supported\n#endif\n",
+    "cDefinition": "typedef void (*IndexCallbackFunction)(void* userData, int index);",
     "cppDefinition": "using IndexCallbackFunction = void (*)(void* userData, int index);",
     "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
   }]

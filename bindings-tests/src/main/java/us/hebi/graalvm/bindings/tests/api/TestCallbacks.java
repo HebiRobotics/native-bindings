@@ -18,9 +18,6 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  * Every callback here fires synchronously on the calling thread before the method
  * returns, so the number of invocations is fully determined by the arguments. That
  * keeps the language tests free of sleeps and polling.
- * <p>
- * MATLAB cannot take a C function pointer, so the typedef degrades to void* there
- * and these methods are not callable from MATLAB.
  *
  * @author Florian Enner
  */
@@ -29,13 +26,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 public class TestCallbacks {
 
     @CLibTypeDef(name = "IndexCallbackFunction",
-            cDefinition = """
-                    #ifndef MATLAB
-                    typedef void (*IndexCallbackFunction)(void* userData, int index);
-                    #else
-                    typedef void* IndexCallbackFunction; // Callbacks are not supported
-                    #endif
-                    """,
+            cDefinition = "typedef void (*IndexCallbackFunction)(void* userData, int index);",
             cppDefinition = "using IndexCallbackFunction = void (*)(void* userData, int index);",
             pythonDefinition = "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
     )

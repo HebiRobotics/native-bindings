@@ -36,10 +36,8 @@ public class CocoaFeature implements FeatureGenerator {
             return getReplacedText("""
 
                     // ==== Cocoa utilities for supporting macOS ====
-                    #ifndef MATLAB
                     typedef int (*main_func_t)(int argc, char** argv);
                     DLL_PUBLIC int runApplicationC(main_func_t callback, int argc, char** argv);
-                    #endif
                     """
             );
         }
