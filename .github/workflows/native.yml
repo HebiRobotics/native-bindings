@@ -58,6 +58,20 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      # The compiler wrapper merges a static zlib into the archive when it finds a
+      # position independent one, so consumers do not need the system zlib installed.
+      # Ubuntu's x86_64 libz.a is not position independent, so build one that is.
+      - name: Build a position independent zlib
+        if: runner.os == 'Linux'
+        run: |
+          curl -sSL https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz | tar xz
+          cd zlib-${ZLIB_VERSION}
+          CFLAGS=-fPIC ./configure --static
+          make -j"$(nproc)" libz.a
+          echo "BINDINGS_ZLIB_STATIC=${PWD}/libz.a" >> "$GITHUB_ENV"
+        env:
+          ZLIB_VERSION: 1.3.1
+
       # Stage one. native-image runs through the generated target/image/static/compiler-<os>,
       # which also emits the static library and the cmake fragments into target/image/static.
       - name: Build the shared library and the bindings

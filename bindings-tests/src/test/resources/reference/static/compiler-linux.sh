@@ -42,22 +42,51 @@ echo "=====================================================" >> ${LOG_FILE}
 # to some libraries that we'd prefer to be statically linked, so we manually
 # modify the arguments.
 
-# Path to the system library files, e.g.,
-# found on Github actions runners:
-# > /usr/lib/x86_64-linux-gnu/libz.a (ubuntu 22.04 and 24.04)
-# > /usr/lib/aarch64-linux-gnu/libz.a (Ubuntu 22.04 on Arm)
-ARCH=$(uname -m)
-STATIC_LIBS_PATH="/usr/lib/${ARCH}-linux-gnu"
+# zlib arrives as -lz, which leaves every consumer of the merged archive needing the
+# system zlib installed. Minimal containers routinely do not have it, so merge a static
+# one whenever a usable one exists. Usable means position independent, because the
+# archive ends up inside a shared library.
+# ${BINDINGS_ZLIB_STATIC} overrides the path, so CI can build a valid -fPIC one.
+zlib_is_usable() {
+    [ -f "$1" ] && gcc -shared -o /dev/null -Wl,--whole-archive "$1" -Wl,--no-whole-archive 2>/dev/null
+}
+
+if [ -n "${BINDINGS_ZLIB_STATIC}" ]
+then
+    ZLIB_STATIC="${BINDINGS_ZLIB_STATIC}"
+    USE_STATIC_ZLIB=1
+    if ! zlib_is_usable "${ZLIB_STATIC}"
+    then
+        ERROR="BINDINGS_ZLIB_STATIC=${ZLIB_STATIC} is missing or not position independent"
+        echo "* ERROR: ${ERROR}" >> ${LOG_FILE}
+        echo "${ERROR}" >&2
+        exit 1
+    fi
+    echo "* Static zlib from BINDINGS_ZLIB_STATIC: ${ZLIB_STATIC}" >> ${LOG_FILE}
+else
+    # Github action runners:
+    # > /usr/lib/aarch64-linux-gnu/libz.a (Ubuntu 22.04 on Arm) -> valid -fPIC
+    # > /usr/lib/x86_64-linux-gnu/libz.a (ubuntu 22.04 and 24.04) -> invalid
+    ARCH=$(uname -m)
+    ZLIB_STATIC="/usr/lib/${ARCH}-linux-gnu/libz.a"
+    USE_STATIC_ZLIB=0
+    if zlib_is_usable "${ZLIB_STATIC}"
+    then
+        USE_STATIC_ZLIB=1
+        echo "* Static zlib is usable: ${ZLIB_STATIC}" >> ${LOG_FILE}
+    else
+        echo "* No position independent zlib at ${ZLIB_STATIC}, leaving -lz to the consumer" >> ${LOG_FILE}
+    fi
+fi
 
 # Do the original call, but replace dynamic libs with static versions
-# Only use static libz on arm64 as x86_64 was compiled without fPIC.
 GCC_ARGS=""
 for arg in "$@"
 do
-    if [ "$arg" = "-lz" ] && [ "$ARCH" = "aarch64" ]
+    if [ "$arg" = "-lz" ] && [ "${USE_STATIC_ZLIB}" = "1" ]
     then
-        echo "* Replacing -lz with static ${STATIC_LIBS_PATH}/libz.a" >> ${LOG_FILE}
-        GCC_ARGS+=" ${STATIC_LIBS_PATH}/libz.a"
+        echo "* Replacing -lz with static ${ZLIB_STATIC}" >> ${LOG_FILE}
+        GCC_ARGS+=" ${ZLIB_STATIC}"
     else
         GCC_ARGS+=" $arg"
     fi
