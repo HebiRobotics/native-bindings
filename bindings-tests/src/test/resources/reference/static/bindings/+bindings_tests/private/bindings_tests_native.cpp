@@ -165,8 +165,45 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     return array;
 }
 
+// MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
+// mxCreateString decodes in MATLAB's default character set, which its own header describes
+// as "either UTF-8 encoding or the local codepage encoding". The UTF-8 default was added in
+// R2020a, but we want to support back down to R2018b. Counting the utf8 code units keeps
+// this allocation free.
 inline mxArray* createMexString(const char* c_str) {
-    return c_str ? mxCreateString(c_str) : createEmpty();
+    if (!c_str) {
+        return createEmpty();
+    }
+
+    // Continuation bytes never start a character, a four byte sequence needs a surrogate pair
+    const auto* utf8 = reinterpret_cast<const unsigned char*>(c_str);
+    mwSize units = 0;
+    for (const unsigned char* b = utf8; *b; ++b) {
+        if ((*b & 0xC0) != 0x80) units += (*b >= 0xF0) ? 2 : 1;
+    }
+
+    const mwSize dims[2] = {1, units};
+    mxArray* array = mxCreateCharArray(2, dims);
+    auto* out = static_cast<mxChar*>(mxGetData(array));
+    const mxChar* const end = out + units; // malformed input must not go beyond the count
+
+    for (const unsigned char* b = utf8; *b && out < end; ) {
+        uint32_t cp = *b++;
+        if (cp >= 0x80) {
+            // Mask the length bits off the lead byte, then fold in what follows
+            cp &= (cp >= 0xF0) ? 0x07 : (cp >= 0xE0) ? 0x0F : 0x1F;
+            while ((*b & 0xC0) == 0x80) cp = (cp << 6) | (*b++ & 0x3F);
+        }
+
+        if (cp <= 0xFFFF) {
+            *out++ = static_cast<mxChar>(cp);
+        } else {
+            cp -= 0x10000; // outside the BMP, so it takes a surrogate pair
+            *out++ = static_cast<mxChar>(0xD800 | (cp >> 10));
+            if (out < end) *out++ = static_cast<mxChar>(0xDC00 | (cp & 0x3FF));
+        }
+    }
+    return array;
 }
 
 template <typename T>

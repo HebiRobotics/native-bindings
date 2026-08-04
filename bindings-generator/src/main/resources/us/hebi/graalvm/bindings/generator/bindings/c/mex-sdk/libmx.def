@@ -5,10 +5,10 @@ LIBRARY libmx
 EXPORTS
     mxArrayToUTF8String_800
     mxCalloc_800
+    mxCreateCharArray_800
     mxCreateDoubleMatrix_800
     mxCreateDoubleScalar_800
     mxCreateNumericMatrix_800
-    mxCreateString_800
     mxDestroyArray_800
     mxFree_800
     mxGetCell_800

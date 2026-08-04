@@ -57,10 +57,10 @@ typedef enum {
 // Matrix API (libmx)
 char* mxArrayToUTF8String_800(const mxArray* pa);
 void* mxCalloc_800(mwSize n, mwSize size);
+mxArray* mxCreateCharArray_800(mwSize ndim, const mwSize* dims);
 mxArray* mxCreateDoubleMatrix_800(mwSize m, mwSize n, mxComplexity flag);
 mxArray* mxCreateDoubleScalar_800(double value);
 mxArray* mxCreateNumericMatrix_800(mwSize m, mwSize n, mxClassID classid, mxComplexity flag);
-mxArray* mxCreateString_800(const char* str);
 void mxDestroyArray_800(mxArray* pa);
 void mxFree_800(void* ptr);
 mxArray* mxGetCell_800(const mxArray* pa, mwIndex index);
@@ -89,10 +89,10 @@ void mexErrMsgTxt_800(const char* errormsg);
 // The unsuffixed documented names map onto the versioned exports.
 #define mxArrayToUTF8String mxArrayToUTF8String_800
 #define mxCalloc mxCalloc_800
+#define mxCreateCharArray mxCreateCharArray_800
 #define mxCreateDoubleMatrix mxCreateDoubleMatrix_800
 #define mxCreateDoubleScalar mxCreateDoubleScalar_800
 #define mxCreateNumericMatrix mxCreateNumericMatrix_800
-#define mxCreateString mxCreateString_800
 #define mxDestroyArray mxDestroyArray_800
 #define mxFree mxFree_800
 #define mxGetCell mxGetCell_800

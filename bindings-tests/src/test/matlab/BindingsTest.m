@@ -119,20 +119,29 @@ classdef BindingsTest < matlab.unittest.TestCase
             % String marshalling in both directions, plus char** arrays
             testCase.verifyEqual(bindings_tests.Strings.echo('hello'), 'hello');
 
-            % This file is UTF-8. The literal must survive the round trip unchanged.
-            nonAscii = 'naïve café';
+            % Built from code points rather than from a literal in this file. MATLAB
+            % only reads source as UTF-8 from R2020a, and before that it decodes this
+            % file in the platform character set, which would change what the byte
+            % length assertions below are even asking about.
+            naive = char([110 97 239 118 101]);              % naïve
+            nonAscii = [naive ' ' char([99 97 102 233])];    % naïve café
             testCase.verifyEqual(bindings_tests.Strings.echo(nonAscii), nonAscii);
+
+            % A code point above the BMP crosses as a surrogate pair, so the round trip
+            % also has to survive being two MATLAB chars for one character.
+            emoji = char([55357 56842]);                     % U+1F60A
+            testCase.verifyEqual(bindings_tests.Strings.echo(emoji), emoji);
 
             testCase.verifyEqual(bindings_tests.Strings.concat('ab', 'cd'), 'abcd');
 
             % 6 UTF-8 bytes but only 5 UTF-16 code units
-            testCase.verifyEqual(bindings_tests.Strings.utf8Length('naïve'), 6);
-            testCase.verifyEqual(bindings_tests.Strings.utf16Length('naïve'), 5);
+            testCase.verifyEqual(bindings_tests.Strings.utf8Length(naive), 6);
+            testCase.verifyEqual(bindings_tests.Strings.utf16Length(naive), 5);
 
-            testCase.verifyEqual(bindings_tests.Strings.empty(), '');
-
-            % The MEX layer turns a null char* into an empty array, so null and
+            % Only emptiness is part of the contract, not the shape or the class of the
+            % empty result. A null char* also comes back as an empty array, so null and
             % '' are indistinguishable here. The C suite checks the pointer.
+            testCase.verifyTrue(isempty(bindings_tests.Strings.empty()));
             testCase.verifyTrue(isempty(bindings_tests.Strings.nullString()));
 
             testCase.verifyEqual(bindings_tests.Strings.join({'a', 'b', 'c'}, 3, '-'), 'a-b-c');
