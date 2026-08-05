@@ -7,6 +7,8 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
+import us.hebi.graalvm.bindings.runtime.types.CLibError;
+import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestCounter;
 
 public final class TestCounter$CEntries {
@@ -31,11 +33,13 @@ public final class TestCounter$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Counter_create"
     )
-    public static ObjectHandle bindings_tests_Counter_create(IsolateThread _isolate, int start) {
+    public static ObjectHandle bindings_tests_Counter_create(IsolateThread _isolate,
+            ErrorInfo _error, int start) {
+        CLibError.clearStruct(_error);
         try {
             return TestCounter$CEntries._registerInstance(TestCounter.create(start));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            CLibError.fillStruct(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }

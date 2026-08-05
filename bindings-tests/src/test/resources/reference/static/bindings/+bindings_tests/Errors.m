@@ -62,6 +62,14 @@ classdef (Sealed) Errors
             result = bindings_tests_native('bindings_tests_Errors_failingString', shouldFail);
         end
 
+        function result = failWithoutMessage()
+            % Throws an exception that carries no message.
+            %
+            %   Throws:
+            %       Error always
+            result = bindings_tests_native('bindings_tests_Errors_failWithoutMessage');
+        end
+
         function neverThrows()
             % Marked noexcept, so no status code is generated for it.
             bindings_tests_native('bindings_tests_Errors_neverThrows');

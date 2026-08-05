@@ -7,6 +7,8 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
+import us.hebi.graalvm.bindings.runtime.types.CLibError;
+import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestNaming;
 
 public final class TestNaming$CEntries {
@@ -31,11 +33,13 @@ public final class TestNaming$CEntries {
     @CEntryPoint(
             name = "__custom_prefix_Naming_create"
     )
-    public static ObjectHandle custom_prefix_Naming_create(IsolateThread _isolate, int startValue) {
+    public static ObjectHandle custom_prefix_Naming_create(IsolateThread _isolate, ErrorInfo _error,
+            int startValue) {
+        CLibError.clearStruct(_error);
         try {
             return TestNaming$CEntries._registerInstance(TestNaming.create(startValue));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            CLibError.fillStruct(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }

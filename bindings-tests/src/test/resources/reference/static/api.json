@@ -714,6 +714,16 @@
       "documentation": "Returns a null pointer through the ABI when it throws.",
       "throwsOn": "shouldFail is true"
     }, {
+      "name": "failWithoutMessage",
+      "lowerUnderscoreName": "fail_without_message",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_failWithoutMessage",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "documentation": "Throws an exception that carries no message.",
+      "throwsOn": "always"
+    }, {
       "name": "neverThrows",
       "lowerUnderscoreName": "never_throws",
       "isStatic": true,

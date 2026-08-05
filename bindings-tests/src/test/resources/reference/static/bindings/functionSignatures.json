@@ -220,6 +220,9 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Errors.failWithoutMessage": {
+    "inputs": []
+  },
   "bindings_tests.Errors.failingBool": {
     "inputs": [{
         "kind": "required",

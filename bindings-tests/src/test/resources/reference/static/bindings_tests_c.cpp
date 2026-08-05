@@ -64,9 +64,9 @@ extern "C" {
 
 
 // ==== Counter ====
-bindings_tests_CounterPtr __bindings_tests_Counter_create(bindings_tests_isolatethread_t* isolate, int start);
-bindings_tests_CounterPtr bindings_tests_Counter_create(int start) {
-    return __bindings_tests_Counter_create(isolate::global(), start);
+bindings_tests_CounterPtr __bindings_tests_Counter_create(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int start);
+bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_error_info_t* _error, int start) {
+    return __bindings_tests_Counter_create(isolate::global(), _error, start);
 }
 int __bindings_tests_Counter_getValue(bindings_tests_isolatethread_t* isolate, bindings_tests_CounterPtr obj);
 int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj) {
@@ -102,9 +102,9 @@ void bindings_tests_Counter_release(bindings_tests_CounterPtr obj) {
 }
 
 // ==== Naming ====
-custom_prefix_NamingPtr __custom_prefix_Naming_create(bindings_tests_isolatethread_t* isolate, int startValue);
-custom_prefix_NamingPtr custom_prefix_Naming_create(int startValue) {
-    return __custom_prefix_Naming_create(isolate::global(), startValue);
+custom_prefix_NamingPtr __custom_prefix_Naming_create(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int startValue);
+custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_error_info_t* _error, int startValue) {
+    return __custom_prefix_Naming_create(isolate::global(), _error, startValue);
 }
 int __custom_prefix_Naming_get_start_value(bindings_tests_isolatethread_t* isolate, custom_prefix_NamingPtr obj);
 int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj) {
@@ -142,9 +142,9 @@ void bindings_tests_Shape_release(bindings_tests_ShapePtr obj) {
 }
 
 // ==== Circle ====
-bindings_tests_CirclePtr __bindings_tests_Circle_create(bindings_tests_isolatethread_t* isolate, double radius);
-bindings_tests_CirclePtr bindings_tests_Circle_create(double radius) {
-    return __bindings_tests_Circle_create(isolate::global(), radius);
+bindings_tests_CirclePtr __bindings_tests_Circle_create(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, double radius);
+bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_error_info_t* _error, double radius) {
+    return __bindings_tests_Circle_create(isolate::global(), _error, radius);
 }
 double __bindings_tests_Circle_getRadius(bindings_tests_isolatethread_t* isolate, bindings_tests_CirclePtr obj);
 double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj) {
@@ -167,9 +167,9 @@ bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr 
 }
 
 // ==== Square ====
-bindings_tests_SquarePtr __bindings_tests_Square_create(bindings_tests_isolatethread_t* isolate, double side);
-bindings_tests_SquarePtr bindings_tests_Square_create(double side) {
-    return __bindings_tests_Square_create(isolate::global(), side);
+bindings_tests_SquarePtr __bindings_tests_Square_create(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, double side);
+bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_error_info_t* _error, double side) {
+    return __bindings_tests_Square_create(isolate::global(), _error, side);
 }
 double __bindings_tests_Square_getSide(bindings_tests_isolatethread_t* isolate, bindings_tests_SquarePtr obj);
 double bindings_tests_Square_getSide(bindings_tests_SquarePtr obj) {
@@ -208,9 +208,9 @@ void __bindings_tests_Arrays_reverseFloat64(bindings_tests_isolatethread_t* isol
 void bindings_tests_Arrays_reverseFloat64(double* values, size_t count) {
     __bindings_tests_Arrays_reverseFloat64(isolate::global(), values, static_cast<long long>(count));
 }
-double __bindings_tests_Arrays_dotProduct(bindings_tests_isolatethread_t* isolate, const bindings_tests_double_span* x, const bindings_tests_double_span* y);
-double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y) {
-    return __bindings_tests_Arrays_dotProduct(isolate::global(), &x, &y);
+double __bindings_tests_Arrays_dotProduct(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, const bindings_tests_double_span* x, const bindings_tests_double_span* y);
+double bindings_tests_Arrays_dotProduct(bindings_tests_error_info_t* _error, bindings_tests_double_span x, bindings_tests_double_span y) {
+    return __bindings_tests_Arrays_dotProduct(isolate::global(), _error, &x, &y);
 }
 void __bindings_tests_Arrays_addOffset(bindings_tests_isolatethread_t* isolate, const bindings_tests_double_span* values, double offset, bindings_tests_double_span* spanOut);
 bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset) {
@@ -236,25 +236,29 @@ void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userD
 }
 
 // ==== Errors ====
-int __bindings_tests_Errors_requireNonNegative(bindings_tests_isolatethread_t* isolate, int value);
-int bindings_tests_Errors_requireNonNegative(int value) {
-    return __bindings_tests_Errors_requireNonNegative(isolate::global(), value);
+int __bindings_tests_Errors_requireNonNegative(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int value);
+int bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value) {
+    return __bindings_tests_Errors_requireNonNegative(isolate::global(), _error, value);
 }
-int __bindings_tests_Errors_divideInt32(bindings_tests_isolatethread_t* isolate, int a, int b);
-int bindings_tests_Errors_divideInt32(int a, int b) {
-    return __bindings_tests_Errors_divideInt32(isolate::global(), a, b);
+int __bindings_tests_Errors_divideInt32(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int a, int b);
+int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b) {
+    return __bindings_tests_Errors_divideInt32(isolate::global(), _error, a, b);
 }
-double __bindings_tests_Errors_failingFloat64(bindings_tests_isolatethread_t* isolate, int shouldFail);
-double bindings_tests_Errors_failingFloat64(int shouldFail) {
-    return __bindings_tests_Errors_failingFloat64(isolate::global(), shouldFail);
+double __bindings_tests_Errors_failingFloat64(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int shouldFail);
+double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail) {
+    return __bindings_tests_Errors_failingFloat64(isolate::global(), _error, shouldFail);
 }
-int __bindings_tests_Errors_failingBool(bindings_tests_isolatethread_t* isolate, int shouldFail);
-int bindings_tests_Errors_failingBool(int shouldFail) {
-    return __bindings_tests_Errors_failingBool(isolate::global(), shouldFail);
+int __bindings_tests_Errors_failingBool(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int shouldFail);
+int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail) {
+    return __bindings_tests_Errors_failingBool(isolate::global(), _error, shouldFail);
 }
-const char* __bindings_tests_Errors_failingString(bindings_tests_isolatethread_t* isolate, int shouldFail);
-const char* bindings_tests_Errors_failingString(int shouldFail) {
-    return __bindings_tests_Errors_failingString(isolate::global(), shouldFail);
+const char* __bindings_tests_Errors_failingString(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int shouldFail);
+const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail) {
+    return __bindings_tests_Errors_failingString(isolate::global(), _error, shouldFail);
+}
+int __bindings_tests_Errors_failWithoutMessage(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error);
+int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error) {
+    return __bindings_tests_Errors_failWithoutMessage(isolate::global(), _error);
 }
 void __bindings_tests_Errors_neverThrows(bindings_tests_isolatethread_t* isolate);
 void bindings_tests_Errors_neverThrows() {
@@ -308,9 +312,9 @@ void __bindings_tests_Isolated_reset(bindings_tests_isolatethread_t* isolate);
 void bindings_tests_Isolated_reset() {
     __bindings_tests_Isolated_reset(isolate::secondary());
 }
-int __bindings_tests_Isolated_alwaysFails(bindings_tests_isolatethread_t* isolate);
-int bindings_tests_Isolated_alwaysFails() {
-    return __bindings_tests_Isolated_alwaysFails(isolate::secondary());
+int __bindings_tests_Isolated_alwaysFails(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error);
+int bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error) {
+    return __bindings_tests_Isolated_alwaysFails(isolate::secondary(), _error);
 }
 
 // ==== Math ====

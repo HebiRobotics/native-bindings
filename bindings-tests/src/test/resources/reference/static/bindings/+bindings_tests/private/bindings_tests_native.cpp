@@ -50,6 +50,22 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
     }
 }
 
+// Struct for getting error return information. Every call that can throw fills it.
+// The char pointers are only valid until the current thread calls any other lib function.
+struct ErrorInfo {
+    const char* message;
+    const char* id;
+    int32_t code;
+};
+
+// mexErrMsgIdAndTxt immediately reports an error and jumps over the rest of the function.
+inline void checkError(const ErrorInfo& error) {
+    if (error.code != 0) {
+        mexErrMsgIdAndTxt(error.id != nullptr ? error.id : "bindings_tests:Error",
+                          "%s", error.message != nullptr ? error.message : "unknown error");
+    }
+}
+
 template <typename T, typename S>
 inline void copyData(T* dest, const void* src, size_t n) {
     auto s = static_cast<const S*>(src);
@@ -348,10 +364,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Counter
         case /* hash32_fnv1a("bindings_tests_Counter_create") */ 3878812671: {
-            static auto bindings_tests_Counter_create = libLoader.getFunc<void*(*)(int)>("bindings_tests_Counter_create");
+            static auto bindings_tests_Counter_create = libLoader.getFunc<void*(*)(ErrorInfo*, int)>("bindings_tests_Counter_create");
             checkArgCount(nrhs, 1, "bindings_tests_Counter_create");
+            ErrorInfo _error = {};
             int start = getScalar<int>(prhs[1], "start");
-            void* _value = bindings_tests_Counter_create(start);
+            void* _value = bindings_tests_Counter_create(&_error, start);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
@@ -411,10 +429,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Naming
         case /* hash32_fnv1a("custom_prefix_Naming_create") */ 2391897161: {
-            static auto custom_prefix_Naming_create = libLoader.getFunc<void*(*)(int)>("custom_prefix_Naming_create");
+            static auto custom_prefix_Naming_create = libLoader.getFunc<void*(*)(ErrorInfo*, int)>("custom_prefix_Naming_create");
             checkArgCount(nrhs, 1, "custom_prefix_Naming_create");
+            ErrorInfo _error = {};
             int startValue = getScalar<int>(prhs[1], "startValue");
-            void* _value = custom_prefix_Naming_create(startValue);
+            void* _value = custom_prefix_Naming_create(&_error, startValue);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
@@ -479,10 +499,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Circle
         case /* hash32_fnv1a("bindings_tests_Circle_create") */ 1129006167: {
-            static auto bindings_tests_Circle_create = libLoader.getFunc<void*(*)(double)>("bindings_tests_Circle_create");
+            static auto bindings_tests_Circle_create = libLoader.getFunc<void*(*)(ErrorInfo*, double)>("bindings_tests_Circle_create");
             checkArgCount(nrhs, 1, "bindings_tests_Circle_create");
+            ErrorInfo _error = {};
             double radius = getScalar<double>(prhs[1], "radius");
-            void* _value = bindings_tests_Circle_create(radius);
+            void* _value = bindings_tests_Circle_create(&_error, radius);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
@@ -523,10 +545,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Square
         case /* hash32_fnv1a("bindings_tests_Square_create") */ 3588199438: {
-            static auto bindings_tests_Square_create = libLoader.getFunc<void*(*)(double)>("bindings_tests_Square_create");
+            static auto bindings_tests_Square_create = libLoader.getFunc<void*(*)(ErrorInfo*, double)>("bindings_tests_Square_create");
             checkArgCount(nrhs, 1, "bindings_tests_Square_create");
+            ErrorInfo _error = {};
             double side = getScalar<double>(prhs[1], "side");
-            void* _value = bindings_tests_Square_create(side);
+            void* _value = bindings_tests_Square_create(&_error, side);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
@@ -604,13 +628,15 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Arrays_dotProduct") */ 4019140823: {
-            static auto bindings_tests_Arrays_dotProduct = libLoader.getFunc<double(*)(DoubleSpan, DoubleSpan)>("bindings_tests_Arrays_dotProduct");
+            static auto bindings_tests_Arrays_dotProduct = libLoader.getFunc<double(*)(ErrorInfo*, DoubleSpan, DoubleSpan)>("bindings_tests_Arrays_dotProduct");
             checkArgCount(nrhs, 2, "bindings_tests_Arrays_dotProduct");
+            ErrorInfo _error = {};
             MatlabArray<double, mxDOUBLE_CLASS> x_arr(prhs[1]);
             DoubleSpan x = {x_arr.ptr, mxGetNumberOfElements(prhs[1])};
             MatlabArray<double, mxDOUBLE_CLASS> y_arr(prhs[2]);
             DoubleSpan y = {y_arr.ptr, mxGetNumberOfElements(prhs[2])};
-            double _value = bindings_tests_Arrays_dotProduct(x, y);
+            double _value = bindings_tests_Arrays_dotProduct(&_error, x, y);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
@@ -655,44 +681,63 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Errors
         case /* hash32_fnv1a("bindings_tests_Errors_requireNonNegative") */ 3634828815: {
-            static auto bindings_tests_Errors_requireNonNegative = libLoader.getFunc<int(*)(int)>("bindings_tests_Errors_requireNonNegative");
+            static auto bindings_tests_Errors_requireNonNegative = libLoader.getFunc<int(*)(ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
             checkArgCount(nrhs, 1, "bindings_tests_Errors_requireNonNegative");
+            ErrorInfo _error = {};
             int value = getScalar<int>(prhs[1], "value");
-            int _value = bindings_tests_Errors_requireNonNegative(value);
+            int _value = bindings_tests_Errors_requireNonNegative(&_error, value);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_divideInt32") */ 876481109: {
-            static auto bindings_tests_Errors_divideInt32 = libLoader.getFunc<int(*)(int, int)>("bindings_tests_Errors_divideInt32");
+            static auto bindings_tests_Errors_divideInt32 = libLoader.getFunc<int(*)(ErrorInfo*, int, int)>("bindings_tests_Errors_divideInt32");
             checkArgCount(nrhs, 2, "bindings_tests_Errors_divideInt32");
+            ErrorInfo _error = {};
             int a = getScalar<int>(prhs[1], "a");
             int b = getScalar<int>(prhs[2], "b");
-            int _value = bindings_tests_Errors_divideInt32(a, b);
+            int _value = bindings_tests_Errors_divideInt32(&_error, a, b);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_failingFloat64") */ 2587869218: {
-            static auto bindings_tests_Errors_failingFloat64 = libLoader.getFunc<double(*)(int)>("bindings_tests_Errors_failingFloat64");
+            static auto bindings_tests_Errors_failingFloat64 = libLoader.getFunc<double(*)(ErrorInfo*, int)>("bindings_tests_Errors_failingFloat64");
             checkArgCount(nrhs, 1, "bindings_tests_Errors_failingFloat64");
+            ErrorInfo _error = {};
             int shouldFail = getScalar<int>(prhs[1], "shouldFail");
-            double _value = bindings_tests_Errors_failingFloat64(shouldFail);
+            double _value = bindings_tests_Errors_failingFloat64(&_error, shouldFail);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_failingBool") */ 2739720686: {
-            static auto bindings_tests_Errors_failingBool = libLoader.getFunc<int(*)(int)>("bindings_tests_Errors_failingBool");
+            static auto bindings_tests_Errors_failingBool = libLoader.getFunc<int(*)(ErrorInfo*, int)>("bindings_tests_Errors_failingBool");
             checkArgCount(nrhs, 1, "bindings_tests_Errors_failingBool");
+            ErrorInfo _error = {};
             int shouldFail = getScalar<int>(prhs[1], "shouldFail");
-            int _value = bindings_tests_Errors_failingBool(shouldFail);
+            int _value = bindings_tests_Errors_failingBool(&_error, shouldFail);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_failingString") */ 3708443195: {
-            static auto bindings_tests_Errors_failingString = libLoader.getFunc<const char*(*)(int)>("bindings_tests_Errors_failingString");
+            static auto bindings_tests_Errors_failingString = libLoader.getFunc<const char*(*)(ErrorInfo*, int)>("bindings_tests_Errors_failingString");
             checkArgCount(nrhs, 1, "bindings_tests_Errors_failingString");
+            ErrorInfo _error = {};
             int shouldFail = getScalar<int>(prhs[1], "shouldFail");
-            const char* _value = bindings_tests_Errors_failingString(shouldFail);
+            const char* _value = bindings_tests_Errors_failingString(&_error, shouldFail);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexString(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Errors_failWithoutMessage") */ 2220498109: {
+            static auto bindings_tests_Errors_failWithoutMessage = libLoader.getFunc<int(*)(ErrorInfo*)>("bindings_tests_Errors_failWithoutMessage");
+            checkArgCount(nrhs, 0, "bindings_tests_Errors_failWithoutMessage");
+            ErrorInfo _error = {};
+            int _value = bindings_tests_Errors_failWithoutMessage(&_error);
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_neverThrows") */ 2677745337: {
@@ -787,9 +832,11 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Isolated_alwaysFails") */ 406300632: {
-            static auto bindings_tests_Isolated_alwaysFails = libLoader.getFunc<int(*)()>("bindings_tests_Isolated_alwaysFails");
+            static auto bindings_tests_Isolated_alwaysFails = libLoader.getFunc<int(*)(ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
             checkArgCount(nrhs, 0, "bindings_tests_Isolated_alwaysFails");
-            int _value = bindings_tests_Isolated_alwaysFails();
+            ErrorInfo _error = {};
+            int _value = bindings_tests_Isolated_alwaysFails(&_error);
+            checkError(_error);
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }

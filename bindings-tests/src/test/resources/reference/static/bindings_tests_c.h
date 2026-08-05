@@ -1,5 +1,6 @@
 #pragma once
 #include <stddef.h>
+#include <stdint.h>
 
 #if !defined(_WIN32) && (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__)))
 # ifndef DLL_PUBLIC
@@ -22,6 +23,16 @@ extern "C" {
 #endif
 
 typedef void (*IndexCallbackFunction)(void* userData, int index);
+
+// Error information for every method that can throw. A non-zero code
+// means the call failed and the return value can be ignored. Contents
+// are library owned and only valid until the next call on this thread.
+typedef struct {
+    const char* message;
+    const char* id;
+    int32_t code;
+} bindings_tests_error_info_t;
+
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
@@ -71,7 +82,7 @@ _Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for b
 
 
 // ==== Counter ====
-DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(int start);
+DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_error_info_t* _error, int start);
 DLL_PUBLIC int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj);
 DLL_PUBLIC void bindings_tests_Counter_setValue(bindings_tests_CounterPtr obj, int value);
 DLL_PUBLIC void bindings_tests_Counter_increment(bindings_tests_CounterPtr obj);
@@ -82,7 +93,7 @@ DLL_PUBLIC void bindings_tests_Counter_resetClosedCount();
 DLL_PUBLIC void bindings_tests_Counter_release(bindings_tests_CounterPtr obj);
 
 // ==== Naming ====
-DLL_PUBLIC custom_prefix_NamingPtr custom_prefix_Naming_create(int startValue);
+DLL_PUBLIC custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_error_info_t* _error, int startValue);
 DLL_PUBLIC int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
 DLL_PUBLIC int custom_prefix_Naming_add_two_numbers(int first, int second);
 DLL_PUBLIC void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
@@ -95,7 +106,7 @@ DLL_PUBLIC int bindings_tests_Shape_sideCount(bindings_tests_ShapePtr obj);
 DLL_PUBLIC void bindings_tests_Shape_release(bindings_tests_ShapePtr obj);
 
 // ==== Circle ====
-DLL_PUBLIC bindings_tests_CirclePtr bindings_tests_Circle_create(double radius);
+DLL_PUBLIC bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_error_info_t* _error, double radius);
 DLL_PUBLIC double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj);
 DLL_PUBLIC bindings_tests_CircleColor bindings_tests_Circle_getColor(bindings_tests_CirclePtr obj);
 DLL_PUBLIC double bindings_tests_Circle_area(bindings_tests_CirclePtr obj);
@@ -103,7 +114,7 @@ DLL_PUBLIC int bindings_tests_Circle_sideCount(bindings_tests_CirclePtr obj);
 DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr ptr);
 
 // ==== Square ====
-DLL_PUBLIC bindings_tests_SquarePtr bindings_tests_Square_create(double side);
+DLL_PUBLIC bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_error_info_t* _error, double side);
 DLL_PUBLIC double bindings_tests_Square_getSide(bindings_tests_SquarePtr obj);
 DLL_PUBLIC double bindings_tests_Square_area(bindings_tests_SquarePtr obj);
 DLL_PUBLIC int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
@@ -115,7 +126,7 @@ DLL_PUBLIC int bindings_tests_Arrays_sumInt32(const int* values, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
 DLL_PUBLIC void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
-DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_double_span x, bindings_tests_double_span y);
+DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_error_info_t* _error, bindings_tests_double_span x, bindings_tests_double_span y);
 DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
 DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count);
 
@@ -124,11 +135,12 @@ DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func,
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
 
 // ==== Errors ====
-DLL_PUBLIC int bindings_tests_Errors_requireNonNegative(int value);
-DLL_PUBLIC int bindings_tests_Errors_divideInt32(int a, int b);
-DLL_PUBLIC double bindings_tests_Errors_failingFloat64(int shouldFail);
-DLL_PUBLIC int bindings_tests_Errors_failingBool(int shouldFail);
-DLL_PUBLIC const char* bindings_tests_Errors_failingString(int shouldFail);
+DLL_PUBLIC int bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
+DLL_PUBLIC int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b);
+DLL_PUBLIC double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail);
+DLL_PUBLIC int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail);
+DLL_PUBLIC const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail);
+DLL_PUBLIC int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error);
 DLL_PUBLIC void bindings_tests_Errors_neverThrows();
 DLL_PUBLIC void bindings_tests_Errors_clearLastError();
 DLL_PUBLIC const char* bindings_tests_Errors_getLastError();
@@ -145,7 +157,7 @@ DLL_PUBLIC size_t bindings_tests_Indices_echoSize(size_t index);
 DLL_PUBLIC void bindings_tests_Isolated_increment();
 DLL_PUBLIC int bindings_tests_Isolated_getCounter();
 DLL_PUBLIC void bindings_tests_Isolated_reset();
-DLL_PUBLIC int bindings_tests_Isolated_alwaysFails();
+DLL_PUBLIC int bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
 
 // ==== Math ====
 DLL_PUBLIC int bindings_tests_Math_negate(int value);
