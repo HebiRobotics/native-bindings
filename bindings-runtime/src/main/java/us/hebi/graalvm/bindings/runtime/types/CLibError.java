@@ -41,12 +41,12 @@ public interface CLibError {
      * success path is what keeps a struct that is reused across a loop from reporting the
      * first failure forever.
      *
-     * @param error the caller's struct, or a null pointer when the caller wants none
+     * @param error input struct owned by the caller. should never be null, but checked just in case.
      */
-    static void clearStruct(ErrorStatus error) {
+    static void clearStruct(ErrorInfo error) {
         if (error.isNull()) return;
         error.setCode(STATUS_CODE_SUCCESS);
-        error.setMessage(tmpErrorMessage.get().setContent(null).getPointer());
+        error.setMessage(tmpErrorMessage.get().setContent(null).getPointer()); // TODO: add some util like CTypes::nullCharPointer()
         error.setId(tmpErrorId.get().setContent(null).getPointer());
     }
 
@@ -54,10 +54,10 @@ public interface CLibError {
      * Fills a caller-provided error struct from a failure. The message and id go into the
      * calling thread's scratch buffer and are valid only until its next call.
      *
-     * @param error    the caller's struct, or a null pointer when the caller wants none
+     * @param error    input struct owned by the caller. should never be null, but checked just in case.
      * @param idPrefix library name used for exceptions that carry no id of their own
      */
-    static void fillStruct(Throwable throwable, ErrorStatus error, String idPrefix) {
+    static void fillStruct(Throwable throwable, ErrorInfo error, String idPrefix) {
         // TODO: remove lastError mechanism? should this always be available for debugging?
         ExceptionHandlers.setLastError(throwable);
 

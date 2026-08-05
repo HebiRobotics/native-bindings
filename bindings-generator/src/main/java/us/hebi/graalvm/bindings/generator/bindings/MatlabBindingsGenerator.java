@@ -254,6 +254,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 post.setLength(0);
                 types.clear();
                 args.clear();
+                // The error struct is filled by the call and raises before any output is built
+                if (isThrowing(method)) {
+                    pre.append("ErrorInfo _error = {};\n");
+                    post.append("\ncheckError(_error);");
+                    types.add("ErrorInfo*");
+                    args.add("&_error");
+                }
                 if (!method.getIsStatic()) {
                     types.add(getMexCType(clazz.getType()));
                     args.add(getMexToC(clazz.getType(), index++));

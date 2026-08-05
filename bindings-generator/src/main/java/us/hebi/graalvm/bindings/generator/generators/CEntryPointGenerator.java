@@ -110,6 +110,12 @@ public class CEntryPointGenerator extends AbstractGenerator {
         for (var method : apiClass.getPublicApiMethods()) {
             final MethodSpec.Builder builder = createCEntryPoint(method.getCEntryPointName());
 
+            // Anything that can throw reports through a caller-provided struct. It goes ahead
+            // of the instance handle so that it is argument zero of every public C signature
+            if (method.isThrowing()) {
+                builder.addParameter(ErrorInfo, ERROR_OUT_PARAM);
+            }
+
             CodeBlock.Builder invocation = CodeBlock.builder();
             CodeBlock.Builder invocationClose = CodeBlock.builder();
 
@@ -192,7 +198,8 @@ public class CEntryPointGenerator extends AbstractGenerator {
             addGuardedInvocation(
                     builder,
                     invocation.add(invocationClose.build()).build(),
-                    throwingReturnType
+                    throwingReturnType,
+                    method.isThrowing() ? getErrorIdPrefix() : null
             );
             cEntriesClass.addMethod(builder.build());
 
@@ -201,6 +208,15 @@ public class CEntryPointGenerator extends AbstractGenerator {
         // Build class
         return cEntriesClass.build();
 
+    }
+
+    /**
+     * The C prefix carries a trailing underscore, which would make the id read as {@code lib_:Name}.
+     * TODO: have the prefix in the generated global Isolate class? similar to getLastError there
+     */
+    private String getErrorIdPrefix() {
+        String prefix = getOptions().getCPrefix();
+        return prefix.endsWith("_") ? prefix.substring(0, prefix.length() - 1) : prefix;
     }
 
     private static MethodSpec.Builder createCEntryPoint(String entryPointName) {

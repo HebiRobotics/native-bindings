@@ -110,13 +110,13 @@ public class CBindingsGenerator extends BindingGenerator {
 
         header.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
         cFile.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
-        SignatureBuilder func = new SignatureBuilder(getIsolateThreadType());
+        SignatureBuilder func = new SignatureBuilder(getIsolateThreadType(), getErrorType());
         String isolateName = apiClass.tryGetIsolateName().orElse("global");
 
         // Function signatures, e.g.,
         // HebiStatusCode hebiRobotModelSetBaseFrame(HebiRobotModelPtr robot_model, const double* transform, HebiMatrixOrdering ordering);
         for (var method : apiClass.getMethods()) {
-            func.init(isolateName, method.getReturnType(), method.getCName());
+            func.init(isolateName, method.getReturnType(), method.getCName(), isThrowing(method));
 
             // instance reference
             if (!method.getIsStatic()) {
@@ -216,6 +216,20 @@ public class CBindingsGenerator extends BindingGenerator {
             writer.write(typedef.getCDefinition());
             writer.write("\n");
         }
+        writer.write(IndentingTextRenderer.of("""
+
+                        // Error information for every method that can throw. A non-zero code
+                        // means the call failed and the return value can be ignored. Contents
+                        // are library owned and only valid until the next call on this thread.
+                        typedef struct {
+                            const char* message;
+                            const char* id;
+                            int32_t code;
+                        } %%ERROR_TYPE%%;
+                        """)
+                .set("ERROR_TYPE", getErrorType())
+                .render());
+        writer.write("\n");
         writer.write(typeDefs.toString());
         writer.write("\n");
 
@@ -316,6 +330,10 @@ public class CBindingsGenerator extends BindingGenerator {
         return lib.getCPrefix() + "_isolate_t";
     }
 
+    private String getErrorType() {
+        return lib.getCPrefix() + "_error_info_t";
+    }
+
     private String getIsolateThreadType() {
         return lib.getCPrefix() + "_isolatethread_t";
     }
@@ -351,15 +369,22 @@ public class CBindingsGenerator extends BindingGenerator {
 
     static class SignatureBuilder {
 
-        public SignatureBuilder(String isolateThreadType) {
+        public SignatureBuilder(String isolateThreadType, String errorType) { // TODO: make params replacements via IndentingAppender?
             this.isolateThreadParam = isolateThreadType + "* isolate";
+            this.errorParam = errorType + "* " + ERROR_PARAM_NAME;
         }
 
         public SignatureBuilder init(String isolateName, TypeDescription returnType, String cEntryPointName) {
+            return init(isolateName, returnType, cEntryPointName, false);
+        }
+
+        public SignatureBuilder init(String isolateName, TypeDescription returnType, String cEntryPointName,
+                                     boolean throwing) {
             params.clear();
             this.returnType = returnType;
             this.cEntryPointName = cEntryPointName;
             this.isolateName = isolateName;
+            this.throwing = throwing;
             return this;
         }
 
@@ -382,6 +407,9 @@ public class CBindingsGenerator extends BindingGenerator {
             out.append(spanReturn ? "void" : getInternalQualifiedCType(returnType))
                     .append(" ").append(getInternalName(cEntryPointName)).append("(");
             out.append(isolateThreadParam);
+            if (throwing) {
+                out.append(", ").append(errorParam);
+            }
             for (var param : params) {
                 if (param.getKey().getDataType() == DataType.FLOAT64_SPAN) {
                     out.append(", const ").append(TypeMap.toExternalC(param.getKey(), false))
@@ -401,6 +429,10 @@ public class CBindingsGenerator extends BindingGenerator {
             out.append(DLL_PUBLIC);
             out.append(getQualifiedCType(returnType)).append(" ").append(cEntryPointName).append("(");
             int numParams = 0;
+            if (throwing) {
+                out.append(errorParam);
+                numParams++;
+            }
             for (var param : params) {
                 var key = getQualifiedCType(param.getKey());
                 out.append(numParams++ > 0 ? ", " : "").append(key).append(" ").append(param.getValue());
@@ -420,6 +452,11 @@ public class CBindingsGenerator extends BindingGenerator {
             invocation.append(getInternalName(cEntryPointName)).append("(").append(isolateNamespace).append(isolateName).append("()");
 
             int numParams = 0;
+            if (throwing) {
+                numParams++;
+                out.append(errorParam);
+                invocation.append(", ").append(ERROR_PARAM_NAME);
+            }
             for (var param : params) {
                 String name = param.getValue();
                 String value = switch (param.getKey().getDataType()) {
@@ -454,6 +491,8 @@ public class CBindingsGenerator extends BindingGenerator {
         }
 
         private final String isolateThreadParam;
+        private final String errorParam;
+        private boolean throwing;
         private String isolateName;
         private TypeDescription returnType;
         private String cEntryPointName;
@@ -465,6 +504,8 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private static final String isolateNamespace = "isolate::";
     private boolean spanTypedefWritten = false;
+
+    static final String ERROR_PARAM_NAME = "_error";
     StringBuilder typeDefs = new StringBuilder();
     StringBuilder header = new StringBuilder();
     StringBuilder cFile = new StringBuilder();

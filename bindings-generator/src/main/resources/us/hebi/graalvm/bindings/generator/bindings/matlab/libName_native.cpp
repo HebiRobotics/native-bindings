@@ -50,6 +50,22 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
     }
 }
 
+// Struct for getting error return information. Every call that can throw fills it.
+// The char pointers are only valid until the current thread calls any other lib function.
+struct ErrorInfo {
+    const char* message;
+    const char* id;
+    int32_t code;
+};
+
+// mexErrMsgIdAndTxt immediately reports an error and jumps over the rest of the function.
+inline void checkError(const ErrorInfo& error) {
+    if (error.code != 0) {
+        mexErrMsgIdAndTxt(error.id != nullptr ? error.id : "%%LIB_NAME%%:Error",
+                          "%s", error.message != nullptr ? error.message : "unknown error");
+    }
+}
+
 template <typename T, typename S>
 inline void copyData(T* dest, const void* src, size_t n) {
     auto s = static_cast<const S*>(src);

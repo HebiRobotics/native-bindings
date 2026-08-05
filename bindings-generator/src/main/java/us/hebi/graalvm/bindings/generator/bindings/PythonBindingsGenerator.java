@@ -184,6 +184,28 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
+        content.append("""
+                class _ErrorInfo(Structure):
+                    # Filled by every method that can throw. The strings stay valid only until
+                    # this thread's next library call, so they get copied into the exception.
+                    _fields_ = [("message", c_char_p), ("id", c_char_p), ("code", c_int32)]
+
+                class Error(RuntimeError):
+                    # Failure reported by the library. The id names the kind of failure, as in
+                    # "mylib:invalidArgument", and is empty when the library did not set one.
+                    def __init__(self, message, id=""):
+                        super().__init__(f"[{id}] {message}" if id else message)
+                        self.id = id
+
+                def _checked(error_, result_):
+                    # Wraps the call so that the check reads as one expression. Python evaluates
+                    # the arguments first, so the struct is filled by the time this runs.
+                    if error_.code != 0:
+                        message = error_.message.decode("utf-8") if error_.message else "unknown error"
+                        raise Error(message, error_.id.decode("utf-8") if error_.id else "")
+                    return result_
+
+                """);
         if (GeneratorUtil.usesSpans(lib)) {
             content.append("""
                     class _DoubleSpan(Structure):
@@ -218,6 +240,9 @@ public class PythonBindingsGenerator extends BindingGenerator {
             List<String> params = new ArrayList<>();
             for (MethodDescription method : apiClass.getMethods()) {
                 params.clear();
+                if (isThrowing(method)) {
+                    params.add("POINTER(_ErrorInfo)");
+                }
                 if (!method.getIsStatic()) {
                     params.add(getCPythonType(apiClass.getType()));
                 }
@@ -479,18 +504,27 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var conversions = indent.apply(paramLists.inputConversions);
         var postBody = overload.tryGetPostBody().map(appendNewline).map(indent).orElse("");
 
-        // C call and type conversion
+        // C call and type conversion. A throwing method fills a local struct and wraps the
+        // call in the check, which keeps every return template a single expression.
+        boolean throwing = isThrowing(method);
+        if (throwing) {
+            callArgs = callArgs.isEmpty() ? "byref(error_)" : "byref(error_), " + callArgs;
+        }
         var returnTemplate = indent.apply(getReturnTemplate(apiClass, method)
-                .set("CALL", "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
+                .set("CALL", throwing
+                        ? "_checked(error_, %%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%))"
+                        : "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
                 .render());
+        var errorInit = throwing ? indent.apply("error_ = _ErrorInfo()\n") : "";
         var numpy = isUsingNumpy(body, conversions, postBody, returnTemplate) ? indent.apply("np = _require_numpy()\n") : "";
 
         // Build the full method body
         content.append(IndentingTextRenderer.of("""
                             def %%METHOD%%(%%PARAMS%%)%%HINT%%:%%DOCS%%
-                                %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%RETURN%%
+                                %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%ERROR_INIT%%%%RETURN%%
 
                         """)
+                .set("ERROR_INIT", errorInit)
                 .set("RETURN", returnTemplate)
 
                 .set("METHOD", funcName)
