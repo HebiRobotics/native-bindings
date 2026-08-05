@@ -20,10 +20,7 @@ classdef (Sealed) Isolated
             %
             %   Throws:
             %       Error always
-            status_ = bindings_tests_native('bindings_tests_Isolated_alwaysFails');
-            if status_ ~= 0
-                error(['Encountered error in Isolated.alwaysFails' ': ' bindings_tests_native('bindings_tests_secondary_getLastError')]);
-            end
+            bindings_tests_native('bindings_tests_Isolated_alwaysFails');
         end
 
     end

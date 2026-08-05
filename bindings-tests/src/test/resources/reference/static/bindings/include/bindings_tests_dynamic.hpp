@@ -1024,14 +1024,11 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 
 // Errors
 inline void errors::requireNonNegative(int value) {
-  static auto bindings_tests_Errors_requireNonNegative = DynamicLookup::instance().getFunc<int(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
+  static auto bindings_tests_Errors_requireNonNegative = DynamicLookup::instance().getFunc<void(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
   internal::ErrorInfo error_ = {};
-  int status_ = bindings_tests_Errors_requireNonNegative(&error_, value);
+  bindings_tests_Errors_requireNonNegative(&error_, value);
   if (error_.code != 0) {
     throw Exception(error_.message, error_.id);
-  }
-  if (status_ != 0) {
-    throw Exception("Encountered error in Errors::requireNonNegative");
   }
 }
 inline int errors::divideInt32(int a, int b) {
@@ -1133,14 +1130,11 @@ inline void isolated::reset() noexcept {
   bindings_tests_Isolated_reset();
 }
 inline void isolated::alwaysFails() {
-  static auto bindings_tests_Isolated_alwaysFails = DynamicLookup::instance().getFunc<int(*)(internal::ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
+  static auto bindings_tests_Isolated_alwaysFails = DynamicLookup::instance().getFunc<void(*)(internal::ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
   internal::ErrorInfo error_ = {};
-  int status_ = bindings_tests_Isolated_alwaysFails(&error_);
+  bindings_tests_Isolated_alwaysFails(&error_);
   if (error_.code != 0) {
     throw Exception(error_.message, error_.id);
-  }
-  if (status_ != 0) {
-    throw Exception("Encountered error in Isolated::alwaysFails");
   }
 }
 

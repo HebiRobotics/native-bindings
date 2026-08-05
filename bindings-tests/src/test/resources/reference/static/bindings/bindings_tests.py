@@ -280,7 +280,7 @@ libbindings_tests.bindings_tests_Callbacks_invokeOnce.restype = None
 
 # ==== Errors ====
 libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
-libbindings_tests.bindings_tests_Errors_requireNonNegative.restype = c_int
+libbindings_tests.bindings_tests_Errors_requireNonNegative.restype = None
 libbindings_tests.bindings_tests_Errors_divideInt32.argtypes = [POINTER(_ErrorInfo), c_int, c_int]
 libbindings_tests.bindings_tests_Errors_divideInt32.restype = c_int
 libbindings_tests.bindings_tests_Errors_failingFloat64.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -320,7 +320,7 @@ libbindings_tests.bindings_tests_Isolated_getCounter.restype = c_int
 libbindings_tests.bindings_tests_Isolated_reset.argtypes = []
 libbindings_tests.bindings_tests_Isolated_reset.restype = None
 libbindings_tests.bindings_tests_Isolated_alwaysFails.argtypes = [POINTER(_ErrorInfo)]
-libbindings_tests.bindings_tests_Isolated_alwaysFails.restype = c_int
+libbindings_tests.bindings_tests_Isolated_alwaysFails.restype = None
 
 # ==== Math ====
 libbindings_tests.bindings_tests_Math_negate.argtypes = [c_int]
@@ -813,9 +813,7 @@ class Errors:
             Exception: value is negative
         """
         error_ = _ErrorInfo()
-        status_ = _checked(error_, libbindings_tests.bindings_tests_Errors_requireNonNegative(byref(error_), value))
-        if status_ != 0:
-            raise RuntimeError(f'Encountered error in Errors::require_non_negative ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+        _checked(error_, libbindings_tests.bindings_tests_Errors_requireNonNegative(byref(error_), value))
 
     @classmethod
     def divide_int32(cls, a: int, b: int) -> int:
@@ -993,9 +991,7 @@ class Isolated:
             Exception: always
         """
         error_ = _ErrorInfo()
-        status_ = _checked(error_, libbindings_tests.bindings_tests_Isolated_alwaysFails(byref(error_)))
-        if status_ != 0:
-            raise RuntimeError(f'Encountered error in Isolated::always_fails ({libbindings_tests.bindings_tests_secondary_getLastError().decode("utf-8")})')
+        _checked(error_, libbindings_tests.bindings_tests_Isolated_alwaysFails(byref(error_)))
 
 
 class Math:

@@ -11,10 +11,7 @@ classdef (Sealed) Errors
             %
             %   Throws:
             %       Error value is negative
-            status_ = bindings_tests_native('bindings_tests_Errors_requireNonNegative', value);
-            if status_ ~= 0
-                error(['Encountered error in Errors.requireNonNegative' ': ' bindings_tests_native('bindings_tests_getLastError')]);
-            end
+            bindings_tests_native('bindings_tests_Errors_requireNonNegative', value);
         end
 
         function result = divideInt32(a, b)

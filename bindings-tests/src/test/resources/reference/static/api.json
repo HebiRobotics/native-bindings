@@ -639,7 +639,7 @@
       "isStatic": true,
       "cName": "bindings_tests_Errors_requireNonNegative",
       "returnType": {
-        "dataType": "VOID_WITH_ERROR_CODE"
+        "dataType": "VOID"
       },
       "parameters": [{
         "paramName": "value",
@@ -914,7 +914,7 @@
       "isStatic": true,
       "cName": "bindings_tests_Isolated_alwaysFails",
       "returnType": {
-        "dataType": "VOID_WITH_ERROR_CODE"
+        "dataType": "VOID"
       },
       "documentation": "Always throws, so the secondary isolate's error path is exercised too.",
       "throwsOn": "always"

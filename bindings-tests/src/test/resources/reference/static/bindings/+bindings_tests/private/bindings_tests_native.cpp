@@ -681,13 +681,12 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Errors
         case /* hash32_fnv1a("bindings_tests_Errors_requireNonNegative") */ 3634828815: {
-            static auto bindings_tests_Errors_requireNonNegative = libLoader.getFunc<int(*)(ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
+            static auto bindings_tests_Errors_requireNonNegative = libLoader.getFunc<void(*)(ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
             checkArgCount(nrhs, 1, "bindings_tests_Errors_requireNonNegative");
             ErrorInfo _error = {};
             int value = getScalar<int>(prhs[1], "value");
-            int _value = bindings_tests_Errors_requireNonNegative(&_error, value);
+            bindings_tests_Errors_requireNonNegative(&_error, value);
             checkError(_error);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Errors_divideInt32") */ 876481109: {
@@ -832,12 +831,11 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Isolated_alwaysFails") */ 406300632: {
-            static auto bindings_tests_Isolated_alwaysFails = libLoader.getFunc<int(*)(ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
+            static auto bindings_tests_Isolated_alwaysFails = libLoader.getFunc<void(*)(ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
             checkArgCount(nrhs, 0, "bindings_tests_Isolated_alwaysFails");
             ErrorInfo _error = {};
-            int _value = bindings_tests_Isolated_alwaysFails(&_error);
+            bindings_tests_Isolated_alwaysFails(&_error);
             checkError(_error);
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
 

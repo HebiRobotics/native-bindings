@@ -119,7 +119,7 @@ void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* user
 void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
 
 // ==== Errors ====
-int bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
+void bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
 int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b);
 double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail);
 int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail);
@@ -141,7 +141,7 @@ size_t bindings_tests_Indices_echoSize(size_t index);
 void bindings_tests_Isolated_increment();
 int bindings_tests_Isolated_getCounter();
 void bindings_tests_Isolated_reset();
-int bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
+void bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
 
 // ==== Math ====
 int bindings_tests_Math_negate(int value);

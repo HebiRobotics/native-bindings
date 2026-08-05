@@ -45,15 +45,13 @@ public final class TestIsolated$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Isolated_alwaysFails"
     )
-    public static int bindings_tests_Isolated_alwaysFails(IsolateThread _isolate,
+    public static void bindings_tests_Isolated_alwaysFails(IsolateThread _isolate,
             ErrorInfo _error) {
         CLibError.clearStruct(_error);
         try {
             TestIsolated.alwaysFails();
-            return ExceptionHandlers.STATUS_CODE_SUCCESS;
         } catch (Throwable throwable) {
             CLibError.fillStruct(throwable, _error, "bindings_tests");
-            return ExceptionHandlers.returnErrorStatusCode(throwable);
         }
     }
 }

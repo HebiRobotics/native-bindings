@@ -14,15 +14,13 @@ public final class TestErrors$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Errors_requireNonNegative"
     )
-    public static int bindings_tests_Errors_requireNonNegative(IsolateThread _isolate,
+    public static void bindings_tests_Errors_requireNonNegative(IsolateThread _isolate,
             ErrorInfo _error, int value) {
         CLibError.clearStruct(_error);
         try {
             TestErrors.requireNonNegative(value);
-            return ExceptionHandlers.STATUS_CODE_SUCCESS;
         } catch (Throwable throwable) {
             CLibError.fillStruct(throwable, _error, "bindings_tests");
-            return ExceptionHandlers.returnErrorStatusCode(throwable);
         }
     }
 

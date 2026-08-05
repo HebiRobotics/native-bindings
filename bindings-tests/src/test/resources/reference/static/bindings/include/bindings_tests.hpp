@@ -733,7 +733,7 @@ extern "C" {
   internal::double_span bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
-  int bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
+  void bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
   int bindings_tests_Errors_divideInt32(internal::ErrorInfo*, int, int);
   double bindings_tests_Errors_failingFloat64(internal::ErrorInfo*, int);
   int bindings_tests_Errors_failingBool(internal::ErrorInfo*, int);
@@ -751,7 +751,7 @@ extern "C" {
   void bindings_tests_Isolated_increment();
   int bindings_tests_Isolated_getCounter();
   void bindings_tests_Isolated_reset();
-  int bindings_tests_Isolated_alwaysFails(internal::ErrorInfo*);
+  void bindings_tests_Isolated_alwaysFails(internal::ErrorInfo*);
   int bindings_tests_Math_negate(int);
   unsigned short bindings_tests_Math_nextChar(unsigned short);
   char bindings_tests_Math_addInt8(char, char);
@@ -1045,12 +1045,9 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 // Errors
 inline void errors::requireNonNegative(int value) {
   internal::ErrorInfo error_ = {};
-  int status_ = bindings_tests_Errors_requireNonNegative(&error_, value);
+  bindings_tests_Errors_requireNonNegative(&error_, value);
   if (error_.code != 0) {
     throw Exception(error_.message, error_.id);
-  }
-  if (status_ != 0) {
-    throw Exception("Encountered error in Errors::requireNonNegative");
   }
 }
 inline int errors::divideInt32(int a, int b) {
@@ -1136,12 +1133,9 @@ inline void isolated::reset() noexcept {
 }
 inline void isolated::alwaysFails() {
   internal::ErrorInfo error_ = {};
-  int status_ = bindings_tests_Isolated_alwaysFails(&error_);
+  bindings_tests_Isolated_alwaysFails(&error_);
   if (error_.code != 0) {
     throw Exception(error_.message, error_.id);
-  }
-  if (status_ != 0) {
-    throw Exception("Encountered error in Isolated::alwaysFails");
   }
 }
 

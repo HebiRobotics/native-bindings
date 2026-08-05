@@ -135,7 +135,7 @@ DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func,
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
 
 // ==== Errors ====
-DLL_PUBLIC int bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
+DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
 DLL_PUBLIC int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b);
 DLL_PUBLIC double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail);
 DLL_PUBLIC int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail);
@@ -157,7 +157,7 @@ DLL_PUBLIC size_t bindings_tests_Indices_echoSize(size_t index);
 DLL_PUBLIC void bindings_tests_Isolated_increment();
 DLL_PUBLIC int bindings_tests_Isolated_getCounter();
 DLL_PUBLIC void bindings_tests_Isolated_reset();
-DLL_PUBLIC int bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
+DLL_PUBLIC void bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
 
 // ==== Math ====
 DLL_PUBLIC int bindings_tests_Math_negate(int value);

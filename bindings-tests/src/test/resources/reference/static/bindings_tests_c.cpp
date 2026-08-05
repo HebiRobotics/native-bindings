@@ -236,9 +236,9 @@ void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userD
 }
 
 // ==== Errors ====
-int __bindings_tests_Errors_requireNonNegative(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int value);
-int bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value) {
-    return __bindings_tests_Errors_requireNonNegative(isolate::global(), _error, value);
+void __bindings_tests_Errors_requireNonNegative(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int value);
+void bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value) {
+    __bindings_tests_Errors_requireNonNegative(isolate::global(), _error, value);
 }
 int __bindings_tests_Errors_divideInt32(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int a, int b);
 int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b) {
@@ -312,9 +312,9 @@ void __bindings_tests_Isolated_reset(bindings_tests_isolatethread_t* isolate);
 void bindings_tests_Isolated_reset() {
     __bindings_tests_Isolated_reset(isolate::secondary());
 }
-int __bindings_tests_Isolated_alwaysFails(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error);
-int bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error) {
-    return __bindings_tests_Isolated_alwaysFails(isolate::secondary(), _error);
+void __bindings_tests_Isolated_alwaysFails(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error);
+void bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error) {
+    __bindings_tests_Isolated_alwaysFails(isolate::secondary(), _error);
 }
 
 // ==== Math ====
