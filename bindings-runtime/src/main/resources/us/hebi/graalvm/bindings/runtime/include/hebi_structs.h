@@ -26,6 +26,6 @@ typedef struct {
     const char* message;
     const char* id;
     int32_t code;
-} Error;
+} ErrorInfo;
 
 #endif

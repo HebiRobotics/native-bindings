@@ -18,8 +18,8 @@ import org.graalvm.word.PointerBase;
  * @since 05 Aug 2026
  */
 @CContext(StructDirectives.class)
-@CStruct("Error")
-public interface ErrorStatus extends PointerBase {
+@CStruct("ErrorInfo")
+public interface ErrorInfo extends PointerBase {
 
     @CField("message")
     CCharPointer message();

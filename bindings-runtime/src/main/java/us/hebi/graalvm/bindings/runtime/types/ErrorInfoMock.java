@@ -3,13 +3,13 @@ package us.hebi.graalvm.bindings.runtime.types;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 
 /**
- * Field-backed {@link ErrorStatus} so that annotated classes can be exercised
+ * Field-backed {@link ErrorInfo} so that annotated classes can be exercised
  * on HotSpot without building a native image.
  *
  * @author Florian Enner
  * @since 05 Aug 2026
  */
-public class ErrorStatusMock extends MockPointerBase implements ErrorStatus {
+public class ErrorInfoMock extends MockPointerBase implements ErrorInfo {
 
     @Override
     public CCharPointer message() {
@@ -44,19 +44,5 @@ public class ErrorStatusMock extends MockPointerBase implements ErrorStatus {
     private CCharPointer message;
     private CCharPointer id;
     private int code;
-
-    /**
-     * Stand-in for the null struct a caller passes when it does not want an error.
-     */
-    public static ErrorStatus nullPointer() {
-        return NULL_INSTANCE;
-    }
-
-    @Override
-    public boolean isNull() {
-        return this == NULL_INSTANCE;
-    }
-
-    private static final ErrorStatusMock NULL_INSTANCE = new ErrorStatusMock();
 
 }
