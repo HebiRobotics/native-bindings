@@ -3,7 +3,6 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.VoidPointer;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestCallbacks;
 
@@ -16,7 +15,7 @@ public final class TestCallbacks$CEntries {
         try {
             TestCallbacks.invokeTimes(func, userData, CTypes.capSizeToInt(times));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -28,7 +27,7 @@ public final class TestCallbacks$CEntries {
         try {
             TestCallbacks.invokeOnce(func, userData, index);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 }

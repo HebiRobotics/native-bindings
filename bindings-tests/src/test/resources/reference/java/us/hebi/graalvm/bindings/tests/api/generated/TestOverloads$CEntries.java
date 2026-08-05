@@ -4,7 +4,6 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestOverloads;
 
@@ -17,7 +16,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.scale(value, factor);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -30,7 +29,7 @@ public final class TestOverloads$CEntries {
         try {
             return CTypes.toTempCharPointer(TestOverloads.greet(CTypes.utf8ToJavaString(name), CTypes.utf8ToJavaString(greeting)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -42,7 +41,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.total(sum, factor);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -55,7 +54,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.gain(invert, scale);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -67,7 +66,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.echoIndex(index);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -79,7 +78,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.answer(multiplier);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -91,7 +90,7 @@ public final class TestOverloads$CEntries {
         try {
             return TestOverloads.originalName();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

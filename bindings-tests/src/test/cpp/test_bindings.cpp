@@ -28,6 +28,18 @@ static int failures = 0;
 
 static const double kPi = 3.14159265358979323846;
 
+// Every throwing method now reports through the error out-struct, so the wrapper raises
+// instead of handing back a default the caller cannot tell apart from data.
+template <typename Call>
+static bool throwsWithMessage(Call call, const char* fragment) {
+  try {
+    call();
+  } catch (const bt::Exception& e) {
+    return std::string(e.what()).find(fragment) != std::string::npos;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Math
 // ---------------------------------------------------------------------------
@@ -191,12 +203,17 @@ static void testSpans() {
   bt::internal::double_span rawY{y.data(), y.size()};
   CHECK(bt::arrays::dotProduct(rawX, rawY) == 32.0);
 
-  // The length check lives once in the Java implementation. A mismatch
-  // returns the type default and sets the last error.
-  bt::errors::clearLastError();
+  // The length check lives once in the Java implementation, and the wrapper turns
+  // it into an exception carrying the message rather than a silent zero.
   std::vector<double> shorter = {4.0, 5.0};
-  CHECK(bt::arrays::dotProduct(x, shorter) == 0.0);
-  CHECK(bt::errors::getLastError().find("elements") != std::string::npos);
+  bool threwOnMismatch = false;
+  try {
+    bt::arrays::dotProduct(x, shorter);
+  } catch (const bt::Exception& e) {
+    threwOnMismatch = true;
+    CHECK(std::string(e.what()).find("elements") != std::string::npos);
+  }
+  CHECK(threwOnMismatch);
 
   // Span in, vector out. The wrapper copies before the next call invalidates it.
   std::vector<double> offset = bt::arrays::addOffset(x, 10.0);
@@ -273,42 +290,55 @@ static void testPalette() {
 // ---------------------------------------------------------------------------
 
 static void testErrors() {
-  bt::errors::clearLastError();
-
   // A throwing void method is promoted to an int status code, and the wrapper
   // turns a non-zero status into a bindings::tests::Exception.
   bt::errors::requireNonNegative(5);
 
-  bool threw = false;
-  try {
-    bt::errors::requireNonNegative(-1);
-  } catch (const bt::Exception&) {
-    threw = true;
-  }
-  CHECK(threw);
-  CHECK(bt::errors::getLastError().find("must not be negative") != std::string::npos);
+  CHECK(throwsWithMessage([] { bt::errors::requireNonNegative(-1); }, "must not be negative"));
 
-  // Methods with a real return type get a type specific default on failure. The
-  // generated wrapper does not check those, so nothing is thrown here and the
-  // C++ result matches the raw C ABI.
+  // Methods with a real return type report through the same error struct, so a
+  // failure is an exception here too rather than a value the caller cannot tell
+  // apart from data.
   CHECK(bt::errors::divideInt32(10, 2) == 5);
-  CHECK(bt::errors::divideInt32(1, 0) == 0);
+  CHECK(throwsWithMessage([] { bt::errors::divideInt32(1, 0); }, "zero"));
+
+  // The id travels alongside the message as structured data
+  bool threwWithId = false;
+  try {
+    bt::errors::divideInt32(1, 0);
+  } catch (const bt::Exception& e) {
+    threwWithId = true;
+    CHECK(std::string(e.id()) == "bindings_tests:ArithmeticException");
+    CHECK(std::string(e.what()).find("zero") != std::string::npos);
+  }
+  CHECK(threwWithId);
 
   CHECK(bt::errors::failingFloat64(false) == 1.5);
-  CHECK(bt::errors::failingFloat64(true) == 0.0);
+  CHECK(throwsWithMessage([] { bt::errors::failingFloat64(true); }, "asked to fail"));
 
   CHECK(bt::errors::failingBool(false) == true);
-  CHECK(bt::errors::failingBool(true) == false);
+  CHECK(throwsWithMessage([] { bt::errors::failingBool(true); }, "asked to fail"));
 
   CHECK(bt::errors::failingString(false) == "ok");
-  CHECK(bt::errors::failingString(true).empty());
+  CHECK(throwsWithMessage([] { bt::errors::failingString(true); }, "asked to fail"));
+
+  // An exception without a message falls back to a placeholder, the id still arrives
+  CHECK(throwsWithMessage([] { bt::errors::failWithoutMessage(); }, "unknown error"));
+  bool threwWithoutMessage = false;
+  try {
+    bt::errors::failWithoutMessage();
+  } catch (const bt::Exception& e) {
+    threwWithoutMessage = true;
+    CHECK(std::string(e.id()) == "bindings_tests:IllegalStateException");
+  }
+  CHECK(threwWithoutMessage);
 
   // neverThrows is marked Noexcept, so it has no status code and the wrapper is
   // declared noexcept.
   bt::errors::neverThrows();
 
-  bt::errors::clearLastError();
-  CHECK(bt::errors::getLastError().empty());
+  // A successful call after a failure must not report the earlier one
+  CHECK(bt::errors::divideInt32(9, 3) == 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -365,28 +395,17 @@ static void testOverloads() {
 // Isolated (second isolate)
 // ---------------------------------------------------------------------------
 
-// The C++ wrapper only uses the generated per-isolate accessor internally, so
-// the raw C symbol is declared here to assert on it directly.
-extern "C" const char* bindings_tests_secondary_getLastError();
-
 static void testIsolated() {
   // This state lives in a second GraalVM isolate. It does not share static
-  // fields, the handle registry or the last error slot with the default
-  // isolate, which is why it gets its own generated last error accessor.
+  // fields or the handle registry with the default isolate.
   bt::isolated::reset();
   bt::isolated::increment();
   bt::isolated::increment();
   bt::isolated::increment();
   CHECK(bt::isolated::getCounter() == 3);
 
-  bool threw = false;
-  try {
-    bt::isolated::alwaysFails();
-  } catch (const bt::Exception&) {
-    threw = true;
-  }
-  CHECK(threw);
-  CHECK(std::string(bindings_tests_secondary_getLastError()).find("secondary isolate") != std::string::npos);
+  // The error struct is caller-owned, so the secondary isolate reports the same way
+  CHECK(throwsWithMessage([] { bt::isolated::alwaysFails(); }, "secondary isolate"));
 }
 
 // ---------------------------------------------------------------------------

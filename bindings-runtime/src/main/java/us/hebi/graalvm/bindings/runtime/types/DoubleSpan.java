@@ -17,7 +17,7 @@ import org.graalvm.word.PointerBase;
  * @author Florian Enner
  * @since 01 Aug 2026
  */
-@CContext(SpanDirectives.class)
+@CContext(StructDirectives.class)
 @CStruct("DoubleSpan")
 public interface DoubleSpan extends PointerBase {
 

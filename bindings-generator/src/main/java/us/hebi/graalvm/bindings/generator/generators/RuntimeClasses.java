@@ -14,24 +14,40 @@ class RuntimeClasses {
 
     static final ClassName HandlesUtil = ClassName.get("us.hebi.graalvm.bindings.runtime.handles", "Handles");
 
-    static final ClassName ExceptionHandlers = ClassName.get("us.hebi.graalvm.bindings.runtime.exceptions", "ExceptionHandlers");
-
     public static final ClassName CTypes = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CTypes");
 
     public static final ClassName DoubleSpan = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "DoubleSpan");
+
+    public static final ClassName CLibError = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CLibError");
+
+    public static final ClassName ErrorInfo = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "ErrorInfo");
 
     /**
      * Name of the trailing out-struct param on entry points that return a span
      */
     public static final String SPAN_OUT = "_spanOut";
 
-    public static void addGuardedInvocation(MethodSpec.Builder builder, CodeBlock invocation, DataType returnType) {
+    // Name of the leading out-struct param on entry points that can throw
+    public static final String ERROR_OUT_PARAM = "_error";
 
+    /**
+     * @param idPrefix library name for the fallback error id, or null if there is no error struct
+     */
+    public static void addGuardedInvocation(MethodSpec.Builder builder, CodeBlock invocation, DataType returnType,
+                                            String idPrefix) {
+
+        if (idPrefix != null) {
+            builder.addStatement("$T.clearStruct($N)", CLibError, ERROR_OUT_PARAM);
+        }
         builder.beginControlFlow("try")
                 .addCode(getInvocationCode(returnType, invocation))
-                .nextControlFlow("catch (Throwable throwable)")
-                .addStatement("$T.setLastError(throwable)", ExceptionHandlers)
-                .addCode(getOnErrorReturnCode(returnType))
+                .nextControlFlow("catch (Throwable throwable)");
+        if (idPrefix != null) {
+            builder.addStatement("$T.fillStruct(throwable, $N, $S)", CLibError, ERROR_OUT_PARAM, idPrefix);
+        } else {
+            builder.addComment("Declared noexcept, so there is no error struct to report through");
+        }
+        builder.addCode(getOnErrorReturnCode(returnType))
                 .endControlFlow();
 
     }
@@ -40,9 +56,6 @@ class RuntimeClasses {
         CodeBlock.Builder code = CodeBlock.builder();
         switch (dataType) {
             case VOID -> code.addStatement(invocation);
-            case VOID_WITH_ERROR_CODE -> code
-                    .addStatement(invocation)
-                    .addStatement("return $T.STATUS_CODE_SUCCESS", ExceptionHandlers);
             // The array gets copied into a per-thread scratch buffer that stays valid
             // until the thread's next call, same as the string returns
             case FLOAT64_SPAN -> code
@@ -66,8 +79,6 @@ class RuntimeClasses {
             case FLOAT64_SPAN -> code
                     .addStatement("$N.setData($T.nullPointer())", SPAN_OUT, WordFactory.class)
                     .addStatement("$N.setLength(0)", SPAN_OUT);
-            case VOID_WITH_ERROR_CODE ->
-                    code.addStatement("return $T.returnErrorStatusCode(throwable)", ExceptionHandlers);
             case VOID -> {
             }
             default -> code.addStatement("return null /* unsupported: cause native-image failure */");

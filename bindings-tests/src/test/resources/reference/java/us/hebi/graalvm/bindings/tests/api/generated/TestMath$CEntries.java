@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestMath;
 
@@ -14,7 +13,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.negate(value);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return false;
         }
     }
@@ -26,7 +25,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.nextChar(value);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -38,7 +37,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addInt8(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -50,7 +49,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addInt16(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -62,7 +61,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addInt32(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -74,7 +73,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addInt64(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -86,7 +85,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addFloat32(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -99,7 +98,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addFloat64(a, b);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -111,7 +110,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.addSize(CTypes.capSizeToLong(a), CTypes.capSizeToLong(b));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -123,7 +122,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.sizeToInt32(CTypes.capSizeToInt(value));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -135,7 +134,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.maxInt32();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -147,7 +146,7 @@ public final class TestMath$CEntries {
         try {
             return TestMath.maxSize();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

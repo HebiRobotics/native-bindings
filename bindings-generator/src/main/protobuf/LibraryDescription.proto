@@ -77,7 +77,7 @@ enum DataType {
   TYPEDEF = 40;               // C type alias (e.g. 'my_type_t')
   ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
-  VOID_WITH_ERROR_CODE = 43;  // void method that passes error codes through the binary interface
+  reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct
   // STRUCT = 44;             // TODO: support structs?
 
   // Spans: a (pointer, length) pair passed or returned as one by-value struct in the

@@ -6,9 +6,7 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
-import us.hebi.graalvm.bindings.model.DataType;
 
 import java.util.TreeSet;
 
@@ -67,7 +65,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 .returns(TypeName.INT)
                 .addParameter(IsolateThread.class, "thread")
                 .build());
-        isolateClass.addMethod(createGetLastErrorFunction());
         return isolateClass.build();
     }
 
@@ -78,21 +75,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                         .addMember("builtin", "$T.$L", CEntryPoint.Builtin.class, builtin.name())
                         .build())
                 .addModifiers(PUBLIC, STATIC, NATIVE);
-    }
-
-    /**
-     * The last error slot lives is specific to each isolate heap, so one entry can serve all isolate
-     */
-    MethodSpec createGetLastErrorFunction() {
-        final String entryPointName = AnnotatedCLibClass.getCEntryName(true, getOptions().getCPrefix(), "", "getLastError");
-        final MethodSpec.Builder method = createCEntryPoint(entryPointName)
-                .returns(CCharPointer.class);
-        addGuardedInvocation(
-                method,
-                CodeBlock.of("$T.toTempCharPointer($T.getLastError(false))", CTypes, ExceptionHandlers),
-                DataType.CHAR_POINTER
-        );
-        return method.build();
     }
 
     TypeSpec generateEntryPointWrapper(AnnotatedCLibClass apiClass) {
@@ -109,6 +91,12 @@ public class CEntryPointGenerator extends AbstractGenerator {
         // Add method wrappers
         for (var method : apiClass.getPublicApiMethods()) {
             final MethodSpec.Builder builder = createCEntryPoint(method.getCEntryPointName());
+
+            // Anything that can throw reports through a caller-provided struct. It goes ahead
+            // of the instance handle so that it is argument zero of every public C signature
+            if (method.isThrowing()) {
+                builder.addParameter(ErrorInfo, ERROR_OUT_PARAM);
+            }
 
             CodeBlock.Builder invocation = CodeBlock.builder();
             CodeBlock.Builder invocationClose = CodeBlock.builder();
@@ -184,15 +172,11 @@ public class CEntryPointGenerator extends AbstractGenerator {
             }
 
             // Add guards
-            DataType throwingReturnType = method.getReturnType().getDataType();
-            if (throwingReturnType == DataType.VOID && method.isThrowing()) {
-                throwingReturnType = DataType.VOID_WITH_ERROR_CODE;
-                builder.returns(TypeName.INT);
-            }
             addGuardedInvocation(
                     builder,
                     invocation.add(invocationClose.build()).build(),
-                    throwingReturnType
+                    method.getReturnType().getDataType(),
+                    method.isThrowing() ? getErrorIdPrefix() : null
             );
             cEntriesClass.addMethod(builder.build());
 
@@ -201,6 +185,14 @@ public class CEntryPointGenerator extends AbstractGenerator {
         // Build class
         return cEntriesClass.build();
 
+    }
+
+    /**
+     * The C prefix carries a trailing underscore, which would make the id read as {@code lib_:Name}.
+     */
+    private String getErrorIdPrefix() {
+        String prefix = getOptions().getCPrefix();
+        return prefix.endsWith("_") ? prefix.substring(0, prefix.length() - 1) : prefix;
     }
 
     private static MethodSpec.Builder createCEntryPoint(String entryPointName) {
@@ -253,7 +245,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
     private final static String getInstanceMethod = "_getInstance";
     private static final String ISOLATE_NAME = "_isolate";
     private static final String ISOLATE_API_CLASS_NAME = "_Isolates$CEntries";
-    private static final String LAST_ERROR_CLASS_NAME = "_LastError$CEntries";
 
     public static final String INTERNAL_PREFIX = "__";
 

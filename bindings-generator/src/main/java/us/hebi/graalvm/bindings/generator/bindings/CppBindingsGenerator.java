@@ -57,9 +57,9 @@ public class CppBindingsGenerator extends BindingGenerator {
         out.write(getCppNamespace(lib, true));
         out.write("\n\n");
 
-        writeExceptionClass(out);
         writeEnumDefinitions(out);
         writeForwardDeclarations(out, apiClasses, useDynamicLookup);
+        writeExceptionClass(out);
 
         out.write("// ==== Class Wrappers ====\n");
         for (ClassDescription apiClass : apiClasses) {
@@ -120,20 +120,31 @@ public class CppBindingsGenerator extends BindingGenerator {
         // }
     }
 
+    /**
+     * The exception copies message and id out of the per-thread buffers, so it stays
+     * valid past the next call. checkError substitutes for NULL fields because it is
+     * the only caller that can see one.
+     */
     private void writeExceptionClass(Writer out) throws IOException {
         out.write("""
-                class Exception : public std::exception {
+                class Exception : public std::runtime_error {
                 public:
-                  Exception(const char* message) noexcept : msg_(message) {}
-                  Exception(const std::string& message) noexcept : msg_(message) {}
-                  virtual ~Exception() noexcept {}
-                  const char* what() const noexcept override {
-                    return msg_.c_str();
-                  }
-                protected:
-                  std::string msg_;
+                  explicit Exception(const char* message) : std::runtime_error(message) {}
+                  Exception(const char* message, const char* id) : std::runtime_error(message), id_(id) {}
+                  virtual ~Exception() noexcept = default;
+                  const char* id() const noexcept { return id_.c_str(); } // Kind of failure, e.g., bindings:Generic
+                private:
+                  std::string id_;
                 };
-                """);
+
+                inline void checkError(const %s& error) {
+                  if (error.code != 0) {
+                    const char* message = error.message != nullptr ? error.message : "unknown error";
+                    const char* id = error.id != nullptr ? error.id : "";
+                    throw Exception(message, id);
+                  }
+                }
+                """.formatted(getErrorType()));
         out.write("\n");
     }
 
@@ -170,10 +181,14 @@ public class CppBindingsGenerator extends BindingGenerator {
                 }
             }
         }
+
+        // Span structs
         if (GeneratorUtil.usesSpans(lib)) {
-            // Layout-compatible with the by-value struct in the C ABI
             out.write("struct %s {\n  const double* data;\n  size_t length;\n};\n".formatted(TypeMap.SPAN_STRUCT_NAME));
         }
+
+        // Error struct
+        out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
         out.write("}\n\n");
     }
 
@@ -231,6 +246,11 @@ public class CppBindingsGenerator extends BindingGenerator {
     private final class MethodParams {
 
         MethodParams(MethodDescription method) {
+            // error out-struct, ahead of the instance so it is argument zero everywhere
+            if (isThrowing(method)) {
+                cParams.add("&" + ERROR_LOCAL_NAME);
+            }
+
             // instance reference
             if (!method.getIsStatic()) {
                 cParams.add("ptr_");
@@ -239,6 +259,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             // other arguments
             for (TypeDescription parameter : method.getParameters()) {
                 cParams.add(parameter.getParamName());
+                paramNames.add(parameter.getParamName());
                 String value = String.format("%s %s",
                         getCppType(parameter),
                         parameter.getParamName()
@@ -254,6 +275,8 @@ public class CppBindingsGenerator extends BindingGenerator {
         final List<String> cParams = new ArrayList<>();
         final List<String> cppParams = new ArrayList<>();
         final List<String> cppHeaderParams = new ArrayList<>();
+        /** Declared arguments only, for the delegating constructor that forwards to the factory */
+        final List<String> paramNames = new ArrayList<>();
 
     }
 
@@ -299,8 +322,12 @@ public class CppBindingsGenerator extends BindingGenerator {
             if (useDynamicLookup) {
                 impl.write(getDynamicFunctionLookup(apiClass, method));
             }
+            if (isThrowing(method)) {
+                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
+            }
             impl.write("  auto ptr = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
             if (isThrowing(method)) {
+                impl.write(getErrorCheck());
                 impl.write("""
                           if (!ptr) {
                             throw Exception("Could not create %s");
@@ -310,16 +337,22 @@ public class CppBindingsGenerator extends BindingGenerator {
             impl.write("  return ptr;\n");
             impl.write("}\n");
             impl.write("}\n");
+            // The delegation forwards the declared arguments, not the C call arguments, which
+            // carry the error struct and the receiver.
             impl.write("inline %s::%s(%s) : %s(%s::%s(%s)) {}\n".formatted(
                     cppClassName, cppClassName, joiner.join(cppParams),
-                    cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, joiner.join(cParams)));
+                    cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, joiner.join(params.paramNames)));
         } else {
             impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, joiner.join(cppParams)));
             if (useDynamicLookup) {
                 impl.write(getDynamicFunctionLookup(apiClass, method));
             }
+            if (isThrowing(method)) {
+                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
+            }
             impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
             if (isThrowing(method)) {
+                impl.write(getErrorCheck());
                 impl.write("""
                           if (!ptr_) {
                             throw Exception("Could not create %s");
@@ -368,6 +401,13 @@ public class CppBindingsGenerator extends BindingGenerator {
             impl.write("\n");
         }
 
+        // The struct the call reports through. A plain value return has to be captured
+        // rather than returned directly, because the check comes after the call.
+        boolean throwing = isThrowing(method);
+        if (throwing) {
+            impl.write(String.format("  %s %s = {};\n", getErrorType(), ERROR_LOCAL_NAME));
+        }
+
         // Forwarding call
         impl.write("  ");
 
@@ -376,9 +416,8 @@ public class CppBindingsGenerator extends BindingGenerator {
             case VOID -> {
             }
             case OBJECT_HANDLE, CHAR_POINTER -> impl.write("auto ptr = ");
-            case VOID_WITH_ERROR_CODE -> impl.write("int status_ = ");
             case FLOAT64_SPAN -> impl.write("auto span_ = ");
-            default -> impl.write("return ");
+            default -> impl.write(throwing ? "auto result_ = " : "return ");
         }
 
 
@@ -388,18 +427,14 @@ public class CppBindingsGenerator extends BindingGenerator {
                 joiner.join(cParams)));
 
         // Check for errors
-        if (isThrowing(method)) {
+        if (throwing) {
+            impl.write(getErrorCheck());
             switch (method.getReturnType().getDataType()) {
                 case OBJECT_HANDLE -> impl.write("""
                           if (!ptr) {
                             throw Exception("Could not create %s in %s::%s");
                           }
                         """.formatted(getCppClassName(method.getReturnType()), getCppClassName(apiClass.getType()), method.getName()));
-                case VOID_WITH_ERROR_CODE -> impl.write("""
-                          if (status_ != 0) {
-                            throw Exception("Encountered error in %s::%s");
-                          }
-                        """.formatted(getCppClassName(apiClass.getType()), method.getName()));
             }
         }
 
@@ -414,6 +449,13 @@ public class CppBindingsGenerator extends BindingGenerator {
             case FLOAT64_SPAN -> impl.write("""
                       return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
                     """);
+            case VOID -> {
+            }
+            default -> {
+                if (throwing) {
+                    impl.write("  return result_;\n");
+                }
+            }
         }
 
         // end
@@ -556,7 +598,8 @@ public class CppBindingsGenerator extends BindingGenerator {
                 }
                 var cast = apiClass.tryGetToParentCastMethod();
                 if (cast.isPresent()) {
-                    writeCFuncSignature(apiClass, cast.get(), out);
+                    // A cast is generated plumbing rather than an API call and never throws
+                    writeCFuncSignature(apiClass, cast.get(), out, false);
                 } else if (apiClass.getInstantiable()) {
                     out.write("  void %s(%s);\n".formatted(apiClass.getCDestructorName(), getCppType(apiClass.getType())));
                 }
@@ -669,6 +712,16 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     private static final String INTERNAL_POINTER_NAMESPACE = "internal";
+    private static final String ERROR_STRUCT_NAME = "ErrorInfo";
+    private static final String ERROR_LOCAL_NAME = "error_";
+
+    private static String getErrorType() {
+        return INTERNAL_POINTER_NAMESPACE + "::" + ERROR_STRUCT_NAME;
+    }
+
+    private static String getErrorCheck() {
+        return "  checkError(%s);\n".formatted(ERROR_LOCAL_NAME);
+    }
 
     /**
      * Name of the factory that value constructors of child classes delegate through. It carries the
@@ -775,6 +828,9 @@ public class CppBindingsGenerator extends BindingGenerator {
     private String getDynamicFunctionLookup(ClassDescription apiClass, MethodDescription method) {
         // Build parameters including obj reference
         List<String> cParamTypes = new ArrayList<>();
+        if (isThrowing(method)) {
+            cParamTypes.add(getErrorType() + "*");
+        }
         if (!method.getIsStatic()) {
             cParamTypes.add(getCType(apiClass.getType()));
         }
@@ -794,8 +850,16 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     private void writeCFuncSignature(ClassDescription apiClass, MethodDescription method, Writer impl) throws IOException {
+        writeCFuncSignature(apiClass, method, impl, isThrowing(method));
+    }
+
+    private void writeCFuncSignature(ClassDescription apiClass, MethodDescription method, Writer impl,
+                                     boolean throwing) throws IOException {
         // TODO: C++ types due to enum mismatches. Properly handle C types w/ conversions?
         List<String> cParamTypes = new ArrayList<>();
+        if (throwing) {
+            cParamTypes.add(getErrorType() + "*");
+        }
         if (!method.getIsStatic()) {
             cParamTypes.add(getCType(apiClass.getType()));
         }
@@ -931,6 +995,5 @@ public class CppBindingsGenerator extends BindingGenerator {
                 .replaceAll("%%CPP_NAMESPACE%%", Joiner.on("::").join(lib.getNamespace()))
         );
     }
-
 
 }

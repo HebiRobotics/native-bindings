@@ -104,6 +104,26 @@ def _require_numpy():
     return _numpy
 
 # API definitions
+class _ErrorInfo(Structure):
+    # Filled by every method that can throw. The strings stay valid only until
+    # this thread's next library call, so they get copied into the exception.
+    _fields_ = [("message", c_char_p), ("id", c_char_p), ("code", c_int32)]
+
+class Error(RuntimeError):
+    # Failure reported by the library. The id names the kind of failure, as in
+    # "mylib:invalidArgument", and is empty when the library did not set one.
+    def __init__(self, message, id=""):
+        super().__init__(f"[{id}] {message}" if id else message)
+        self.id = id
+
+def _checked(error_, result_):
+    # Wraps the call so that the check reads as one expression. Python evaluates
+    # the arguments first, so the struct is filled by the time this runs.
+    if error_.code != 0:
+        message = error_.message.decode("utf-8") if error_.message else "unknown error"
+        raise Error(message, error_.id.decode("utf-8") if error_.id else "")
+    return result_
+
 class _DoubleSpan(Structure):
     # A (pointer, length) view of a double buffer, passed and returned by value
     _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
@@ -167,7 +187,7 @@ StringsPtr = POINTER(struct_Strings_)
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 
 # ==== Counter ====
-libbindings_tests.bindings_tests_Counter_create.argtypes = [c_int]
+libbindings_tests.bindings_tests_Counter_create.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.bindings_tests_Counter_create.restype = CounterPtr
 libbindings_tests.bindings_tests_Counter_getValue.argtypes = [CounterPtr]
 libbindings_tests.bindings_tests_Counter_getValue.restype = c_int
@@ -187,7 +207,7 @@ libbindings_tests.bindings_tests_Counter_release.argtypes = [CounterPtr]
 libbindings_tests.bindings_tests_Counter_release.restype = None
 
 # ==== Naming ====
-libbindings_tests.custom_prefix_Naming_create.argtypes = [c_int]
+libbindings_tests.custom_prefix_Naming_create.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.custom_prefix_Naming_create.restype = NamingPtr
 libbindings_tests.custom_prefix_Naming_get_start_value.argtypes = [NamingPtr]
 libbindings_tests.custom_prefix_Naming_get_start_value.restype = c_int
@@ -209,7 +229,7 @@ libbindings_tests.bindings_tests_Shape_release.argtypes = [ShapePtr]
 libbindings_tests.bindings_tests_Shape_release.restype = None
 
 # ==== Circle ====
-libbindings_tests.bindings_tests_Circle_create.argtypes = [c_double]
+libbindings_tests.bindings_tests_Circle_create.argtypes = [POINTER(_ErrorInfo), c_double]
 libbindings_tests.bindings_tests_Circle_create.restype = CirclePtr
 libbindings_tests.bindings_tests_Circle_getRadius.argtypes = [CirclePtr]
 libbindings_tests.bindings_tests_Circle_getRadius.restype = c_double
@@ -223,7 +243,7 @@ libbindings_tests.bindings_tests_Circle_to_Shape.argtypes = [CirclePtr]
 libbindings_tests.bindings_tests_Circle_to_Shape.restype = ShapePtr
 
 # ==== Square ====
-libbindings_tests.bindings_tests_Square_create.argtypes = [c_double]
+libbindings_tests.bindings_tests_Square_create.argtypes = [POINTER(_ErrorInfo), c_double]
 libbindings_tests.bindings_tests_Square_create.restype = SquarePtr
 libbindings_tests.bindings_tests_Square_getSide.argtypes = [SquarePtr]
 libbindings_tests.bindings_tests_Square_getSide.restype = c_double
@@ -245,7 +265,7 @@ libbindings_tests.bindings_tests_Arrays_cumulativeSum.argtypes = [POINTER(c_doub
 libbindings_tests.bindings_tests_Arrays_cumulativeSum.restype = None
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.argtypes = [POINTER(c_double), c_size_t]
 libbindings_tests.bindings_tests_Arrays_reverseFloat64.restype = None
-libbindings_tests.bindings_tests_Arrays_dotProduct.argtypes = [_DoubleSpan, _DoubleSpan]
+libbindings_tests.bindings_tests_Arrays_dotProduct.argtypes = [POINTER(_ErrorInfo), _DoubleSpan, _DoubleSpan]
 libbindings_tests.bindings_tests_Arrays_dotProduct.restype = c_double
 libbindings_tests.bindings_tests_Arrays_addOffset.argtypes = [_DoubleSpan, c_double]
 libbindings_tests.bindings_tests_Arrays_addOffset.restype = _DoubleSpan
@@ -259,22 +279,20 @@ libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackF
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.restype = None
 
 # ==== Errors ====
-libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [c_int]
-libbindings_tests.bindings_tests_Errors_requireNonNegative.restype = c_int
-libbindings_tests.bindings_tests_Errors_divideInt32.argtypes = [c_int, c_int]
+libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
+libbindings_tests.bindings_tests_Errors_requireNonNegative.restype = None
+libbindings_tests.bindings_tests_Errors_divideInt32.argtypes = [POINTER(_ErrorInfo), c_int, c_int]
 libbindings_tests.bindings_tests_Errors_divideInt32.restype = c_int
-libbindings_tests.bindings_tests_Errors_failingFloat64.argtypes = [c_int]
+libbindings_tests.bindings_tests_Errors_failingFloat64.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.bindings_tests_Errors_failingFloat64.restype = c_double
-libbindings_tests.bindings_tests_Errors_failingBool.argtypes = [c_int]
+libbindings_tests.bindings_tests_Errors_failingBool.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.bindings_tests_Errors_failingBool.restype = c_int
-libbindings_tests.bindings_tests_Errors_failingString.argtypes = [c_int]
+libbindings_tests.bindings_tests_Errors_failingString.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.bindings_tests_Errors_failingString.restype = c_char_p
+libbindings_tests.bindings_tests_Errors_failWithoutMessage.argtypes = [POINTER(_ErrorInfo)]
+libbindings_tests.bindings_tests_Errors_failWithoutMessage.restype = c_int
 libbindings_tests.bindings_tests_Errors_neverThrows.argtypes = []
 libbindings_tests.bindings_tests_Errors_neverThrows.restype = None
-libbindings_tests.bindings_tests_Errors_clearLastError.argtypes = []
-libbindings_tests.bindings_tests_Errors_clearLastError.restype = None
-libbindings_tests.bindings_tests_Errors_getLastError.argtypes = []
-libbindings_tests.bindings_tests_Errors_getLastError.restype = c_char_p
 
 # ==== Indices ====
 libbindings_tests.bindings_tests_Indices_echo.argtypes = [c_int]
@@ -297,8 +315,8 @@ libbindings_tests.bindings_tests_Isolated_getCounter.argtypes = []
 libbindings_tests.bindings_tests_Isolated_getCounter.restype = c_int
 libbindings_tests.bindings_tests_Isolated_reset.argtypes = []
 libbindings_tests.bindings_tests_Isolated_reset.restype = None
-libbindings_tests.bindings_tests_Isolated_alwaysFails.argtypes = []
-libbindings_tests.bindings_tests_Isolated_alwaysFails.restype = c_int
+libbindings_tests.bindings_tests_Isolated_alwaysFails.argtypes = [POINTER(_ErrorInfo)]
+libbindings_tests.bindings_tests_Isolated_alwaysFails.restype = None
 
 # ==== Math ====
 libbindings_tests.bindings_tests_Math_negate.argtypes = [c_int]
@@ -372,12 +390,6 @@ libbindings_tests.bindings_tests_Strings_join.restype = c_char_p
 libbindings_tests.bindings_tests_Strings_repeat.argtypes = [c_char_p, c_size_t]
 libbindings_tests.bindings_tests_Strings_repeat.restype = c_char_p
 
-# ==== Library ====
-libbindings_tests.bindings_tests_getLastError.argtypes = []
-libbindings_tests.bindings_tests_getLastError.restype = c_char_p
-libbindings_tests.bindings_tests_secondary_getLastError.argtypes = []
-libbindings_tests.bindings_tests_secondary_getLastError.restype = c_char_p
-
 # ==== Enum Wrappers ====
 class CircleColor(IntEnum):
     RED = 0
@@ -409,9 +421,10 @@ class Counter:
         Raises:
             Exception: on internal errors
         """
-        ptr_ = libbindings_tests.bindings_tests_Counter_create(start)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counter_create(byref(error_), start))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Counter in Counter::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Counter in Counter::__init__')
         self.ptr = ptr_
         if value is not None: self.value = value
 
@@ -469,9 +482,10 @@ class Naming:
         Raises:
             Exception: on internal errors
         """
-        ptr_ = libbindings_tests.custom_prefix_Naming_create(start_value)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.custom_prefix_Naming_create(byref(error_), start_value))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Naming in Naming::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Naming in Naming::__init__')
         self.ptr = ptr_
 
     def __del__(self):
@@ -541,9 +555,10 @@ class Circle(Shape):
     __slots__ = ('ref_Circle',)
 
     def __init__(self, radius: float, *, name: str = None) -> None:
-        ptr_ = libbindings_tests.bindings_tests_Circle_create(radius)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Circle_create(byref(error_), radius))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Circle in Circle::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Circle in Circle::__init__')
         self.ref_Circle = ptr_
         super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -576,9 +591,10 @@ class Square(Shape):
     __slots__ = ('ref_Square',)
 
     def __init__(self, side: float, *, name: str = None) -> None:
-        ptr_ = libbindings_tests.bindings_tests_Square_create(side)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Square_create(byref(error_), side))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Square in Square::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Square in Square::__init__')
         self.ref_Square = ptr_
         super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -702,7 +718,8 @@ class Arrays:
         elif not isinstance(y, _DoubleSpan):
             y_arr = np.ascontiguousarray(y, dtype=np.float64)
             y = _DoubleSpan(y_arr.ctypes.data_as(POINTER(c_double)), len(y_arr))
-        return libbindings_tests.bindings_tests_Arrays_dotProduct(x, y)
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Arrays_dotProduct(byref(error_), x, y))
 
     @classmethod
     def add_offset(cls, values: Sequence[float], offset: float) -> Sequence[float]:
@@ -785,9 +802,8 @@ class Errors:
         Raises:
             Exception: value is negative
         """
-        status_ = libbindings_tests.bindings_tests_Errors_requireNonNegative(value)
-        if status_ != 0:
-            raise RuntimeError(f'Encountered error in Errors::require_non_negative ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+        error_ = _ErrorInfo()
+        _checked(error_, libbindings_tests.bindings_tests_Errors_requireNonNegative(byref(error_), value))
 
     @classmethod
     def divide_int32(cls, a: int, b: int) -> int:
@@ -800,7 +816,8 @@ class Errors:
         Raises:
             Exception: divisor is zero
         """
-        return libbindings_tests.bindings_tests_Errors_divideInt32(a, b)
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Errors_divideInt32(byref(error_), a, b))
 
     @classmethod
     def failing_float64(cls, should_fail: bool) -> float:
@@ -812,7 +829,8 @@ class Errors:
         Raises:
             Exception: shouldFail is true
         """
-        return libbindings_tests.bindings_tests_Errors_failingFloat64(should_fail)
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Errors_failingFloat64(byref(error_), should_fail))
 
     @classmethod
     def failing_bool(cls, should_fail: bool) -> bool:
@@ -824,7 +842,8 @@ class Errors:
         Raises:
             Exception: shouldFail is true
         """
-        return libbindings_tests.bindings_tests_Errors_failingBool(should_fail) != 0
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Errors_failingBool(byref(error_), should_fail)) != 0
 
     @classmethod
     def failing_string(cls, should_fail: bool) -> str:
@@ -836,27 +855,24 @@ class Errors:
         Raises:
             Exception: shouldFail is true
         """
-        ptr_ = libbindings_tests.bindings_tests_Errors_failingString(should_fail)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Errors_failingString(byref(error_), should_fail))
         return ptr_.decode("utf-8") if ptr_ is not None else ""
+
+    @classmethod
+    def fail_without_message(cls) -> int:
+        """Throws an exception that carries no message.
+
+        Raises:
+            Exception: always
+        """
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Errors_failWithoutMessage(byref(error_)))
 
     @classmethod
     def never_throws(cls) -> None:
         """Marked noexcept, so no status code is generated for it."""
         libbindings_tests.bindings_tests_Errors_neverThrows()
-
-    @classmethod
-    def clear_last_error(cls) -> None:
-        """Clears the last error for the calling thread."""
-        libbindings_tests.bindings_tests_Errors_clearLastError()
-
-    @classmethod
-    def get_last_error(cls) -> str:
-        """Message of the last exception thrown on the calling thread, or an empty
-        string if there has not been one. Same content as the generated library
-        level accessor, exported as an ordinary method.
-        """
-        ptr_ = libbindings_tests.bindings_tests_Errors_getLastError()
-        return ptr_.decode("utf-8") if ptr_ is not None else ""
 
 
 class Indices:
@@ -950,9 +966,8 @@ class Isolated:
         Raises:
             Exception: always
         """
-        status_ = libbindings_tests.bindings_tests_Isolated_alwaysFails()
-        if status_ != 0:
-            raise RuntimeError(f'Encountered error in Isolated::always_fails ({libbindings_tests.bindings_tests_secondary_getLastError().decode("utf-8")})')
+        error_ = _ErrorInfo()
+        _checked(error_, libbindings_tests.bindings_tests_Isolated_alwaysFails(byref(error_)))
 
 
 class Math:

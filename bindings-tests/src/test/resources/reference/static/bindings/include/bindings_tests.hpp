@@ -10,18 +10,6 @@
 namespace bindings {
 namespace tests {
 
-class Exception : public std::exception {
-public:
-  Exception(const char* message) noexcept : msg_(message) {}
-  Exception(const std::string& message) noexcept : msg_(message) {}
-  virtual ~Exception() noexcept {}
-  const char* what() const noexcept override {
-    return msg_.c_str();
-  }
-protected:
-  std::string msg_;
-};
-
 enum class CircleColor : int32_t {
   Red = 0,
   Green = 1,
@@ -57,6 +45,29 @@ struct double_span {
   const double* data;
   size_t length;
 };
+struct ErrorInfo {
+  const char* message;
+  const char* id;
+  int32_t code;
+};
+}
+
+class Exception : public std::runtime_error {
+public:
+  explicit Exception(const char* message) : std::runtime_error(message) {}
+  Exception(const char* message, const char* id) : std::runtime_error(message), id_(id) {}
+  virtual ~Exception() noexcept = default;
+  const char* id() const noexcept { return id_.c_str(); } // Kind of failure, e.g., bindings:Generic
+private:
+  std::string id_;
+};
+
+inline void checkError(const internal::ErrorInfo& error) {
+  if (error.code != 0) {
+    const char* message = error.message != nullptr ? error.message : "unknown error";
+    const char* id = error.id != nullptr ? error.id : "";
+    throw Exception(message, id);
+  }
 }
 
 // ==== Class Wrappers ====
@@ -370,22 +381,15 @@ bool failingBool(bool shouldFail);
 std::string failingString(bool shouldFail);
 
 /**
+ * @brief Throws an exception that carries no message.
+ * @throw always
+ */
+int failWithoutMessage();
+
+/**
  * @brief Marked noexcept, so no status code is generated for it.
  */
 void neverThrows() noexcept;
-
-/**
- * @brief Clears the last error for the calling thread.
- */
-void clearLastError() noexcept;
-
-/**
- * @details 
- * Message of the last exception thrown on the calling thread, or an empty
- * string if there has not been one. Same content as the generated library
- * level accessor, exported as an ordinary method.
- */
-std::string getLastError() noexcept;
 } // namespace errors
 
 
@@ -677,7 +681,7 @@ std::string repeat(const std::string& value, size_t times) noexcept;
 
 // ==== C Library Functions ====
 extern "C" {
-  internal::CounterPtr bindings_tests_Counter_create(int);
+  internal::CounterPtr bindings_tests_Counter_create(internal::ErrorInfo*, int);
   int bindings_tests_Counter_getValue(internal::CounterPtr);
   void bindings_tests_Counter_setValue(internal::CounterPtr, int);
   void bindings_tests_Counter_increment(internal::CounterPtr);
@@ -686,7 +690,7 @@ extern "C" {
   int bindings_tests_Counter_getClosedCount();
   void bindings_tests_Counter_resetClosedCount();
   void bindings_tests_Counter_release(internal::CounterPtr);
-  internal::NamingPtr custom_prefix_Naming_create(int);
+  internal::NamingPtr custom_prefix_Naming_create(internal::ErrorInfo*, int);
   int custom_prefix_Naming_get_start_value(internal::NamingPtr);
   int custom_prefix_Naming_add_two_numbers(int, int);
   void custom_prefix_Naming_release(internal::NamingPtr);
@@ -695,13 +699,13 @@ extern "C" {
   double bindings_tests_Shape_area(internal::ShapePtr);
   int bindings_tests_Shape_sideCount(internal::ShapePtr);
   void bindings_tests_Shape_release(internal::ShapePtr);
-  internal::CirclePtr bindings_tests_Circle_create(double);
+  internal::CirclePtr bindings_tests_Circle_create(internal::ErrorInfo*, double);
   double bindings_tests_Circle_getRadius(internal::CirclePtr);
   CircleColor bindings_tests_Circle_getColor(internal::CirclePtr);
   double bindings_tests_Circle_area(internal::CirclePtr);
   int bindings_tests_Circle_sideCount(internal::CirclePtr);
   internal::ShapePtr bindings_tests_Circle_to_Shape(internal::CirclePtr);
-  internal::SquarePtr bindings_tests_Square_create(double);
+  internal::SquarePtr bindings_tests_Square_create(internal::ErrorInfo*, double);
   double bindings_tests_Square_getSide(internal::SquarePtr);
   double bindings_tests_Square_area(internal::SquarePtr);
   int bindings_tests_Square_sideCount(internal::SquarePtr);
@@ -711,19 +715,18 @@ extern "C" {
   void bindings_tests_Arrays_fillFloat64(double*, size_t, double);
   void bindings_tests_Arrays_cumulativeSum(const double*, double*, size_t);
   void bindings_tests_Arrays_reverseFloat64(double*, size_t);
-  double bindings_tests_Arrays_dotProduct(internal::double_span, internal::double_span);
+  double bindings_tests_Arrays_dotProduct(internal::ErrorInfo*, internal::double_span, internal::double_span);
   internal::double_span bindings_tests_Arrays_addOffset(internal::double_span, double);
   internal::double_span bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
-  int bindings_tests_Errors_requireNonNegative(int);
-  int bindings_tests_Errors_divideInt32(int, int);
-  double bindings_tests_Errors_failingFloat64(int);
-  int bindings_tests_Errors_failingBool(int);
-  const char* bindings_tests_Errors_failingString(int);
+  void bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
+  int bindings_tests_Errors_divideInt32(internal::ErrorInfo*, int, int);
+  double bindings_tests_Errors_failingFloat64(internal::ErrorInfo*, int);
+  int bindings_tests_Errors_failingBool(internal::ErrorInfo*, int);
+  const char* bindings_tests_Errors_failingString(internal::ErrorInfo*, int);
+  int bindings_tests_Errors_failWithoutMessage(internal::ErrorInfo*);
   void bindings_tests_Errors_neverThrows();
-  void bindings_tests_Errors_clearLastError();
-  const char* bindings_tests_Errors_getLastError();
   int bindings_tests_Indices_echo(int);
   int bindings_tests_Indices_countUpTo(int);
   int bindings_tests_Indices_lastIndexOf(int);
@@ -733,7 +736,7 @@ extern "C" {
   void bindings_tests_Isolated_increment();
   int bindings_tests_Isolated_getCounter();
   void bindings_tests_Isolated_reset();
-  int bindings_tests_Isolated_alwaysFails();
+  void bindings_tests_Isolated_alwaysFails(internal::ErrorInfo*);
   int bindings_tests_Math_negate(int);
   unsigned short bindings_tests_Math_nextChar(unsigned short);
   char bindings_tests_Math_addInt8(char, char);
@@ -772,7 +775,9 @@ extern "C" {
 // ==== C++ Implementations ====
 // Counter
 inline Counter::Counter(int start) {
-  ptr_ = bindings_tests_Counter_create(start);
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counter_create(&error_, start);
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Counter");
   }
@@ -818,7 +823,9 @@ inline Counter::~Counter() noexcept {
 
 // Naming
 inline Naming::Naming(int startValue) {
-  ptr_ = custom_prefix_Naming_create(startValue);
+  internal::ErrorInfo error_ = {};
+  ptr_ = custom_prefix_Naming_create(&error_, startValue);
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Naming");
   }
@@ -886,7 +893,9 @@ inline Shape::~Shape() noexcept {
 namespace internal {
 // The null check happens here because the base class gets initialized before the constructor body runs
 inline internal::CirclePtr createCirclePointer(double radius) {
-  auto ptr = bindings_tests_Circle_create(radius);
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Circle_create(&error_, radius);
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Circle");
   }
@@ -924,7 +933,9 @@ inline Circle& Circle::operator=(Circle&& from) noexcept {
 namespace internal {
 // The null check happens here because the base class gets initialized before the constructor body runs
 inline internal::SquarePtr createSquarePointer(double side) {
-  auto ptr = bindings_tests_Square_create(side);
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Square_create(&error_, side);
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Square");
   }
@@ -978,7 +989,10 @@ inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
   bindings_tests_Arrays_reverseFloat64(values, count);
 }
 inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
-  return bindings_tests_Arrays_dotProduct(x, y);
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Arrays_dotProduct(&error_, x, y);
+  checkError(error_);
+  return result_;
 }
 inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
   return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
@@ -1005,33 +1019,42 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 
 // Errors
 inline void errors::requireNonNegative(int value) {
-  int status_ = bindings_tests_Errors_requireNonNegative(value);
-  if (status_ != 0) {
-    throw Exception("Encountered error in Errors::requireNonNegative");
-  }
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Errors_requireNonNegative(&error_, value);
+  checkError(error_);
 }
 inline int errors::divideInt32(int a, int b) {
-  return bindings_tests_Errors_divideInt32(a, b);
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_divideInt32(&error_, a, b);
+  checkError(error_);
+  return result_;
 }
 inline double errors::failingFloat64(bool shouldFail) {
-  return bindings_tests_Errors_failingFloat64(shouldFail);
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failingFloat64(&error_, shouldFail);
+  checkError(error_);
+  return result_;
 }
 inline bool errors::failingBool(bool shouldFail) {
-  return bindings_tests_Errors_failingBool(shouldFail);
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failingBool(&error_, shouldFail);
+  checkError(error_);
+  return result_;
 }
 inline std::string errors::failingString(bool shouldFail) {
-  auto ptr = bindings_tests_Errors_failingString(shouldFail);
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Errors_failingString(&error_, shouldFail);
+  checkError(error_);
   return !ptr ? std::string() : std::string(ptr); // copy utf8
+}
+inline int errors::failWithoutMessage() {
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failWithoutMessage(&error_);
+  checkError(error_);
+  return result_;
 }
 inline void errors::neverThrows() noexcept {
   bindings_tests_Errors_neverThrows();
-}
-inline void errors::clearLastError() noexcept {
-  bindings_tests_Errors_clearLastError();
-}
-inline std::string errors::getLastError() noexcept {
-  auto ptr = bindings_tests_Errors_getLastError();
-  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 
 // Indices
@@ -1065,10 +1088,9 @@ inline void isolated::reset() noexcept {
   bindings_tests_Isolated_reset();
 }
 inline void isolated::alwaysFails() {
-  int status_ = bindings_tests_Isolated_alwaysFails();
-  if (status_ != 0) {
-    throw Exception("Encountered error in Isolated::alwaysFails");
-  }
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Isolated_alwaysFails(&error_);
+  checkError(error_);
 }
 
 // Math

@@ -37,7 +37,7 @@ classdef (Sealed) Naming < handle & matlab.mixin.SetGet
             end
             ptr_ = bindings_tests_native('custom_prefix_Naming_create', startValue);
             if isempty(ptr_)
-                error(['Failed to create bindings_tests.Naming in Naming.Naming' ': ' bindings_tests_native('bindings_tests_getLastError')]);
+                error('Failed to create bindings_tests.Naming in Naming.Naming');
             end
             this.ptr = ptr_;
         end

@@ -182,12 +182,10 @@ classdef BindingsTest < matlab.unittest.TestCase
             % take plain arrays without a count argument.
             testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5 6]), 32);
 
-            % The length check lives once in the Java implementation. A mismatch
-            % returns the type default and sets the last error.
-            bindings_tests.Errors.clearLastError();
-            testCase.verifyEqual(bindings_tests.Arrays.dotProduct([1 2 3], [4 5]), 0);
-            testCase.verifyTrue(contains(bindings_tests.Errors.getLastError(), 'elements'));
-            bindings_tests.Errors.clearLastError();
+            % The length check lives once in the Java implementation, and the
+            % gateway raises with its message rather than returning a silent zero.
+            message = testCase.captureError(@() bindings_tests.Arrays.dotProduct([1 2 3], [4 5]));
+            testCase.verifyTrue(contains(message, 'elements'));
 
             % Span in, row vector out. The MEX gateway copies out of the
             % library-owned buffer before returning.
@@ -254,37 +252,42 @@ classdef BindingsTest < matlab.unittest.TestCase
 
         function testErrors(testCase)
             % Error propagation across the ABI
-            bindings_tests.Errors.clearLastError();
-
             bindings_tests.Errors.requireNonNegative(5);
 
             % A throwing void method is promoted to an int status code, and the
-            % wrapper turns a non-zero status into a MATLAB error whose message
-            % already carries the last error text.
-            message = testCase.captureError(@() bindings_tests.Errors.requireNonNegative(-1));
+            % wrapper turns a non-zero status into a MATLAB error carrying the
+            % message and id from the error struct.
+            [message, identifier] = testCase.captureError(@() bindings_tests.Errors.requireNonNegative(-1));
             testCase.verifyTrue(contains(message, 'must not be negative'));
-            testCase.verifyTrue(contains(bindings_tests.Errors.getLastError(), 'must not be negative'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalArgumentException');
 
-            % Methods with a real return type get a type specific default on
-            % failure. The generated wrapper does not check those, so nothing is
-            % raised here and the MATLAB result matches the raw C ABI.
+            % Methods with a real return type report through the same error
+            % struct, so a failure raises here too and the id reaches MATLAB as
+            % the error identifier that try/catch matches on.
             testCase.verifyEqual(bindings_tests.Errors.divideInt32(10, 2), 5);
-            testCase.verifyEqual(bindings_tests.Errors.divideInt32(1, 0), 0);
+            [message, identifier] = testCase.captureError(@() bindings_tests.Errors.divideInt32(1, 0));
+            testCase.verifyTrue(contains(message, 'division by zero'));
+            testCase.verifyEqual(identifier, 'bindings_tests:ArithmeticException');
 
             testCase.verifyEqual(bindings_tests.Errors.failingFloat64(false), 1.5);
-            testCase.verifyEqual(bindings_tests.Errors.failingFloat64(true), 0.0);
+            testCase.captureError(@() bindings_tests.Errors.failingFloat64(true));
 
             testCase.verifyEqual(bindings_tests.Errors.failingBool(false), 1);
-            testCase.verifyEqual(bindings_tests.Errors.failingBool(true), 0);
+            testCase.captureError(@() bindings_tests.Errors.failingBool(true));
 
             testCase.verifyEqual(bindings_tests.Errors.failingString(false), 'ok');
-            testCase.verifyTrue(isempty(bindings_tests.Errors.failingString(true)));
+            testCase.captureError(@() bindings_tests.Errors.failingString(true));
+
+            % An exception without a message falls back to a placeholder
+            [message, identifier] = testCase.captureError(@() bindings_tests.Errors.failWithoutMessage());
+            testCase.verifyTrue(contains(message, 'unknown error'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalStateException');
 
             % Marked Noexcept, so there is no status code to check
             bindings_tests.Errors.neverThrows();
 
-            bindings_tests.Errors.clearLastError();
-            testCase.verifyTrue(isempty(bindings_tests.Errors.getLastError()));
+            % A successful call after a failure must not report the earlier one
+            testCase.verifyEqual(bindings_tests.Errors.divideInt32(9, 3), 3);
         end
 
         function testOverloads(testCase)
@@ -354,35 +357,35 @@ classdef BindingsTest < matlab.unittest.TestCase
 
         function testIsolated(testCase)
             % State confined to a second GraalVM isolate. It does not share
-            % static fields, the handle registry or the last error slot with the
-            % default isolate, which is why it gets its own generated last error
-            % accessor. The MEX gateway lives in a private folder, so the raw
-            % accessor is not reachable from here and the error message, which
-            % flows through it, is the observable instead.
+            % static fields or the handle registry with the default isolate.
             bindings_tests.Isolated.reset();
             bindings_tests.Isolated.increment();
             bindings_tests.Isolated.increment();
             bindings_tests.Isolated.increment();
             testCase.verifyEqual(bindings_tests.Isolated.getCounter(), 3);
 
-            message = testCase.captureError(@() bindings_tests.Isolated.alwaysFails());
+            % The error struct is caller-owned, so the secondary isolate reports the same way
+            [message, identifier] = testCase.captureError(@() bindings_tests.Isolated.alwaysFails());
             testCase.verifyTrue(contains(message, 'secondary isolate'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalStateException');
         end
 
     end
 
     methods (Access = private)
 
-        function message = captureError(testCase, fn)
-            % Runs fn and returns the error message. The generated wrappers call
-            % error() with a plain message and no identifier, so verifyError
-            % cannot be used here.
+        function [message, identifier] = captureError(testCase, fn)
+            % Runs fn and returns the error message and identifier. Some wrappers
+            % still call error() with a plain message and no identifier, so
+            % verifyError cannot be used here.
             message = '';
+            identifier = '';
             try
                 fn();
                 testCase.verifyFail('Expected the call to raise an error');
             catch err
                 message = err.message;
+                identifier = err.identifier;
             end
         end
 

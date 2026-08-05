@@ -5,8 +5,9 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
+import us.hebi.graalvm.bindings.runtime.types.CLibError;
+import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestSquare;
 
 public final class TestSquare$CEntries {
@@ -23,11 +24,13 @@ public final class TestSquare$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Square_create"
     )
-    public static ObjectHandle bindings_tests_Square_create(IsolateThread _isolate, double side) {
+    public static ObjectHandle bindings_tests_Square_create(IsolateThread _isolate,
+            ErrorInfo _error, double side) {
+        CLibError.clearStruct(_error);
         try {
             return TestSquare$CEntries._registerInstance(TestSquare.create(side));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            CLibError.fillStruct(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }
@@ -39,7 +42,7 @@ public final class TestSquare$CEntries {
         try {
             return _getInstance(_obj).getSide();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -51,7 +54,7 @@ public final class TestSquare$CEntries {
         try {
             return _getInstance(_obj).area();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -63,7 +66,7 @@ public final class TestSquare$CEntries {
         try {
             return _getInstance(_obj).sideCount();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

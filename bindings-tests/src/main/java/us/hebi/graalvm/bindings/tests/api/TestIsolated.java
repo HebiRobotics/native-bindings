@@ -3,7 +3,6 @@ package us.hebi.graalvm.bindings.tests.api;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 

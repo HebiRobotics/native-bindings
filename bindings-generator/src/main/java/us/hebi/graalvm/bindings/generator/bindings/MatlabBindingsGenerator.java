@@ -194,7 +194,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private String getCToMex(TypeDescription type) {
         return switch (type.getDataType()) {
             // Numbers and Booleans
-            case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16, VOID_WITH_ERROR_CODE ->
+            case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16 ->
                     "createMexScalar(%%RETURN_VALUE%%)";
 
             // Too wide for the 53 bit mantissa of MATLAB's default double
@@ -254,6 +254,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 post.setLength(0);
                 types.clear();
                 args.clear();
+                // The error struct is filled by the call and raises before any output is built
+                if (isThrowing(method)) {
+                    pre.append("ErrorInfo _error = {};\n");
+                    post.append("\ncheckError(_error);");
+                    types.add("ErrorInfo*");
+                    args.add("&_error");
+                }
                 if (!method.getIsStatic()) {
                     types.add(getMexCType(clazz.getType()));
                     args.add(getMexToC(clazz.getType(), index++));
@@ -299,20 +306,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             .set("CALL", "if (nlhs > 0) plhs[0] = createMexPointer(%%CNAME%%(%%ARGS%%));"));
                 }
             }
-        }
-
-        // Per-isolate last error accessors used by the generated error messages
-        var charPointer = TypeDescription.newInstance().setDataType(DataType.CHAR_POINTER).setIsConst(true);
-        cases.addLine("\n// Library");
-        for (String cName : GeneratorUtil.getLastErrorSymbols(lib)) {
-            var vars = cases.snapshot();
-            vars.set("RETURN_TYPE", getMexCType(charPointer));
-            addCase.accept(vars.set("CNAME", cName)
-                    .set("HASH", computeHash.apply(cName))
-                    .set("PRE", "%%RETURN_TYPE%% %%RETURN_VALUE%% = ")
-                    .set("POST", "\nif (nlhs > 0) plhs[0] = " + getCToMex(charPointer) + ";")
-                    .set("TYPES", "")
-                    .set("ARGS", ""));
         }
 
         // Generate
@@ -608,8 +601,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 ? "this@%%PARENT_NAME%%(%%DISPATCH%%(%%CAST%%, ptr_));\n"
                 : "");
 
-        content.set("LAST_ERROR", " ': ' %%DISPATCH%%(" + getDispatchIdentifier(getLastErrorMethod(apiClass)) + ")");
-
         // Build the internal function
         content.add("function ").add(wrapOutputAssignment(params.externalOutput)).addLine("%%FUNC_NAME%%(%%EXTERNAL_ARGS%%)").indent();
         if (method.hasDocumentation()) {
@@ -716,7 +707,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
                     postCallActions.append("""
                             if isempty(ptr_)
-                                error(['Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%.%%FUNC_NAME%%'%%LAST_ERROR%%]);
+                                error('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%.%%FUNC_NAME%%');
                             end
                             """);
                     if (GeneratorUtil.isConstructor(method)) {
@@ -739,16 +730,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         }
                     }
 
-                }
-
-                case VOID_WITH_ERROR_CODE -> {
-                    String result = "status_";
-                    internalOutput.add(result);
-                    postCallActions.append("""
-                            if status_ ~= 0
-                                error(['Encountered error in %%CLASS_NAME%%.%%FUNC_NAME%%'%%LAST_ERROR%%]);
-                            end
-                            """.stripTrailing());
                 }
 
                 case VOID -> {

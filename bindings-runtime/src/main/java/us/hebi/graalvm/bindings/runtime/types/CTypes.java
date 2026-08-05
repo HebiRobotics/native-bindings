@@ -8,15 +8,18 @@ import org.graalvm.word.WordFactory;
 import us.hebi.glue.Buffer6;
 import us.hebi.glue.DirectBuffer6;
 import us.hebi.graalvm.bindings.runtime.Configuration;
+import us.hebi.graalvm.bindings.runtime.views.DoubleBufferView;
+import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.DoubleBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
  * Marshalling helpers referenced by generated entry points.
+ * <p>
+ * // TODO: after error migration, check what we still need
  *
  * @author Florian Enner
  * @since 02 Aug 2024
@@ -24,21 +27,11 @@ import java.util.Arrays;
 public class CTypes {
 
     public static CCharPointer toTempCharPointer(String string) {
-        return string == null ? WordFactory.<CCharPointer>nullPointer() : WordFactory.<CCharPointer>pointer(toTempCString(string));
+        return tempReturnString.get().setContent(string).getPointer();
     }
 
     public static CCharPointer toTempCharPointer(byte[] utf8, int offset, int length) {
-        return utf8 == null ? WordFactory.<CCharPointer>nullPointer() : WordFactory.<CCharPointer>pointer(toTempCString(utf8, offset, length));
-    }
-
-    /**
-     * @param string input
-     * @return an address to a matching c string that is only valid for this call. Needs to be copied immediately. null maps to nullptr.
-     */
-    public static long toTempCString(String string) {
-        if (string == null) return 0;
-        byte[] utf8 = string.getBytes(StandardCharsets.UTF_8);
-        return toTempCString(utf8, 0, utf8.length);
+        return tempReturnString.get().setContent(utf8, offset, length).getPointer();
     }
 
     /**
@@ -46,22 +39,7 @@ public class CTypes {
      * makes the returned address valid only until this thread's next call. Threads that
      * never marshal a string never allocate.
      */
-    public static long toTempCString(byte[] utf8, int offset, int length) {
-        if (utf8 == null) return 0;
-        int strlen = length + 1;
-        ByteBuffer buffer = utf8StringBuffer.get();
-        if (buffer == null || buffer.capacity() < strlen) {
-            buffer = ByteBuffer.allocateDirect(Math.max(strlen, 128));
-            buffer.order(ByteOrder.nativeOrder());
-            utf8StringBuffer.set(buffer);
-        }
-        Buffer6.rewind(buffer);
-        buffer.put(utf8, offset, length);
-        buffer.put((byte) '\0');
-        return DirectBuffer6.getAddress(buffer);
-    }
-
-    private static final ThreadLocal<ByteBuffer> utf8StringBuffer = new ThreadLocal<ByteBuffer>();
+    private static final ThreadLocal<Utf8StringView> tempReturnString = ThreadLocal.withInitial(Utf8StringView::new);
 
     /**
      * Copies a double array into a per-thread temporary buffer for returning it as a span.
@@ -69,34 +47,10 @@ public class CTypes {
      * immediately. null maps to nullptr, an empty array to a valid zero-length address.
      */
     public static CDoublePointer toTempDoublePointer(double[] values) {
-        if (values == null) return WordFactory.nullPointer();
-        DoubleBufferView buffer = doubleArrayBuffer.get();
-        if (buffer == null || buffer.doubleView.capacity() < values.length) {
-            buffer = new DoubleBufferView(Math.max(values.length, 128));
-            doubleArrayBuffer.set(buffer);
-        }
-        Buffer6.rewind(buffer.doubleView);
-        buffer.doubleView.put(values);
-        return WordFactory.pointer(buffer.address);
+        return tempReturnDoubleBuffer.get().setContent(values).getPointer();
     }
 
-    /* caches the double view on top of the native buffer */
-    private static final class DoubleBufferView {
-
-        DoubleBufferView(int numDoubles) {
-            buffer = ByteBuffer.allocateDirect(numDoubles * Double.BYTES);
-            buffer.order(ByteOrder.nativeOrder());
-            doubleView = buffer.asDoubleBuffer();
-            address = DirectBuffer6.getAddress(buffer);
-        }
-
-        final ByteBuffer buffer;
-        final DoubleBuffer doubleView;
-        final long address;
-
-    }
-
-    private static final ThreadLocal<DoubleBufferView> doubleArrayBuffer = new ThreadLocal<DoubleBufferView>();
+    private static final ThreadLocal<DoubleBufferView> tempReturnDoubleBuffer = ThreadLocal.withInitial(DoubleBufferView::new);
 
     public static int capSizeToInt(long size_t) {
         // Anything over 31 bits gets capped to the max

@@ -206,9 +206,6 @@
   "bindings_tests.Counter.resetClosedCount": {
     "inputs": []
   },
-  "bindings_tests.Errors.clearLastError": {
-    "inputs": []
-  },
   "bindings_tests.Errors.divideInt32": {
     "inputs": [{
         "kind": "required",
@@ -219,6 +216,9 @@
         "name": "b",
         "type": ["numeric"]
       }]
+  },
+  "bindings_tests.Errors.failWithoutMessage": {
+    "inputs": []
   },
   "bindings_tests.Errors.failingBool": {
     "inputs": [{
@@ -244,13 +244,6 @@
         "name": "shouldFail",
         "type": ["logical"]
       }],
-    "outputs": [{
-        "name": "obj",
-        "type": ["char"]
-      }]
-  },
-  "bindings_tests.Errors.getLastError": {
-    "inputs": [],
     "outputs": [{
         "name": "obj",
         "type": ["char"]

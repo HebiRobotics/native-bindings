@@ -395,7 +395,7 @@ become a lookup keyed on the element type:
    `toPythonTypeHint` become element-type switches, and the
    `addMapping(DoubleSpan.class, ...)` registration grows one row per type.
 3. `bindings-runtime/types` needs one `@CStruct` interface per element type, plus matching
-   rows in `hebi_structs.h`, which `SpanDirectives` extracts at image build.
+   rows in `hebi_structs.h`, which `StructDirectives` extracts at image build.
 4. `Spans` needs overloads per type, as do `CTypes.toDoubleSpan` and
    `CTypes.toTempDoublePointer`.
 5. `GeneratorUtil.findSpanType` already returns a `TypeDescription`, so it generalises for
@@ -2125,6 +2125,43 @@ behaviour. It also covers a non-BMP round trip. Run an old release with:
 
 `-batch` and `assertSuccess` do not exist before R2019a and R2020a respectively, which is
 why `run-tests.bat` cannot be pointed at an old release unchanged.
+
+---
+
+## 20. Should the merged archive keep GraalVM's debug info?
+
+Found 2026-08-04 in HEBI-Core, whose CI runs Bloaty McBloatface over the built
+`libhebi.so` to report per-package size. Its bundled bloaty is 1.0, from before DWARF 5,
+and the job now dies with "Data is in new DWARF format we don't understand".
+
+The DWARF 5 is not HEBI-Core's. Its toolchain image is clang 11, which still emits
+DWARF 4. It comes from the GraalVM objects the package merges in: 14 members of
+`libhebi_ndk_static.a` carry debug info, all of them `libchelper` (`JvmFuncs.o`,
+`attachHelper.o`, `cpuid.o`, `locale.o`, `timeZone.o` and friends), and all at version 5.
+The previous ndk's `liblibchelper.a` carried the same objects at version 4, so the bump
+arrived with the newer GraalVM rather than with anything here. The image object itself
+(`hebi_ndk.o`) has no debug sections at all, and neither does the compiled shim on Linux.
+
+So the question is whether the merge in the generated `CMakeLists.txt` should
+`strip --strip-debug` (or `-S` on macOS) the result. Arguments for:
+
+- consumers cannot meaningfully step into prebuilt Oracle objects, and the parts they
+  might want to debug carry no debug info anyway
+- a consumer's split `.debug` file inherits compile units for code that is not theirs
+- it makes the archive's debug format independent of whatever GraalVM ships next
+
+Against, and the reason this is a question rather than a task:
+
+- it is a silent removal of information a consumer might be relying on
+- stripping members inside a merged archive needs care per platform, and the Windows
+  path already has its own debug story (`MSVC_DEBUG_INFORMATION_FORMAT Embedded`, see
+  the CLAUDE.md note about LNK4099)
+- the immediate symptom is one stale tool in one consumer's CI. HEBI-Core has marked
+  that job `continue-on-error` for now, and the real fix there is a newer bloaty
+
+Worth measuring before deciding: how many bytes of the archive this actually is, and
+whether the linker keeps those compile units in a consumer's stripped shared library at
+all.
 
 ---
 

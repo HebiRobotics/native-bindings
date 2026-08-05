@@ -5,7 +5,6 @@ import org.stringtemplate.v4.ST;
 import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
-import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.ProtoSortUtil;
 import us.hebi.graalvm.bindings.model.*;
 
@@ -34,10 +33,6 @@ public abstract class BindingGenerator {
                 new LibraryInfoFeature(lib),
                 new CocoaFeature(lib)
         );
-    }
-
-    protected String getLastErrorMethod(ClassDescription apiClass) {
-        return GeneratorUtil.getLastErrorCName(lib, apiClass.getIsolateName());
     }
 
     protected ST loadTemplateWithLibVars(String template) {

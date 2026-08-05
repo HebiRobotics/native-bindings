@@ -184,6 +184,28 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
+        content.append("""
+                class _ErrorInfo(Structure):
+                    # Filled by every method that can throw. The strings stay valid only until
+                    # this thread's next library call, so they get copied into the exception.
+                    _fields_ = [("message", c_char_p), ("id", c_char_p), ("code", c_int32)]
+
+                class Error(RuntimeError):
+                    # Failure reported by the library. The id names the kind of failure, as in
+                    # "mylib:invalidArgument", and is empty when the library did not set one.
+                    def __init__(self, message, id=""):
+                        super().__init__(f"[{id}] {message}" if id else message)
+                        self.id = id
+
+                def _checked(error_, result_):
+                    # Wraps the call so that the check reads as one expression. Python evaluates
+                    # the arguments first, so the struct is filled by the time this runs.
+                    if error_.code != 0:
+                        message = error_.message.decode("utf-8") if error_.message else "unknown error"
+                        raise Error(message, error_.id.decode("utf-8") if error_.id else "")
+                    return result_
+
+                """);
         if (GeneratorUtil.usesSpans(lib)) {
             content.append("""
                     class _DoubleSpan(Structure):
@@ -218,6 +240,9 @@ public class PythonBindingsGenerator extends BindingGenerator {
             List<String> params = new ArrayList<>();
             for (MethodDescription method : apiClass.getMethods()) {
                 params.clear();
+                if (isThrowing(method)) {
+                    params.add("POINTER(_ErrorInfo)");
+                }
                 if (!method.getIsStatic()) {
                     params.add(getCPythonType(apiClass.getType()));
                 }
@@ -258,20 +283,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("CAST", apiClass.getToParentCastMethod().getCName())
                         .render());
             }
-        }
-
-        // The per-isolate last error accessors are library-level symbols. Without
-        // the restype registration ctypes would default to c_int and truncate the
-        // pointer before the decode in the error messages.
-        content.append("\n# ==== Library ====\n");
-        for (String isolateName : GeneratorUtil.getIsolateNames(lib)) {
-            content.append(IndentingTextRenderer.of("""
-                            %%LIB_FIELD%%.%%CENTRY_NAME%%.argtypes = []
-                            %%LIB_FIELD%%.%%CENTRY_NAME%%.restype = c_char_p
-                            """)
-                    .set("LIB_FIELD", libField)
-                    .set("CENTRY_NAME", GeneratorUtil.getLastErrorCName(lib, isolateName))
-                    .render());
         }
     }
 
@@ -479,18 +490,27 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var conversions = indent.apply(paramLists.inputConversions);
         var postBody = overload.tryGetPostBody().map(appendNewline).map(indent).orElse("");
 
-        // C call and type conversion
+        // C call and type conversion. A throwing method fills a local struct and wraps the
+        // call in the check, which keeps every return template a single expression.
+        boolean throwing = isThrowing(method);
+        if (throwing) {
+            callArgs = callArgs.isEmpty() ? "byref(error_)" : "byref(error_), " + callArgs;
+        }
         var returnTemplate = indent.apply(getReturnTemplate(apiClass, method)
-                .set("CALL", "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
+                .set("CALL", throwing
+                        ? "_checked(error_, %%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%))"
+                        : "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
                 .render());
+        var errorInit = throwing ? indent.apply("error_ = _ErrorInfo()\n") : "";
         var numpy = isUsingNumpy(body, conversions, postBody, returnTemplate) ? indent.apply("np = _require_numpy()\n") : "";
 
         // Build the full method body
         content.append(IndentingTextRenderer.of("""
                             def %%METHOD%%(%%PARAMS%%)%%HINT%%:%%DOCS%%
-                                %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%RETURN%%
+                                %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%ERROR_INIT%%%%RETURN%%
 
                         """)
+                .set("ERROR_INIT", errorInit)
                 .set("RETURN", returnTemplate)
 
                 .set("METHOD", funcName)
@@ -528,7 +548,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 String template = """
                         ptr_ = %%CALL%%
                         if not ptr_:
-                            raise RuntimeError(f'Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%%%REASON%%')
+                            raise RuntimeError('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%')
                         """;
                 if (isConstructor) {
                     template += "self.%%REF_FIELD%% = ptr_\n";
@@ -548,11 +568,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 }
                 yield template;
             }
-            case VOID_WITH_ERROR_CODE -> """
-                    status_ = %%CALL%%
-                    if status_ != 0:
-                        raise RuntimeError(f'Encountered error in %%CLASS_NAME%%::%%METHOD%%%%REASON%%')
-                    """;
             case CHAR_POINTER -> """
                     ptr_ = %%CALL%%
                     return ptr_.decode("utf-8") if ptr_ is not None else ""
@@ -571,13 +586,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         };
 
         return IndentingTextRenderer.of(string.stripTrailing())
-                .set("REASON", getErrorReason(apiClass, desc))
                 .set("RETURN_TYPE", desc.getReturnType().getTypeName());
-    }
-
-    private String getErrorReason(ClassDescription apiClass, MethodDescription desc) {
-        return " ({%%LIB_FIELD%%.%%C_ERROR_METHOD%%().decode(\"utf-8\")})"
-                .replace("%%C_ERROR_METHOD%%", getLastErrorMethod(apiClass));
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {

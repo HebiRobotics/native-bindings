@@ -5,8 +5,9 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
+import us.hebi.graalvm.bindings.runtime.types.CLibError;
+import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
 
 public final class TestShape_TestCircle$CEntries {
@@ -23,11 +24,13 @@ public final class TestShape_TestCircle$CEntries {
     @CEntryPoint(
             name = "__bindings_tests_Circle_create"
     )
-    public static ObjectHandle bindings_tests_Circle_create(IsolateThread _isolate, double radius) {
+    public static ObjectHandle bindings_tests_Circle_create(IsolateThread _isolate,
+            ErrorInfo _error, double radius) {
+        CLibError.clearStruct(_error);
         try {
             return TestShape_TestCircle$CEntries._registerInstance(TestShape.TestCircle.create(radius));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            CLibError.fillStruct(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }
@@ -39,7 +42,7 @@ public final class TestShape_TestCircle$CEntries {
         try {
             return TestShape_TestCircle_Color$$CEnum.fromJava(_getInstance(_obj).getColor());
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -52,7 +55,7 @@ public final class TestShape_TestCircle$CEntries {
         try {
             return _getInstance(_obj).getRadius();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -64,7 +67,7 @@ public final class TestShape_TestCircle$CEntries {
         try {
             return _getInstance(_obj).area();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -76,7 +79,7 @@ public final class TestShape_TestCircle$CEntries {
         try {
             return _getInstance(_obj).sideCount();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

@@ -1,5 +1,6 @@
 #pragma once
 #include \<stddef.h>
+#include \<stdint.h>
 
 <defines>
 #ifdef __cplusplus

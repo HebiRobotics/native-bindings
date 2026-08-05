@@ -4,7 +4,6 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
@@ -16,7 +15,7 @@ public final class TestPalette$CEntries {
         try {
             return TestPalette_Color$$CEnum.fromJava(TestPalette.next(TestPalette_Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -28,7 +27,7 @@ public final class TestPalette$CEntries {
         try {
             return CTypes.toTempCharPointer(TestPalette.nameOf(TestPalette_Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -40,7 +39,7 @@ public final class TestPalette$CEntries {
         try {
             return TestPalette.ordinalOf(TestPalette_Color$$CEnum.toJava(color));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -53,7 +52,7 @@ public final class TestPalette$CEntries {
         try {
             return CTypes.toTempCharPointer(TestPalette.describe(TestPalette_Color$$CEnum.toJava(color), TestPalette_Marker$$CEnum.toJava(marker)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -65,7 +64,7 @@ public final class TestPalette$CEntries {
         try {
             return TestPalette_Color$$CEnum.fromJava(TestPalette.fromOrdinal(ordinal));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

@@ -22,7 +22,7 @@ public final class TypeMap {
     }
 
     public static boolean isVoid(DataType type) {
-        return type == DataType.VOID || type == DataType.VOID_WITH_ERROR_CODE;
+        return type == DataType.VOID;
     }
 
     public static boolean isPointerType(DataType type) {
@@ -42,7 +42,6 @@ public final class TypeMap {
 
     public static String toExternalCpp(DataType type) {
         return switch (type) {
-            case VOID_WITH_ERROR_CODE -> "void";
             case BOOL -> "bool";
             default -> toExternalC(type);
         };
@@ -80,7 +79,6 @@ public final class TypeMap {
      */
     public static String toInternalC(DataType type) {
         return switch (type) {
-            case VOID_WITH_ERROR_CODE -> "int";
             case VOID -> "void";
             case BOOL -> "int";               // Java boolean maps to C int
             case CHAR16 -> "unsigned short";  // Java char (unsigned 16) -> C short
@@ -150,14 +148,13 @@ public final class TypeMap {
             case FLOAT64_SPAN -> "_DoubleSpan";
 
             case UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
-            case VOID_WITH_ERROR_CODE -> "c_int";
         };
     }
 
     public static String toPythonTypeHint(TypeDescription desc) {
         return switch (desc.getDataType()) {
             case OBJECT_HANDLE, TYPEDEF, ENUM -> desc.getTypeName();
-            case VOID, VOID_WITH_ERROR_CODE -> "None";
+            case VOID -> "None";
             case BOOL -> "bool";
 
             // Map all integer widths to Python 'int'

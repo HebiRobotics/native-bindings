@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestIndices;
 
@@ -14,7 +13,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.echo(index);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -26,7 +25,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.countUpTo(index);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -38,7 +37,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.lastIndexOf(count);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -50,7 +49,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.offsetFrom(row, col);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -62,7 +61,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.fromRow(row);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -74,7 +73,7 @@ public final class TestIndices$CEntries {
         try {
             return TestIndices.echoSize(CTypes.capSizeToLong(index));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

@@ -639,7 +639,7 @@
       "isStatic": true,
       "cName": "bindings_tests_Errors_requireNonNegative",
       "returnType": {
-        "dataType": "VOID_WITH_ERROR_CODE"
+        "dataType": "VOID"
       },
       "parameters": [{
         "paramName": "value",
@@ -714,6 +714,16 @@
       "documentation": "Returns a null pointer through the ABI when it throws.",
       "throwsOn": "shouldFail is true"
     }, {
+      "name": "failWithoutMessage",
+      "lowerUnderscoreName": "fail_without_message",
+      "isStatic": true,
+      "cName": "bindings_tests_Errors_failWithoutMessage",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "documentation": "Throws an exception that carries no message.",
+      "throwsOn": "always"
+    }, {
       "name": "neverThrows",
       "lowerUnderscoreName": "never_throws",
       "isStatic": true,
@@ -722,27 +732,6 @@
         "dataType": "VOID"
       },
       "documentation": "Marked noexcept, so no status code is generated for it.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "clearLastError",
-      "lowerUnderscoreName": "clear_last_error",
-      "isStatic": true,
-      "cName": "bindings_tests_Errors_clearLastError",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "documentation": "Clears the last error for the calling thread.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "getLastError",
-      "lowerUnderscoreName": "get_last_error",
-      "isStatic": true,
-      "cName": "bindings_tests_Errors_getLastError",
-      "returnType": {
-        "isConst": true,
-        "dataType": "CHAR_POINTER"
-      },
-      "documentation": "Message of the last exception thrown on the calling thread, or an empty\nstring if there has not been one. Same content as the generated library\nlevel accessor, exported as an ordinary method.\n",
       "flags": ["Noexcept"]
     }]
   }, {
@@ -904,7 +893,7 @@
       "isStatic": true,
       "cName": "bindings_tests_Isolated_alwaysFails",
       "returnType": {
-        "dataType": "VOID_WITH_ERROR_CODE"
+        "dataType": "VOID"
       },
       "documentation": "Always throws, so the secondary isolate's error path is exercised too.",
       "throwsOn": "always"

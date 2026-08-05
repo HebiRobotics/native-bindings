@@ -32,6 +32,11 @@ public class CDoublePointerMock extends MockPointerBase implements CDoublePointe
     }
 
     @Override
+    public boolean isNull() {
+        return array == null;
+    }
+
+    @Override
     public double read() {
         return array[offset];
     }

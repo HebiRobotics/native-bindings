@@ -18,18 +18,6 @@
 namespace bindings {
 namespace tests {
 
-class Exception : public std::exception {
-public:
-  Exception(const char* message) noexcept : msg_(message) {}
-  Exception(const std::string& message) noexcept : msg_(message) {}
-  virtual ~Exception() noexcept {}
-  const char* what() const noexcept override {
-    return msg_.c_str();
-  }
-protected:
-  std::string msg_;
-};
-
 enum class CircleColor : int32_t {
   Red = 0,
   Green = 1,
@@ -65,6 +53,29 @@ struct double_span {
   const double* data;
   size_t length;
 };
+struct ErrorInfo {
+  const char* message;
+  const char* id;
+  int32_t code;
+};
+}
+
+class Exception : public std::runtime_error {
+public:
+  explicit Exception(const char* message) : std::runtime_error(message) {}
+  Exception(const char* message, const char* id) : std::runtime_error(message), id_(id) {}
+  virtual ~Exception() noexcept = default;
+  const char* id() const noexcept { return id_.c_str(); } // Kind of failure, e.g., bindings:Generic
+private:
+  std::string id_;
+};
+
+inline void checkError(const internal::ErrorInfo& error) {
+  if (error.code != 0) {
+    const char* message = error.message != nullptr ? error.message : "unknown error";
+    const char* id = error.id != nullptr ? error.id : "";
+    throw Exception(message, id);
+  }
 }
 
 // ==== Class Wrappers ====
@@ -378,22 +389,15 @@ bool failingBool(bool shouldFail);
 std::string failingString(bool shouldFail);
 
 /**
+ * @brief Throws an exception that carries no message.
+ * @throw always
+ */
+int failWithoutMessage();
+
+/**
  * @brief Marked noexcept, so no status code is generated for it.
  */
 void neverThrows() noexcept;
-
-/**
- * @brief Clears the last error for the calling thread.
- */
-void clearLastError() noexcept;
-
-/**
- * @details 
- * Message of the last exception thrown on the calling thread, or an empty
- * string if there has not been one. Same content as the generated library
- * level accessor, exported as an ordinary method.
- */
-std::string getLastError() noexcept;
 } // namespace errors
 
 
@@ -714,8 +718,10 @@ private:
 // ==== C++ Implementations ====
 // Counter
 inline Counter::Counter(int start) {
-  static auto bindings_tests_Counter_create = DynamicLookup::instance().getFunc<internal::CounterPtr(*)(int)>("bindings_tests_Counter_create");
-  ptr_ = bindings_tests_Counter_create(start);
+  static auto bindings_tests_Counter_create = DynamicLookup::instance().getFunc<internal::CounterPtr(*)(internal::ErrorInfo*, int)>("bindings_tests_Counter_create");
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counter_create(&error_, start);
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Counter");
   }
@@ -769,8 +775,10 @@ inline Counter::~Counter() noexcept {
 
 // Naming
 inline Naming::Naming(int startValue) {
-  static auto custom_prefix_Naming_create = DynamicLookup::instance().getFunc<internal::NamingPtr(*)(int)>("custom_prefix_Naming_create");
-  ptr_ = custom_prefix_Naming_create(startValue);
+  static auto custom_prefix_Naming_create = DynamicLookup::instance().getFunc<internal::NamingPtr(*)(internal::ErrorInfo*, int)>("custom_prefix_Naming_create");
+  internal::ErrorInfo error_ = {};
+  ptr_ = custom_prefix_Naming_create(&error_, startValue);
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Naming");
   }
@@ -846,8 +854,10 @@ inline Shape::~Shape() noexcept {
 namespace internal {
 // The null check happens here because the base class gets initialized before the constructor body runs
 inline internal::CirclePtr createCirclePointer(double radius) {
-  static auto bindings_tests_Circle_create = DynamicLookup::instance().getFunc<internal::CirclePtr(*)(double)>("bindings_tests_Circle_create");
-  auto ptr = bindings_tests_Circle_create(radius);
+  static auto bindings_tests_Circle_create = DynamicLookup::instance().getFunc<internal::CirclePtr(*)(internal::ErrorInfo*, double)>("bindings_tests_Circle_create");
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Circle_create(&error_, radius);
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Circle");
   }
@@ -890,8 +900,10 @@ inline Circle& Circle::operator=(Circle&& from) noexcept {
 namespace internal {
 // The null check happens here because the base class gets initialized before the constructor body runs
 inline internal::SquarePtr createSquarePointer(double side) {
-  static auto bindings_tests_Square_create = DynamicLookup::instance().getFunc<internal::SquarePtr(*)(double)>("bindings_tests_Square_create");
-  auto ptr = bindings_tests_Square_create(side);
+  static auto bindings_tests_Square_create = DynamicLookup::instance().getFunc<internal::SquarePtr(*)(internal::ErrorInfo*, double)>("bindings_tests_Square_create");
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Square_create(&error_, side);
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Square");
   }
@@ -954,8 +966,11 @@ inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
   bindings_tests_Arrays_reverseFloat64(values, count);
 }
 inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
-  static auto bindings_tests_Arrays_dotProduct = DynamicLookup::instance().getFunc<double(*)(internal::double_span, internal::double_span)>("bindings_tests_Arrays_dotProduct");
-  return bindings_tests_Arrays_dotProduct(x, y);
+  static auto bindings_tests_Arrays_dotProduct = DynamicLookup::instance().getFunc<double(*)(internal::ErrorInfo*, internal::double_span, internal::double_span)>("bindings_tests_Arrays_dotProduct");
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Arrays_dotProduct(&error_, x, y);
+  checkError(error_);
+  return result_;
 }
 inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
   return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
@@ -986,41 +1001,49 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 
 // Errors
 inline void errors::requireNonNegative(int value) {
-  static auto bindings_tests_Errors_requireNonNegative = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Errors_requireNonNegative");
-  int status_ = bindings_tests_Errors_requireNonNegative(value);
-  if (status_ != 0) {
-    throw Exception("Encountered error in Errors::requireNonNegative");
-  }
+  static auto bindings_tests_Errors_requireNonNegative = DynamicLookup::instance().getFunc<void(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_requireNonNegative");
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Errors_requireNonNegative(&error_, value);
+  checkError(error_);
 }
 inline int errors::divideInt32(int a, int b) {
-  static auto bindings_tests_Errors_divideInt32 = DynamicLookup::instance().getFunc<int(*)(int, int)>("bindings_tests_Errors_divideInt32");
-  return bindings_tests_Errors_divideInt32(a, b);
+  static auto bindings_tests_Errors_divideInt32 = DynamicLookup::instance().getFunc<int(*)(internal::ErrorInfo*, int, int)>("bindings_tests_Errors_divideInt32");
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_divideInt32(&error_, a, b);
+  checkError(error_);
+  return result_;
 }
 inline double errors::failingFloat64(bool shouldFail) {
-  static auto bindings_tests_Errors_failingFloat64 = DynamicLookup::instance().getFunc<double(*)(int)>("bindings_tests_Errors_failingFloat64");
-  return bindings_tests_Errors_failingFloat64(shouldFail);
+  static auto bindings_tests_Errors_failingFloat64 = DynamicLookup::instance().getFunc<double(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_failingFloat64");
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failingFloat64(&error_, shouldFail);
+  checkError(error_);
+  return result_;
 }
 inline bool errors::failingBool(bool shouldFail) {
-  static auto bindings_tests_Errors_failingBool = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Errors_failingBool");
-  return bindings_tests_Errors_failingBool(shouldFail);
+  static auto bindings_tests_Errors_failingBool = DynamicLookup::instance().getFunc<int(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_failingBool");
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failingBool(&error_, shouldFail);
+  checkError(error_);
+  return result_;
 }
 inline std::string errors::failingString(bool shouldFail) {
-  static auto bindings_tests_Errors_failingString = DynamicLookup::instance().getFunc<const char*(*)(int)>("bindings_tests_Errors_failingString");
-  auto ptr = bindings_tests_Errors_failingString(shouldFail);
+  static auto bindings_tests_Errors_failingString = DynamicLookup::instance().getFunc<const char*(*)(internal::ErrorInfo*, int)>("bindings_tests_Errors_failingString");
+  internal::ErrorInfo error_ = {};
+  auto ptr = bindings_tests_Errors_failingString(&error_, shouldFail);
+  checkError(error_);
   return !ptr ? std::string() : std::string(ptr); // copy utf8
+}
+inline int errors::failWithoutMessage() {
+  static auto bindings_tests_Errors_failWithoutMessage = DynamicLookup::instance().getFunc<int(*)(internal::ErrorInfo*)>("bindings_tests_Errors_failWithoutMessage");
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Errors_failWithoutMessage(&error_);
+  checkError(error_);
+  return result_;
 }
 inline void errors::neverThrows() noexcept {
   static auto bindings_tests_Errors_neverThrows = DynamicLookup::instance().getFunc<void(*)()>("bindings_tests_Errors_neverThrows");
   bindings_tests_Errors_neverThrows();
-}
-inline void errors::clearLastError() noexcept {
-  static auto bindings_tests_Errors_clearLastError = DynamicLookup::instance().getFunc<void(*)()>("bindings_tests_Errors_clearLastError");
-  bindings_tests_Errors_clearLastError();
-}
-inline std::string errors::getLastError() noexcept {
-  static auto bindings_tests_Errors_getLastError = DynamicLookup::instance().getFunc<const char*(*)()>("bindings_tests_Errors_getLastError");
-  auto ptr = bindings_tests_Errors_getLastError();
-  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 
 // Indices
@@ -1063,11 +1086,10 @@ inline void isolated::reset() noexcept {
   bindings_tests_Isolated_reset();
 }
 inline void isolated::alwaysFails() {
-  static auto bindings_tests_Isolated_alwaysFails = DynamicLookup::instance().getFunc<int(*)()>("bindings_tests_Isolated_alwaysFails");
-  int status_ = bindings_tests_Isolated_alwaysFails();
-  if (status_ != 0) {
-    throw Exception("Encountered error in Isolated::alwaysFails");
-  }
+  static auto bindings_tests_Isolated_alwaysFails = DynamicLookup::instance().getFunc<void(*)(internal::ErrorInfo*)>("bindings_tests_Isolated_alwaysFails");
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Isolated_alwaysFails(&error_);
+  checkError(error_);
 }
 
 // Math
