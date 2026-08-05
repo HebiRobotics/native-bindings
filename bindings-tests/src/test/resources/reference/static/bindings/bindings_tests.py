@@ -293,10 +293,6 @@ libbindings_tests.bindings_tests_Errors_failWithoutMessage.argtypes = [POINTER(_
 libbindings_tests.bindings_tests_Errors_failWithoutMessage.restype = c_int
 libbindings_tests.bindings_tests_Errors_neverThrows.argtypes = []
 libbindings_tests.bindings_tests_Errors_neverThrows.restype = None
-libbindings_tests.bindings_tests_Errors_clearLastError.argtypes = []
-libbindings_tests.bindings_tests_Errors_clearLastError.restype = None
-libbindings_tests.bindings_tests_Errors_getLastError.argtypes = []
-libbindings_tests.bindings_tests_Errors_getLastError.restype = c_char_p
 
 # ==== Indices ====
 libbindings_tests.bindings_tests_Indices_echo.argtypes = [c_int]
@@ -394,12 +390,6 @@ libbindings_tests.bindings_tests_Strings_join.restype = c_char_p
 libbindings_tests.bindings_tests_Strings_repeat.argtypes = [c_char_p, c_size_t]
 libbindings_tests.bindings_tests_Strings_repeat.restype = c_char_p
 
-# ==== Library ====
-libbindings_tests.bindings_tests_getLastError.argtypes = []
-libbindings_tests.bindings_tests_getLastError.restype = c_char_p
-libbindings_tests.bindings_tests_secondary_getLastError.argtypes = []
-libbindings_tests.bindings_tests_secondary_getLastError.restype = c_char_p
-
 # ==== Enum Wrappers ====
 class CircleColor(IntEnum):
     RED = 0
@@ -434,7 +424,7 @@ class Counter:
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counter_create(byref(error_), start))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Counter in Counter::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Counter in Counter::__init__')
         self.ptr = ptr_
         if value is not None: self.value = value
 
@@ -495,7 +485,7 @@ class Naming:
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.custom_prefix_Naming_create(byref(error_), start_value))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Naming in Naming::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Naming in Naming::__init__')
         self.ptr = ptr_
 
     def __del__(self):
@@ -568,7 +558,7 @@ class Circle(Shape):
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Circle_create(byref(error_), radius))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Circle in Circle::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Circle in Circle::__init__')
         self.ref_Circle = ptr_
         super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -604,7 +594,7 @@ class Square(Shape):
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Square_create(byref(error_), side))
         if not ptr_:
-            raise RuntimeError(f'Failed to create Square in Square::__init__ ({libbindings_tests.bindings_tests_getLastError().decode("utf-8")})')
+            raise RuntimeError('Failed to create Square in Square::__init__')
         self.ref_Square = ptr_
         super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ptr_))
         if name is not None: self.name = name
@@ -883,20 +873,6 @@ class Errors:
     def never_throws(cls) -> None:
         """Marked noexcept, so no status code is generated for it."""
         libbindings_tests.bindings_tests_Errors_neverThrows()
-
-    @classmethod
-    def clear_last_error(cls) -> None:
-        """Clears the last error for the calling thread."""
-        libbindings_tests.bindings_tests_Errors_clearLastError()
-
-    @classmethod
-    def get_last_error(cls) -> str:
-        """Message of the last exception thrown on the calling thread, or an empty
-        string if there has not been one. Same content as the generated library
-        level accessor, exported as an ordinary method.
-        """
-        ptr_ = libbindings_tests.bindings_tests_Errors_getLastError()
-        return ptr_.decode("utf-8") if ptr_ is not None else ""
 
 
 class Indices:

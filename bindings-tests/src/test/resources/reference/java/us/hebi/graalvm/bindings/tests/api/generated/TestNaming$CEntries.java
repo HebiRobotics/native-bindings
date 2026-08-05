@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
 import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
@@ -52,7 +51,7 @@ public final class TestNaming$CEntries {
         try {
             return _getInstance(_obj).getStartValue();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -65,7 +64,7 @@ public final class TestNaming$CEntries {
         try {
             return TestNaming.addTwoNumbers(first, second);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

@@ -30,7 +30,6 @@ int main(void) {
     bindings_tests_double_span xSpan;
     bindings_tests_double_span ySpan;
     bindings_tests_error_info_t error;
-    const char* lastError;
 
     CHECK(bindings_tests_Math_addInt32(2, 3) == 5);
     CHECK(bindings_tests_Math_negate(0) == 1); /* boolean not */
@@ -48,11 +47,8 @@ int main(void) {
     ySpan.length = 3;
     CHECK(bindings_tests_Arrays_dotProduct(NULL, xSpan, ySpan) == 32.0);
 
-    /* A caller that does not want the struct passes NULL and reads the last error instead */
-    bindings_tests_Errors_clearLastError();
+    /* A caller that does not want the struct passes NULL, which every entry point tolerates */
     bindings_tests_Errors_requireNonNegative(NULL, -1);
-    lastError = bindings_tests_Errors_getLastError();
-    CHECK(lastError != NULL && strlen(lastError) > 0);
 
     error.code = 0;
     bindings_tests_Errors_requireNonNegative(&error, -1);

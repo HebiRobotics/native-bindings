@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestIsolated;
@@ -15,7 +14,7 @@ public final class TestIsolated$CEntries {
         try {
             TestIsolated.increment();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -26,7 +25,7 @@ public final class TestIsolated$CEntries {
         try {
             return TestIsolated.getCounter();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -38,7 +37,7 @@ public final class TestIsolated$CEntries {
         try {
             TestIsolated.reset();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 

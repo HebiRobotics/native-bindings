@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
 import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
@@ -51,7 +50,7 @@ public final class TestCounter$CEntries {
         try {
             _getInstance(_obj).increment();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -63,7 +62,7 @@ public final class TestCounter$CEntries {
         try {
             _getInstance(_obj).add(amount);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -74,7 +73,7 @@ public final class TestCounter$CEntries {
         try {
             return _getInstance(_obj).getValue();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -87,7 +86,7 @@ public final class TestCounter$CEntries {
         try {
             _getInstance(_obj).setValue(value);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -99,7 +98,7 @@ public final class TestCounter$CEntries {
         try {
             return _getInstance(_obj).isClosed();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return false;
         }
     }
@@ -111,7 +110,7 @@ public final class TestCounter$CEntries {
         try {
             return TestCounter.getClosedCount();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -123,7 +122,7 @@ public final class TestCounter$CEntries {
         try {
             TestCounter.resetClosedCount();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 }

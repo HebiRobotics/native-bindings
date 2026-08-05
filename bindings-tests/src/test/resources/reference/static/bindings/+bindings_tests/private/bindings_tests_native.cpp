@@ -745,19 +745,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             bindings_tests_Errors_neverThrows();
             break;
         }
-        case /* hash32_fnv1a("bindings_tests_Errors_clearLastError") */ 2925181135: {
-            static auto bindings_tests_Errors_clearLastError = libLoader.getFunc<void(*)()>("bindings_tests_Errors_clearLastError");
-            checkArgCount(nrhs, 0, "bindings_tests_Errors_clearLastError");
-            bindings_tests_Errors_clearLastError();
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_Errors_getLastError") */ 3813753256: {
-            static auto bindings_tests_Errors_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_Errors_getLastError");
-            checkArgCount(nrhs, 0, "bindings_tests_Errors_getLastError");
-            const char* _value = bindings_tests_Errors_getLastError();
-            if (nlhs > 0) plhs[0] = createMexString(_value);
-            break;
-        }
 
         // Indices
         case /* hash32_fnv1a("bindings_tests_Indices_echo") */ 2992836537: {
@@ -1110,22 +1097,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             MatlabString value(prhs[1]);
             size_t times = getScalar<size_t>(prhs[2], "times");
             const char* _value = bindings_tests_Strings_repeat(value, times);
-            if (nlhs > 0) plhs[0] = createMexString(_value);
-            break;
-        }
-
-        // Library
-        case /* hash32_fnv1a("bindings_tests_getLastError") */ 2861779828: {
-            static auto bindings_tests_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_getLastError");
-            checkArgCount(nrhs, 0, "bindings_tests_getLastError");
-            const char* _value = bindings_tests_getLastError();
-            if (nlhs > 0) plhs[0] = createMexString(_value);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_secondary_getLastError") */ 652972755: {
-            static auto bindings_tests_secondary_getLastError = libLoader.getFunc<const char*(*)()>("bindings_tests_secondary_getLastError");
-            checkArgCount(nrhs, 0, "bindings_tests_secondary_getLastError");
-            const char* _value = bindings_tests_secondary_getLastError();
             if (nlhs > 0) plhs[0] = createMexString(_value);
             break;
         }

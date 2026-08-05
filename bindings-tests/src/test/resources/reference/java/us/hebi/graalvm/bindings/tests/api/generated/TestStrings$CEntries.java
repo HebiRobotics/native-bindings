@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestStrings;
 
@@ -18,7 +17,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.echo(CTypes.utf8ToJavaString(value)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -31,7 +30,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.concat(CTypes.utf8ToJavaString(a), CTypes.utf8ToJavaString(b)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -44,7 +43,7 @@ public final class TestStrings$CEntries {
         try {
             return TestStrings.utf8Length(CTypes.utf8ToJavaString(value));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -57,7 +56,7 @@ public final class TestStrings$CEntries {
         try {
             return TestStrings.utf16Length(CTypes.utf8ToJavaString(value));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -69,7 +68,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.empty());
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -81,7 +80,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.nullString());
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -94,7 +93,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.join(values, CTypes.capSizeToInt(count), CTypes.utf8ToJavaString(separator)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -107,7 +106,7 @@ public final class TestStrings$CEntries {
         try {
             return CTypes.toTempCharPointer(TestStrings.repeat(CTypes.utf8ToJavaString(value), CTypes.capSizeToInt(times)));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }

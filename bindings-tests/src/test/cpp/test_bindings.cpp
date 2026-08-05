@@ -290,20 +290,11 @@ static void testPalette() {
 // ---------------------------------------------------------------------------
 
 static void testErrors() {
-  bt::errors::clearLastError();
-
   // A throwing void method is promoted to an int status code, and the wrapper
   // turns a non-zero status into a bindings::tests::Exception.
   bt::errors::requireNonNegative(5);
 
-  bool threw = false;
-  try {
-    bt::errors::requireNonNegative(-1);
-  } catch (const bt::Exception&) {
-    threw = true;
-  }
-  CHECK(threw);
-  CHECK(bt::errors::getLastError().find("must not be negative") != std::string::npos);
+  CHECK(throwsWithMessage([] { bt::errors::requireNonNegative(-1); }, "must not be negative"));
 
   // Methods with a real return type report through the same error struct, so a
   // failure is an exception here too rather than a value the caller cannot tell
@@ -346,8 +337,8 @@ static void testErrors() {
   // declared noexcept.
   bt::errors::neverThrows();
 
-  bt::errors::clearLastError();
-  CHECK(bt::errors::getLastError().empty());
+  // A successful call after a failure must not report the earlier one
+  CHECK(bt::errors::divideInt32(9, 3) == 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -404,28 +395,17 @@ static void testOverloads() {
 // Isolated (second isolate)
 // ---------------------------------------------------------------------------
 
-// The C++ wrapper only uses the generated per-isolate accessor internally, so
-// the raw C symbol is declared here to assert on it directly.
-extern "C" const char* bindings_tests_secondary_getLastError();
-
 static void testIsolated() {
   // This state lives in a second GraalVM isolate. It does not share static
-  // fields, the handle registry or the last error slot with the default
-  // isolate, which is why it gets its own generated last error accessor.
+  // fields or the handle registry with the default isolate.
   bt::isolated::reset();
   bt::isolated::increment();
   bt::isolated::increment();
   bt::isolated::increment();
   CHECK(bt::isolated::getCounter() == 3);
 
-  bool threw = false;
-  try {
-    bt::isolated::alwaysFails();
-  } catch (const bt::Exception&) {
-    threw = true;
-  }
-  CHECK(threw);
-  CHECK(std::string(bindings_tests_secondary_getLastError()).find("secondary isolate") != std::string::npos);
+  // The error struct is caller-owned, so the secondary isolate reports the same way
+  CHECK(throwsWithMessage([] { bt::isolated::alwaysFails(); }, "secondary isolate"));
 }
 
 // ---------------------------------------------------------------------------

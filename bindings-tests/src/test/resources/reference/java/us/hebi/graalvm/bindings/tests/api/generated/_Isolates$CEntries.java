@@ -3,10 +3,6 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
 
 public final class _Isolates$CEntries {
     @CEntryPoint(
@@ -44,16 +40,4 @@ public final class _Isolates$CEntries {
             builtin = CEntryPoint.Builtin.TEAR_DOWN_ISOLATE
     )
     public static native int tearDownIsolate(IsolateThread thread);
-
-    @CEntryPoint(
-            name = "__bindings_tests_getLastError"
-    )
-    public static CCharPointer bindings_tests_getLastError(IsolateThread _isolate) {
-        try {
-            return CTypes.toTempCharPointer(ExceptionHandlers.getLastError(false));
-        } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
-            return WordFactory.nullPointer();
-        }
-    }
 }

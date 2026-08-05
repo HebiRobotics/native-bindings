@@ -252,16 +252,14 @@ classdef BindingsTest < matlab.unittest.TestCase
 
         function testErrors(testCase)
             % Error propagation across the ABI
-            bindings_tests.Errors.clearLastError();
-
             bindings_tests.Errors.requireNonNegative(5);
 
             % A throwing void method is promoted to an int status code, and the
-            % wrapper turns a non-zero status into a MATLAB error whose message
-            % already carries the last error text.
-            message = testCase.captureError(@() bindings_tests.Errors.requireNonNegative(-1));
+            % wrapper turns a non-zero status into a MATLAB error carrying the
+            % message and id from the error struct.
+            [message, identifier] = testCase.captureError(@() bindings_tests.Errors.requireNonNegative(-1));
             testCase.verifyTrue(contains(message, 'must not be negative'));
-            testCase.verifyTrue(contains(bindings_tests.Errors.getLastError(), 'must not be negative'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalArgumentException');
 
             % Methods with a real return type report through the same error
             % struct, so a failure raises here too and the id reaches MATLAB as
@@ -288,8 +286,8 @@ classdef BindingsTest < matlab.unittest.TestCase
             % Marked Noexcept, so there is no status code to check
             bindings_tests.Errors.neverThrows();
 
-            bindings_tests.Errors.clearLastError();
-            testCase.verifyTrue(isempty(bindings_tests.Errors.getLastError()));
+            % A successful call after a failure must not report the earlier one
+            testCase.verifyEqual(bindings_tests.Errors.divideInt32(9, 3), 3);
         end
 
         function testOverloads(testCase)
@@ -359,19 +357,17 @@ classdef BindingsTest < matlab.unittest.TestCase
 
         function testIsolated(testCase)
             % State confined to a second GraalVM isolate. It does not share
-            % static fields, the handle registry or the last error slot with the
-            % default isolate, which is why it gets its own generated last error
-            % accessor. The MEX gateway lives in a private folder, so the raw
-            % accessor is not reachable from here and the error message, which
-            % flows through it, is the observable instead.
+            % static fields or the handle registry with the default isolate.
             bindings_tests.Isolated.reset();
             bindings_tests.Isolated.increment();
             bindings_tests.Isolated.increment();
             bindings_tests.Isolated.increment();
             testCase.verifyEqual(bindings_tests.Isolated.getCounter(), 3);
 
-            message = testCase.captureError(@() bindings_tests.Isolated.alwaysFails());
+            % The error struct is caller-owned, so the secondary isolate reports the same way
+            [message, identifier] = testCase.captureError(@() bindings_tests.Isolated.alwaysFails());
             testCase.verifyTrue(contains(message, 'secondary isolate'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalStateException');
         end
 
     end

@@ -733,27 +733,6 @@
       },
       "documentation": "Marked noexcept, so no status code is generated for it.",
       "flags": ["Noexcept"]
-    }, {
-      "name": "clearLastError",
-      "lowerUnderscoreName": "clear_last_error",
-      "isStatic": true,
-      "cName": "bindings_tests_Errors_clearLastError",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "documentation": "Clears the last error for the calling thread.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "getLastError",
-      "lowerUnderscoreName": "get_last_error",
-      "isStatic": true,
-      "cName": "bindings_tests_Errors_getLastError",
-      "returnType": {
-        "isConst": true,
-        "dataType": "CHAR_POINTER"
-      },
-      "documentation": "Message of the last exception thrown on the calling thread, or an empty\nstring if there has not been one. Same content as the generated library\nlevel accessor, exported as an ordinary method.\n",
-      "flags": ["Noexcept"]
     }]
   }, {
     "type": {

@@ -14,6 +14,14 @@ plumbing.
 
 ## What exists today (verified 2026-08-05 against the reference output)
 
+**Superseded 2026-08-06.** The out-parameter design below landed: every throwing method
+takes a leading `ErrorInfo` out-struct, the `VOID_WITH_ERROR_CODE` status-code return
+was removed (proto value 43 is reserved), and each wrapper checks the struct through a
+single helper (`checkError` in C++ and the MEX gateway, `_checked` in Python).
+`ExceptionHandlers.STATUS_CODE_*` and `returnErrorStatusCode` are gone. The section is
+kept as the record of the state this round started from. Still open: whether the
+`getLastError` diagnostic surface stays (see the last section).
+
 The mechanism has two halves that do not meet.
 
 **The Java half always runs.** Every generated entry point wraps its invocation in a
@@ -237,12 +245,19 @@ typedef struct {
     const char* message;    // 8, the exception message, NULL on success
     const char* id;         // 8, identifier for catch dispatch, may be NULL
     int32_t     code;       //  4, 0 on success
-} bindings_tests_error;      // 24 bytes, 4 bytes of tail padding
+} bindings_tests_error_info_t; // 24 bytes, 4 bytes of tail padding
 ```
 
-Named `<lib>_error` after `<lib>_double_span`, `<lib>_double_matrix` and
-`<lib>_string_list`, with a generic `Error` in the probe-only `hebi_structs.h`, the same
-split those three already use.
+**Naming decided (author, 2026-08-05): the canonical name is `ErrorInfo`,** used verbatim
+on every surface: C `<lib>_error_info_t` (the `_t` suffix matching `<lib>_isolate_t` and
+`<lib>_isolatethread_t`), C++ `internal::ErrorInfo`, Python `_ErrorInfo`
+(the public exception stays `Error`, per PEP 8), MEX gateway `ErrorInfo`, and `ErrorInfo`
+for both the Java `@CStruct` interface and the probe typedef in `hebi_structs.h`. The
+bare `Error` was rejected because it collides with `java.lang.Error` and reads
+ambiguously next to the thrown types in Python and C++. `ErrorInfo` names the passive
+carrier the way `google.rpc.ErrorInfo` and COM's `IErrorInfo` do. This deliberately does
+not follow the `double_span` convention of snake_case mirrors, which the author dislikes
+and wants revisited (see plans.md item 4).
 
 **Why not `char**`.** The sketch's "can be changed to a struct later" does not hold.
 Widening `char**` to a struct pointer is an ABI break on every method, which is the cost
@@ -389,8 +404,10 @@ warning, positive mean error, zero means success.
   while Python and MATLAB pay a second `getLastError()` call to get one. Under this
   design every language gets the real message in one call, so the error path goes from
   two calls to one and the success path costs one pointer push and one branch.
-- **Keep `getLastError`.** It stays as the diagnostic aid with the stack trace, which is
-  how the S2c `getMaxNumModules` bug was actually found. It stops being the mechanism.
+- **`getLastError` did not survive after all** (removed 2026-08-06, see the last
+  section). The diagnostic value it carried, the stack trace that found the S2c
+  `getMaxNumModules` bug, now reaches the caller through the struct message when
+  `Configuration.isDebugEnabled()`.
 
 ## Where this points
 
@@ -405,24 +422,44 @@ signatures alone, and that is worth little before 1.0.
 Decisions this round still has to make:
 
 1. **Confirm the axis is per call.** Everything above assumes it.
-2. **Whether NULL stays legal.** It preserves the silent-zero failure mode for raw C
-   callers. The generated wrappers always pass a slot, so the exposure is C only, but
-   it should be a written decision rather than a side effect.
-3. ~~**Where `id` comes from.**~~ Answered above: a `HasErrorId` interface the library's
+2. ~~**Whether NULL stays legal.**~~ Decided 2026-08-05: NULL stays legal at the public
+   C surface and is tolerated in Java. The generated wrappers always allocate a struct,
+   so only raw C callers can pass NULL, and `CLibError.clearStruct`/`fillStruct` guard
+   with `isNull()` for that case. A shim-side substitution of a scratch struct was tried
+   and reverted in favour of the plain passthrough, one branch in Java instead of one
+   local and one branch in every C wrapper. The silent-zero failure mode this preserves
+   is confined to raw C callers who opt into it.
+3. ~~**Where `id` comes from.**~~ Answered above: a `CLibError` interface the library's
    exceptions may implement, defaulting to a library-prefixed class simple name, filled
-   by `ExceptionHandlers`. What is left is the prefix's exact form.
+   by `CLibError.fillStruct`. The prefix is the library c_prefix minus its trailing
+   underscore, so `bindings_tests:ArithmeticException`. A class that overrides its
+   symbol prefix (`custom_prefix_Naming`) still gets the library-level id prefix,
+   because the identifier component names the library, not the symbol family.
 4. ~~**Whether multi-error accumulation is in scope.**~~ Not a struct field either way,
    see above. If it is wanted it is an accessor over the per-thread state.
 5. **Whether a noexcept-style second overload is wanted**, letting a caller take the
    status instead of an exception. Nearly free in C++, where the raw `internal::`
    declarations already exist, and needs a name suffix in C. Not urgent.
+6. ~~**How the wrappers surface the id.**~~ Decided 2026-08-05: structured, not only as
+   text. C reads the struct itself, MATLAB raises it as the error identifier, the
+   generated C++ `Exception` carries an `id()` accessor next to `what()`, and Python
+   raises a generated `Error(RuntimeError)` with an `id` attribute. Message text keeps
+   the `[id] message` form in Python so logs show both without unpacking.
 
 ## Open items elsewhere that fold into this
 
 - `matlab-migration.md` open questions 2 and 6 resolve here. Question 6's "value returns
   may lose parser error text" was accepted as temporary on 2026-08-04 and the S2b
   finding elevated it from "loses text" to "no error at all".
-- `ExceptionHandlers.returnErrorStatusCode` carries the `TODO` about richer status
-  codes. That TODO is decision 3.
+- `ExceptionHandlers.returnErrorStatusCode` and its `TODO` about richer status codes
+  were removed with the status-code mechanism on 2026-08-06. Richer codes are now a
+  `CLibError.getStatusCode()` concern.
+- Done 2026-08-06: the `getLastError` mechanism is removed entirely. `ExceptionHandlers`
+  and its ThreadLocal are deleted, along with every `<lib>_getLastError` /
+  `clearLastError` export and wrapper surface. `CLibError.fillStruct` appends the stack
+  trace and cause chain to `message` when `Configuration.isDebugEnabled()`, so the
+  struct is the single mechanism. Libraries do not get their own transport, the
+  `CLibError` interface is the extension point. The debug-enabled path is
+  compile-verified only, nothing flips the flag across the ABI in the suites.
 - The MATLAB cleanup debt entry "value returns lose parser error text" clears when this
   lands.

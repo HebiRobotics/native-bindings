@@ -284,18 +284,15 @@ class PaletteTest(unittest.TestCase):
 class ErrorsTest(unittest.TestCase):
     """Error propagation across the ABI."""
 
-    def setUp(self):
-        bindings_tests.Errors.clear_last_error()
-
     def test_require_non_negative(self):
         bindings_tests.Errors.require_non_negative(5)
 
-        # A throwing void method is promoted to an int status code, and the
-        # wrapper turns a non-zero status into a RuntimeError.
-        with self.assertRaises(RuntimeError):
+        # A throwing void method reports through the error struct, which the
+        # wrapper turns into a bindings_tests.Error.
+        with self.assertRaises(bindings_tests.Error) as caught:
             bindings_tests.Errors.require_non_negative(-1)
-
-        self.assertIn("must not be negative", bindings_tests.Errors.get_last_error())
+        self.assertIn("must not be negative", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
 
     def test_value_returns_raise(self):
         # Methods with a real return type report through the same error struct, so
@@ -332,11 +329,11 @@ class ErrorsTest(unittest.TestCase):
         # Marked Noexcept, so there is no status code to check
         bindings_tests.Errors.never_throws()
 
-    def test_clear(self):
+    def test_success_after_failure(self):
+        # The struct is cleared on every call, so an earlier failure does not linger
         with self.assertRaises(RuntimeError):
             bindings_tests.Errors.divide_int32(1, 0)
-        bindings_tests.Errors.clear_last_error()
-        self.assertEqual("", bindings_tests.Errors.get_last_error())
+        self.assertEqual(3, bindings_tests.Errors.divide_int32(9, 3))
 
 
 class OverloadsTest(unittest.TestCase):
@@ -414,9 +411,8 @@ class IndicesTest(unittest.TestCase):
 class IsolatedTest(unittest.TestCase):
     """State confined to a second GraalVM isolate.
 
-    This counter does not share static fields, the handle registry or the last
-    error slot with the default isolate, which is why it gets its own generated
-    last error accessor.
+    This counter does not share static fields or the handle registry with the
+    default isolate.
     """
 
     def test_counter(self):
@@ -427,12 +423,11 @@ class IsolatedTest(unittest.TestCase):
         self.assertEqual(3, bindings_tests.Isolated.get_counter())
 
     def test_always_fails(self):
-        with self.assertRaisesRegex(RuntimeError, "secondary isolate"):
+        # The error struct is caller-owned, so the secondary isolate reports the same way
+        with self.assertRaises(bindings_tests.Error) as ctx:
             bindings_tests.Isolated.always_fails()
-        # The wrappers use the generated per-isolate accessor internally, so the
-        # raw symbol is asserted through the loaded library handle.
-        message = bindings_tests.libbindings_tests.bindings_tests_secondary_getLastError()
-        self.assertIn("secondary isolate", message.decode("utf-8"))
+        self.assertIn("secondary isolate", str(ctx.exception))
+        self.assertEqual("bindings_tests:IllegalStateException", ctx.exception.id)
 
 
 class CallbacksTest(unittest.TestCase):

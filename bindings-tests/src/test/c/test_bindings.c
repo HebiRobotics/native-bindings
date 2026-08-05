@@ -225,6 +225,7 @@ static void test_spans(void) {
     bindings_tests_double_span x;
     bindings_tests_double_span y;
     bindings_tests_double_span result;
+    bindings_tests_error_info_t error;
     int i;
 
     xs[0] = 1.0;
@@ -240,11 +241,11 @@ static void test_spans(void) {
     assert(bindings_tests_Arrays_dotProduct(NULL, x, y) == 32.0);
 
     /* The length check lives once in the Java implementation. A mismatch
-       returns the type default and sets the last error. */
-    bindings_tests_Errors_clearLastError();
+       returns the type default and reports through the error struct. */
     y.length = 2;
-    assert(bindings_tests_Arrays_dotProduct(NULL, x, y) == 0.0);
-    assert(strstr(bindings_tests_Errors_getLastError(), "elements") != NULL);
+    assert(bindings_tests_Arrays_dotProduct(&error, x, y) == 0.0);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "elements") != NULL);
     y.length = 3;
 
     /* Span in, span out. The result is library-owned. */
@@ -342,20 +343,12 @@ static void test_errors(void) {
     const char* message;
     bindings_tests_error_info_t error;
 
-    bindings_tests_Errors_clearLastError();
-
-    /* A throwing void method is promoted to an int status code: 0 means success. */
-    assert(bindings_tests_Errors_requireNonNegative(NULL, 5) == 0);
-    assert(bindings_tests_Errors_requireNonNegative(NULL, -1) != 0);
-
-    message = bindings_tests_Errors_getLastError();
-    assert(message != NULL);
-    assert(strstr(message, "must not be negative") != NULL);
-
-    /* The library level accessor reads the same per-thread slot. */
-    message = bindings_tests_getLastError();
-    assert(message != NULL);
-    assert(strstr(message, "must not be negative") != NULL);
+    /* A throwing void method stays void: the struct is the only report. */
+    bindings_tests_Errors_requireNonNegative(NULL, 5);
+    bindings_tests_Errors_requireNonNegative(&error, -1);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "must not be negative") != NULL);
+    assert(error.id != NULL && strcmp(error.id, "bindings_tests:IllegalArgumentException") == 0);
 
     /*
      * The struct is what makes a value return checkable. The return value on failure is
@@ -404,10 +397,11 @@ static void test_errors(void) {
      */
     bindings_tests_Errors_neverThrows();
 
-    bindings_tests_Errors_clearLastError();
-    message = bindings_tests_Errors_getLastError();
-    assert(message != NULL);
-    assert(strlen(message) == 0);
+    /* A struct reused across calls is cleared on every one, so no failure lingers. */
+    bindings_tests_Errors_requireNonNegative(&error, 0);
+    assert(error.code == 0);
+    assert(error.message == NULL);
+    assert(error.id == NULL);
 
     printf("errors ok\n");
 }
@@ -473,12 +467,11 @@ static void test_overloads(void) {
 /* ------------------------------------------------------------------ */
 
 static void test_isolated(void) {
-    const char* message;
+    bindings_tests_error_info_t error;
 
     /*
      * This state lives in a second GraalVM isolate. It does not share static
-     * fields, the handle registry or the last error slot with the default
-     * isolate, which is why it gets its own generated last error accessor.
+     * fields or the handle registry with the default isolate.
      */
     bindings_tests_Isolated_reset();
     bindings_tests_Isolated_increment();
@@ -486,20 +479,10 @@ static void test_isolated(void) {
     bindings_tests_Isolated_increment();
     assert(bindings_tests_Isolated_getCounter() == 3);
 
-    bindings_tests_Errors_clearLastError();
-    assert(bindings_tests_Isolated_alwaysFails(NULL) != 0);
-
-    /*
-     * The generated accessors exist once per isolate over a single entry point.
-     * The failure above must be visible through the secondary accessor and must
-     * not leak into the default isolate's slot.
-     */
-    message = bindings_tests_secondary_getLastError();
-    assert(message != NULL);
-    assert(strstr(message, "secondary isolate") != NULL);
-    message = bindings_tests_getLastError();
-    assert(message != NULL);
-    assert(strlen(message) == 0);
+    /* The error struct is caller-owned, so the secondary isolate reports the same way. */
+    bindings_tests_Isolated_alwaysFails(&error);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "secondary isolate") != NULL);
 
     printf("isolated ok\n");
 }

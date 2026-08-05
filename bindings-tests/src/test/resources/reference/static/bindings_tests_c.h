@@ -142,8 +142,6 @@ DLL_PUBLIC int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _e
 DLL_PUBLIC const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail);
 DLL_PUBLIC int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error);
 DLL_PUBLIC void bindings_tests_Errors_neverThrows();
-DLL_PUBLIC void bindings_tests_Errors_clearLastError();
-DLL_PUBLIC const char* bindings_tests_Errors_getLastError();
 
 // ==== Indices ====
 DLL_PUBLIC int bindings_tests_Indices_echo(int index);
@@ -198,10 +196,6 @@ DLL_PUBLIC const char* bindings_tests_Strings_empty();
 DLL_PUBLIC const char* bindings_tests_Strings_nullString();
 DLL_PUBLIC const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 DLL_PUBLIC const char* bindings_tests_Strings_repeat(const char* value, size_t times);
-
-// ==== Last Error ====
-DLL_PUBLIC const char* bindings_tests_getLastError();
-DLL_PUBLIC const char* bindings_tests_secondary_getLastError();
 
 DLL_PUBLIC void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {

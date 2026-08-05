@@ -390,19 +390,6 @@ int failWithoutMessage();
  * @brief Marked noexcept, so no status code is generated for it.
  */
 void neverThrows() noexcept;
-
-/**
- * @brief Clears the last error for the calling thread.
- */
-void clearLastError() noexcept;
-
-/**
- * @details 
- * Message of the last exception thrown on the calling thread, or an empty
- * string if there has not been one. Same content as the generated library
- * level accessor, exported as an ordinary method.
- */
-std::string getLastError() noexcept;
 } // namespace errors
 
 
@@ -740,8 +727,6 @@ extern "C" {
   const char* bindings_tests_Errors_failingString(internal::ErrorInfo*, int);
   int bindings_tests_Errors_failWithoutMessage(internal::ErrorInfo*);
   void bindings_tests_Errors_neverThrows();
-  void bindings_tests_Errors_clearLastError();
-  const char* bindings_tests_Errors_getLastError();
   int bindings_tests_Indices_echo(int);
   int bindings_tests_Indices_countUpTo(int);
   int bindings_tests_Indices_lastIndexOf(int);
@@ -1070,13 +1055,6 @@ inline int errors::failWithoutMessage() {
 }
 inline void errors::neverThrows() noexcept {
   bindings_tests_Errors_neverThrows();
-}
-inline void errors::clearLastError() noexcept {
-  bindings_tests_Errors_clearLastError();
-}
-inline std::string errors::getLastError() noexcept {
-  auto ptr = bindings_tests_Errors_getLastError();
-  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 
 // Indices

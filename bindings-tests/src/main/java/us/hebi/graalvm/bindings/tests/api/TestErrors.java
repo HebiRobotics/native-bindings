@@ -3,7 +3,6 @@ package us.hebi.graalvm.bindings.tests.api;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 
@@ -16,8 +15,8 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  * case below exists so that the language wrappers can assert on exactly one of those
  * defaults.
  * <p>
- * The last error is stored per thread, so a caller must read it on the same thread
- * that made the failing call.
+ * The failure itself travels in the leading error out-struct, which the caller owns and
+ * which is filled on the thread that made the failing call.
  *
  * @author Florian Enner
  */
@@ -85,22 +84,6 @@ public class TestErrors {
     @CLibComment("Marked noexcept, so no status code is generated for it.")
     public static void neverThrows() {
         // intentionally empty
-    }
-
-    @CLibMethod(flags = Noexcept)
-    @CLibComment("Clears the last error for the calling thread.")
-    public static void clearLastError() {
-        ExceptionHandlers.lastException.remove();
-    }
-
-    @CLibMethod(flags = Noexcept)
-    @CLibComment("""
-            Message of the last exception thrown on the calling thread, or an empty
-            string if there has not been one. Same content as the generated library
-            level accessor, exported as an ordinary method.
-            """)
-    public static String getLastError() {
-        return ExceptionHandlers.getLastError(false);
     }
 
 }

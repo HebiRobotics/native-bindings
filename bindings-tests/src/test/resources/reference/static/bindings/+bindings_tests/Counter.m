@@ -62,7 +62,7 @@ classdef (Sealed) Counter < handle & matlab.mixin.SetGet
             end
             ptr_ = bindings_tests_native('bindings_tests_Counter_create', start);
             if isempty(ptr_)
-                error(['Failed to create bindings_tests.Counter in Counter.Counter' ': ' bindings_tests_native('bindings_tests_getLastError')]);
+                error('Failed to create bindings_tests.Counter in Counter.Counter');
             end
             this.ptr = ptr_;
             if numel(varargin) > 0

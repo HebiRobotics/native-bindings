@@ -6,7 +6,6 @@ import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.handles.Handles;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
@@ -38,7 +37,7 @@ public final class TestShape$CEntries {
         try {
             return CTypes.toTempCharPointer(_getInstance(_obj).getName());
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
         }
     }
@@ -51,7 +50,7 @@ public final class TestShape$CEntries {
         try {
             _getInstance(_obj).setName(CTypes.utf8ToJavaString(name));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -62,7 +61,7 @@ public final class TestShape$CEntries {
         try {
             return _getInstance(_obj).area();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -74,7 +73,7 @@ public final class TestShape$CEntries {
         try {
             return _getInstance(_obj).sideCount();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }

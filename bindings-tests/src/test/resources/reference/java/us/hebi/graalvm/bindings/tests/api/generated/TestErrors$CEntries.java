@@ -4,7 +4,6 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
@@ -101,30 +100,7 @@ public final class TestErrors$CEntries {
         try {
             TestErrors.neverThrows();
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
-        }
-    }
-
-    @CEntryPoint(
-            name = "__bindings_tests_Errors_clearLastError"
-    )
-    public static void bindings_tests_Errors_clearLastError(IsolateThread _isolate) {
-        try {
-            TestErrors.clearLastError();
-        } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
-        }
-    }
-
-    @CEntryPoint(
-            name = "__bindings_tests_Errors_getLastError"
-    )
-    public static CCharPointer bindings_tests_Errors_getLastError(IsolateThread _isolate) {
-        try {
-            return CTypes.toTempCharPointer(TestErrors.getLastError());
-        } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
-            return WordFactory.nullPointer();
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 }

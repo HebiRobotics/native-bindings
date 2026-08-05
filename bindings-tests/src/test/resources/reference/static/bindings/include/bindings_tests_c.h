@@ -126,8 +126,6 @@ int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int s
 const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail);
 int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error);
 void bindings_tests_Errors_neverThrows();
-void bindings_tests_Errors_clearLastError();
-const char* bindings_tests_Errors_getLastError();
 
 // ==== Indices ====
 int bindings_tests_Indices_echo(int index);
@@ -182,10 +180,6 @@ const char* bindings_tests_Strings_empty();
 const char* bindings_tests_Strings_nullString();
 const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
-
-// ==== Last Error ====
-const char* bindings_tests_getLastError();
-const char* bindings_tests_secondary_getLastError();
 
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {

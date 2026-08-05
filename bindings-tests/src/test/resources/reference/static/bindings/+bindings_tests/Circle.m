@@ -30,7 +30,7 @@ classdef (Sealed) Circle < bindings_tests.Shape
         function this = Circle(radius, varargin)
             ptr_ = bindings_tests_native('bindings_tests_Circle_create', radius);
             if isempty(ptr_)
-                error(['Failed to create bindings_tests.Circle in Circle.Circle' ': ' bindings_tests_native('bindings_tests_getLastError')]);
+                error('Failed to create bindings_tests.Circle in Circle.Circle');
             end
             this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Circle_to_Shape', ptr_));
             this.ref_Circle = ptr_;

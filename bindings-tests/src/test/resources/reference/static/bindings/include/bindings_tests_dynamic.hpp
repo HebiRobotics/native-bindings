@@ -398,19 +398,6 @@ int failWithoutMessage();
  * @brief Marked noexcept, so no status code is generated for it.
  */
 void neverThrows() noexcept;
-
-/**
- * @brief Clears the last error for the calling thread.
- */
-void clearLastError() noexcept;
-
-/**
- * @details 
- * Message of the last exception thrown on the calling thread, or an empty
- * string if there has not been one. Same content as the generated library
- * level accessor, exported as an ordinary method.
- */
-std::string getLastError() noexcept;
 } // namespace errors
 
 
@@ -1057,15 +1044,6 @@ inline int errors::failWithoutMessage() {
 inline void errors::neverThrows() noexcept {
   static auto bindings_tests_Errors_neverThrows = DynamicLookup::instance().getFunc<void(*)()>("bindings_tests_Errors_neverThrows");
   bindings_tests_Errors_neverThrows();
-}
-inline void errors::clearLastError() noexcept {
-  static auto bindings_tests_Errors_clearLastError = DynamicLookup::instance().getFunc<void(*)()>("bindings_tests_Errors_clearLastError");
-  bindings_tests_Errors_clearLastError();
-}
-inline std::string errors::getLastError() noexcept {
-  static auto bindings_tests_Errors_getLastError = DynamicLookup::instance().getFunc<const char*(*)()>("bindings_tests_Errors_getLastError");
-  auto ptr = bindings_tests_Errors_getLastError();
-  return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 
 // Indices

@@ -72,18 +72,6 @@ classdef (Sealed) Errors
             bindings_tests_native('bindings_tests_Errors_neverThrows');
         end
 
-        function clearLastError()
-            % Clears the last error for the calling thread.
-            bindings_tests_native('bindings_tests_Errors_clearLastError');
-        end
-
-        function result = getLastError()
-            % Message of the last exception thrown on the calling thread, or an empty
-            %   string if there has not been one. Same content as the generated library
-            %   level accessor, exported as an ordinary method.
-            result = bindings_tests_native('bindings_tests_Errors_getLastError');
-        end
-
     end
 
 end

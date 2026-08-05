@@ -264,14 +264,6 @@ void __bindings_tests_Errors_neverThrows(bindings_tests_isolatethread_t* isolate
 void bindings_tests_Errors_neverThrows() {
     __bindings_tests_Errors_neverThrows(isolate::global());
 }
-void __bindings_tests_Errors_clearLastError(bindings_tests_isolatethread_t* isolate);
-void bindings_tests_Errors_clearLastError() {
-    __bindings_tests_Errors_clearLastError(isolate::global());
-}
-const char* __bindings_tests_Errors_getLastError(bindings_tests_isolatethread_t* isolate);
-const char* bindings_tests_Errors_getLastError() {
-    return __bindings_tests_Errors_getLastError(isolate::global());
-}
 
 // ==== Indices ====
 int __bindings_tests_Indices_echo(bindings_tests_isolatethread_t* isolate, int index);
@@ -451,15 +443,6 @@ const char* bindings_tests_Strings_join(const char** values, size_t count, const
 const char* __bindings_tests_Strings_repeat(bindings_tests_isolatethread_t* isolate, const char* value, long long times);
 const char* bindings_tests_Strings_repeat(const char* value, size_t times) {
     return __bindings_tests_Strings_repeat(isolate::global(), value, static_cast<long long>(times));
-}
-
-// ==== Last Error ====
-const char* __bindings_tests_getLastError(bindings_tests_isolatethread_t* isolate);
-const char* bindings_tests_getLastError() {
-    return __bindings_tests_getLastError(isolate::global());
-}
-const char* bindings_tests_secondary_getLastError() {
-    return __bindings_tests_getLastError(isolate::secondary());
 }
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build) {
     *major = 1;

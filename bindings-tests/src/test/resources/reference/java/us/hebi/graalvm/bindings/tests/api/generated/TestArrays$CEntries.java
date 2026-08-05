@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
 import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
@@ -21,7 +20,7 @@ public final class TestArrays$CEntries {
         try {
             return TestArrays.sumFloat64(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -34,7 +33,7 @@ public final class TestArrays$CEntries {
         try {
             return TestArrays.sumInt32(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             return 0;
         }
     }
@@ -47,7 +46,7 @@ public final class TestArrays$CEntries {
         try {
             TestArrays.fillFloat64(target, CTypes.capSizeToInt(count), value);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -59,7 +58,7 @@ public final class TestArrays$CEntries {
         try {
             TestArrays.cumulativeSum(source, target, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -71,7 +70,7 @@ public final class TestArrays$CEntries {
         try {
             TestArrays.reverseFloat64(values, CTypes.capSizeToInt(count));
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
         }
     }
 
@@ -99,7 +98,7 @@ public final class TestArrays$CEntries {
             _spanOut.setData(CTypes.toTempDoublePointer(_values));
             _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             _spanOut.setData(WordFactory.nullPointer());
             _spanOut.setLength(0);
         }
@@ -115,7 +114,7 @@ public final class TestArrays$CEntries {
             _spanOut.setData(CTypes.toTempDoublePointer(_values));
             _spanOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
-            ExceptionHandlers.setLastError(throwable);
+            // Declared noexcept, so there is no error struct to report through
             _spanOut.setData(WordFactory.nullPointer());
             _spanOut.setLength(0);
         }
