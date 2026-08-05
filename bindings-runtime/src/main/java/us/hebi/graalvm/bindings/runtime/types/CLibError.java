@@ -1,7 +1,10 @@
 package us.hebi.graalvm.bindings.runtime.types;
 
-import us.hebi.graalvm.bindings.runtime.exceptions.ExceptionHandlers;
+import us.hebi.graalvm.bindings.runtime.Configuration;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 /**
  * Opt-in for exceptions that carry custom identifiers across the ABI, so callers can dispatch
@@ -58,24 +61,39 @@ public interface CLibError {
      * @param idPrefix library name used for exceptions that carry no id of their own
      */
     static void fillStruct(Throwable throwable, ErrorInfo error, String idPrefix) {
-        // TODO: remove lastError mechanism? should this always be available for debugging?
-        ExceptionHandlers.setLastError(throwable);
-
         // The input should never be null, but it's not safe to throw here
         if (error.isNull()) {
             return;
         }
-        
+
         if (throwable instanceof CLibError clib) {
             error.setCode(clib.getStatusCode());
-            error.setMessage(tmpErrorMessage.get().setContent(clib.getErrorMessage()).getPointer());
+            error.setMessage(tmpErrorMessage.get().setContent(withDebugInfo(clib.getErrorMessage(), throwable)).getPointer());
             error.setId(tmpErrorId.get().setContent(clib.getErrorId()).getPointer());
         } else {
             error.setCode(STATUS_CODE_GENERIC_ERROR);
-            error.setMessage(tmpErrorMessage.get().setContent(throwable.getMessage()).getPointer());
+            error.setMessage(tmpErrorMessage.get().setContent(withDebugInfo(throwable.getMessage(), throwable)).getPointer());
             error.setId(tmpErrorId.get().setContent(idPrefix + ":" + throwable.getClass().getSimpleName()).getPointer());
         }
 
+    }
+
+    /**
+     * Appends the stack trace and cause chain to the message when debugging is enabled.
+     * Walking the stack is expensive, so it only happens when someone is listening.
+     */
+    private static String withDebugInfo(String message, Throwable throwable) {
+        if (!Configuration.isDebugEnabled()) {
+            return message;
+        }
+        StringWriter writer = new StringWriter();
+        PrintWriter printer = new PrintWriter(writer);
+        if (message != null) {
+            printer.println(message);
+        }
+        throwable.printStackTrace(printer);
+        printer.flush();
+        return writer.toString();
     }
 
     ThreadLocal<Utf8StringView> tmpErrorMessage = ThreadLocal.withInitial(Utf8StringView::new);

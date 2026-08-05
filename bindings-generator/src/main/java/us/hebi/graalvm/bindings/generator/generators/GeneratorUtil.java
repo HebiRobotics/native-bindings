@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
-import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.util.*;
@@ -136,7 +135,7 @@ public class GeneratorUtil {
      * All C-symbols that are part of the public C ABI
      */
     public static List<String> getAllCMethodSymbols(LibraryDescription lib) {
-        List<String> symbols = new ArrayList<>(getLastErrorSymbols(lib));
+        List<String> symbols = new ArrayList<>();
         for (var clazz : lib.getClasses()) {
             for (MethodDescription method : clazz.getMethods()) {
                 symbols.add(method.getCName());
@@ -146,24 +145,6 @@ public class GeneratorUtil {
         }
 
         return symbols;
-    }
-
-    public static List<String> getLastErrorSymbols(LibraryDescription lib) {
-        // One error accessor per isolate
-        List<String> symbols = new ArrayList<>();
-        for (String isolateName : getIsolateNames(lib)) {
-            symbols.add(getLastErrorCName(lib, isolateName));
-        }
-        return symbols;
-    }
-
-    /**
-     * The public C symbol of the last error accessor for the given isolate. The
-     * isolate name rides in the class-name slot, so the default isolate yields
-     * lib_getLastError and a named one lib_secondary_getLastError.
-     */
-    public static String getLastErrorCName(LibraryDescription lib, String isolateName) {
-        return AnnotatedCLibClass.getCEntryName(true, lib.getCPrefix(), isolateName, "getLastError");
     }
 
     /**

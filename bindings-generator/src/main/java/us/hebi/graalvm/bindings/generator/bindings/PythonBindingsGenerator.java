@@ -284,20 +284,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .render());
             }
         }
-
-        // The per-isolate last error accessors are library-level symbols. Without
-        // the restype registration ctypes would default to c_int and truncate the
-        // pointer before the decode in the error messages.
-        content.append("\n# ==== Library ====\n");
-        for (String isolateName : GeneratorUtil.getIsolateNames(lib)) {
-            content.append(IndentingTextRenderer.of("""
-                            %%LIB_FIELD%%.%%CENTRY_NAME%%.argtypes = []
-                            %%LIB_FIELD%%.%%CENTRY_NAME%%.restype = c_char_p
-                            """)
-                    .set("LIB_FIELD", libField)
-                    .set("CENTRY_NAME", GeneratorUtil.getLastErrorCName(lib, isolateName))
-                    .render());
-        }
     }
 
     private void appendEnumWrappers(StringBuilder content) {
@@ -562,7 +548,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 String template = """
                         ptr_ = %%CALL%%
                         if not ptr_:
-                            raise RuntimeError(f'Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%%%REASON%%')
+                            raise RuntimeError('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%')
                         """;
                 if (isConstructor) {
                     template += "self.%%REF_FIELD%% = ptr_\n";
@@ -600,13 +586,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         };
 
         return IndentingTextRenderer.of(string.stripTrailing())
-                .set("REASON", getErrorReason(apiClass, desc))
                 .set("RETURN_TYPE", desc.getReturnType().getTypeName());
-    }
-
-    private String getErrorReason(ClassDescription apiClass, MethodDescription desc) {
-        return " ({%%LIB_FIELD%%.%%C_ERROR_METHOD%%().decode(\"utf-8\")})"
-                .replace("%%C_ERROR_METHOD%%", getLastErrorMethod(apiClass));
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {

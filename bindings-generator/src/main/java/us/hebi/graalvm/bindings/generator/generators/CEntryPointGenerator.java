@@ -6,9 +6,7 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
-import us.hebi.graalvm.bindings.model.DataType;
 
 import java.util.TreeSet;
 
@@ -67,7 +65,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 .returns(TypeName.INT)
                 .addParameter(IsolateThread.class, "thread")
                 .build());
-        isolateClass.addMethod(createGetLastErrorFunction());
         return isolateClass.build();
     }
 
@@ -78,21 +75,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                         .addMember("builtin", "$T.$L", CEntryPoint.Builtin.class, builtin.name())
                         .build())
                 .addModifiers(PUBLIC, STATIC, NATIVE);
-    }
-
-    /**
-     * The last error slot lives is specific to each isolate heap, so one entry can serve all isolate
-     */
-    MethodSpec createGetLastErrorFunction() {
-        final String entryPointName = AnnotatedCLibClass.getCEntryName(true, getOptions().getCPrefix(), "", "getLastError");
-        final MethodSpec.Builder method = createCEntryPoint(entryPointName)
-                .returns(CCharPointer.class);
-        addGuardedInvocation(
-                method,
-                CodeBlock.of("$T.toTempCharPointer($T.getLastError(false))", CTypes, ExceptionHandlers),
-                DataType.CHAR_POINTER
-        );
-        return method.build();
     }
 
     TypeSpec generateEntryPointWrapper(AnnotatedCLibClass apiClass) {
@@ -207,7 +189,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
 
     /**
      * The C prefix carries a trailing underscore, which would make the id read as {@code lib_:Name}.
-     * TODO: have the prefix in the generated global Isolate class? similar to getLastError there
      */
     private String getErrorIdPrefix() {
         String prefix = getOptions().getCPrefix();
@@ -264,7 +245,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
     private final static String getInstanceMethod = "_getInstance";
     private static final String ISOLATE_NAME = "_isolate";
     private static final String ISOLATE_API_CLASS_NAME = "_Isolates$CEntries";
-    private static final String LAST_ERROR_CLASS_NAME = "_LastError$CEntries";
 
     public static final String INTERNAL_PREFIX = "__";
 

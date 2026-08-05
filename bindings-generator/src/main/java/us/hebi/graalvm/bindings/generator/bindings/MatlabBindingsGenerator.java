@@ -308,20 +308,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             }
         }
 
-        // Per-isolate last error accessors used by the generated error messages
-        var charPointer = TypeDescription.newInstance().setDataType(DataType.CHAR_POINTER).setIsConst(true);
-        cases.addLine("\n// Library");
-        for (String cName : GeneratorUtil.getLastErrorSymbols(lib)) {
-            var vars = cases.snapshot();
-            vars.set("RETURN_TYPE", getMexCType(charPointer));
-            addCase.accept(vars.set("CNAME", cName)
-                    .set("HASH", computeHash.apply(cName))
-                    .set("PRE", "%%RETURN_TYPE%% %%RETURN_VALUE%% = ")
-                    .set("POST", "\nif (nlhs > 0) plhs[0] = " + getCToMex(charPointer) + ";")
-                    .set("TYPES", "")
-                    .set("ARGS", ""));
-        }
-
         // Generate
         return withLibVars()
                 .set("HASH_SEED", String.format("0x%08X", seed))
@@ -615,8 +601,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 ? "this@%%PARENT_NAME%%(%%DISPATCH%%(%%CAST%%, ptr_));\n"
                 : "");
 
-        content.set("LAST_ERROR", " ': ' %%DISPATCH%%(" + getDispatchIdentifier(getLastErrorMethod(apiClass)) + ")");
-
         // Build the internal function
         content.add("function ").add(wrapOutputAssignment(params.externalOutput)).addLine("%%FUNC_NAME%%(%%EXTERNAL_ARGS%%)").indent();
         if (method.hasDocumentation()) {
@@ -723,7 +707,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
                     postCallActions.append("""
                             if isempty(ptr_)
-                                error(['Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%.%%FUNC_NAME%%'%%LAST_ERROR%%]);
+                                error('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%.%%FUNC_NAME%%');
                             end
                             """);
                     if (GeneratorUtil.isConstructor(method)) {

@@ -31,7 +31,6 @@ public class CBindingsGenerator extends BindingGenerator {
         for (ClassDescription apiClass : lib.getClasses()) {
             process(apiClass);
         }
-        writeLastErrorAccessors();
 
         // Header for the shared library
         filer.createFile("include", lib.getName() + "_c.h", writer -> writeHeader(writer, false));
@@ -144,29 +143,6 @@ public class CBindingsGenerator extends BindingGenerator {
         // To have a pure C library, we need to add casts to go from child to parent pointers
         apiClass.tryGetToParentCastMethod().ifPresent(method -> addParentCastMethod(method, header, cFile));
 
-    }
-
-    /**
-     * Per-isolate accessors for the calling thread's last error message. The
-     * entry point is emitted once for the whole library (the error slot lives in
-     * the isolate's image heap), so each isolate only needs a wrapper that binds
-     * it to its own isolate thread.
-     */
-    private void writeLastErrorAccessors() {
-        header.append("\n// ==== Last Error ====\n");
-        cFile.append("\n// ==== Last Error ====\n");
-        String internalName = SignatureBuilder.getInternalName(GeneratorUtil.getLastErrorCName(lib, ""));
-        cFile.append("const char* ").append(internalName)
-                .append("(").append(getIsolateThreadType()).append("* isolate);\n");
-        for (String isolateName : GeneratorUtil.getIsolateNames(lib)) {
-            String cName = GeneratorUtil.getLastErrorCName(lib, isolateName);
-            String isolateFunc = isolateName.isEmpty() ? "global" : isolateName;
-            header.append(DLL_PUBLIC).append("const char* ").append(cName).append("();\n");
-            cFile.append("const char* ").append(cName).append("() {\n")
-                    .append("    return ").append(internalName)
-                    .append("(").append(isolateNamespace).append(isolateFunc).append("());\n")
-                    .append("}\n");
-        }
     }
 
     public static void addParentCastMethod(MethodDescription method, StringBuilder header, StringBuilder cFile) {

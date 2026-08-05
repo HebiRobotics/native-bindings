@@ -14,8 +14,6 @@ class RuntimeClasses {
 
     static final ClassName HandlesUtil = ClassName.get("us.hebi.graalvm.bindings.runtime.handles", "Handles");
 
-    static final ClassName ExceptionHandlers = ClassName.get("us.hebi.graalvm.bindings.runtime.exceptions", "ExceptionHandlers");
-
     public static final ClassName CTypes = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CTypes");
 
     public static final ClassName DoubleSpan = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "DoubleSpan");
@@ -32,10 +30,6 @@ class RuntimeClasses {
     // Name of the leading out-struct param on entry points that can throw
     public static final String ERROR_OUT_PARAM = "_error";
 
-    public static void addGuardedInvocation(MethodSpec.Builder builder, CodeBlock invocation, DataType returnType) {
-        addGuardedInvocation(builder, invocation, returnType, null);
-    }
-
     /**
      * @param idPrefix library name for the fallback error id, or null if there is no error struct
      */
@@ -51,7 +45,7 @@ class RuntimeClasses {
         if (idPrefix != null) {
             builder.addStatement("$T.fillStruct(throwable, $N, $S)", CLibError, ERROR_OUT_PARAM, idPrefix);
         } else {
-            builder.addStatement("$T.setLastError(throwable)", ExceptionHandlers); // TODO: remove last error mechanism
+            builder.addComment("Declared noexcept, so there is no error struct to report through");
         }
         builder.addCode(getOnErrorReturnCode(returnType))
                 .endControlFlow();
