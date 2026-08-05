@@ -20,6 +20,11 @@ public class CCharPointerMock extends MockPointerBase implements CCharPointer {
     }
 
     @Override
+    public boolean isNull() {
+        return array == null;
+    }
+
+    @Override
     public byte read() {
         return array[offset];
     }

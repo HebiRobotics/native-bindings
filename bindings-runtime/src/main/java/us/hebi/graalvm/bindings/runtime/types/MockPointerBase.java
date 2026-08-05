@@ -7,7 +7,9 @@ import org.graalvm.word.PointerBase;
  * @author Florian Enner
  * @since 02 Aug 2024
  */
-public class MockPointerBase implements PointerBase {
+public abstract class MockPointerBase implements PointerBase {
+
+    // Override for classes that need null check testing
     @Override
     public boolean isNull() {
         return false;
@@ -15,7 +17,7 @@ public class MockPointerBase implements PointerBase {
 
     @Override
     public boolean isNonNull() {
-        return true;
+        return !isNull();
     }
 
     @Override

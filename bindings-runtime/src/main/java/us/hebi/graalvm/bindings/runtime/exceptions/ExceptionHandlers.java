@@ -1,6 +1,8 @@
 package us.hebi.graalvm.bindings.runtime.exceptions;
 
 import us.hebi.graalvm.bindings.runtime.Configuration;
+import us.hebi.graalvm.bindings.runtime.types.CLibError;
+import us.hebi.graalvm.bindings.runtime.types.CTypes;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -20,16 +22,19 @@ import java.io.StringWriter;
  * @author Florian Enner
  * @since 06 Jan 2024
  */
+@Deprecated // TODO: no longer necessary after migration? keep for debugging?
 public interface ExceptionHandlers {
 
     int STATUS_CODE_SUCCESS = 0;
     int STATUS_CODE_GENERIC_ERROR = 1;
 
+    @Deprecated // TODO: should be deleted after error merge
     static int returnErrorStatusCode(Throwable throwable) {
         // TODO: add status codes that provide info about error messages?
-        return STATUS_CODE_GENERIC_ERROR;
+        return CLibError.STATUS_CODE_GENERIC_ERROR;
     }
 
+    @Deprecated // TODO: no longer necessary after migration? keep for debugging?
     static void setLastError(Throwable throwable) {
         // Walking the stack is expensive, so only do it when someone is listening
         if (Configuration.isDebugEnabled()) {
@@ -38,6 +43,7 @@ public interface ExceptionHandlers {
         lastException.set(throwable);
     }
 
+    @Deprecated // TODO: no longer necessary after migration? keep for debugging?
     static void printLastStackTrace() {
         Throwable exception = lastException.get();
         if (exception == null) {
@@ -47,6 +53,7 @@ public interface ExceptionHandlers {
         }
     }
 
+    @Deprecated // TODO: no longer necessary after migration? keep for debugging?
     static String getLastError(boolean withStackTrace) {
         Throwable ex = lastException.get();
         if (ex == null) return "";
