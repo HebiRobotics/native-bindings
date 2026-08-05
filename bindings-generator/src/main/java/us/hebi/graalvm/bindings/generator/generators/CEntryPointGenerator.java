@@ -190,15 +190,10 @@ public class CEntryPointGenerator extends AbstractGenerator {
             }
 
             // Add guards
-            DataType throwingReturnType = method.getReturnType().getDataType();
-            if (throwingReturnType == DataType.VOID && method.isThrowing()) {
-                throwingReturnType = DataType.VOID_WITH_ERROR_CODE;
-                builder.returns(TypeName.INT);
-            }
             addGuardedInvocation(
                     builder,
                     invocation.add(invocationClose.build()).build(),
-                    throwingReturnType,
+                    method.getReturnType().getDataType(),
                     method.isThrowing() ? getErrorIdPrefix() : null
             );
             cEntriesClass.addMethod(builder.build());

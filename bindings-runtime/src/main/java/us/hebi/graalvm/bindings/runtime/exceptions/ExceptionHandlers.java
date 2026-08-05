@@ -1,7 +1,6 @@
 package us.hebi.graalvm.bindings.runtime.exceptions;
 
 import us.hebi.graalvm.bindings.runtime.Configuration;
-import us.hebi.graalvm.bindings.runtime.types.CLibError;
 import us.hebi.graalvm.bindings.runtime.types.CTypes;
 
 import java.io.PrintWriter;
@@ -24,15 +23,6 @@ import java.io.StringWriter;
  */
 @Deprecated // TODO: no longer necessary after migration? keep for debugging?
 public interface ExceptionHandlers {
-
-    int STATUS_CODE_SUCCESS = 0;
-    int STATUS_CODE_GENERIC_ERROR = 1;
-
-    @Deprecated // TODO: should be deleted after error merge
-    static int returnErrorStatusCode(Throwable throwable) {
-        // TODO: add status codes that provide info about error messages?
-        return CLibError.STATUS_CODE_GENERIC_ERROR;
-    }
 
     @Deprecated // TODO: no longer necessary after migration? keep for debugging?
     static void setLastError(Throwable throwable) {

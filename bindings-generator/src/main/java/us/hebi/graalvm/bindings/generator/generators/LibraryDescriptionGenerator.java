@@ -55,11 +55,6 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                 methodDesc.addFlags(flag);
             }
 
-            // Change the C type of throwing void methods so we can return a status
-            if (methodDesc.getReturnType().getDataType() == DataType.VOID && method.isThrowing()) {
-                methodDesc.getMutableReturnType().setDataType(DataType.VOID_WITH_ERROR_CODE);
-            }
-
             method.getDocumentation().ifPresent(methodDesc::setDocumentation);
             method.getThrowsOnComment().ifPresent(methodDesc::setThrowsOn);
 

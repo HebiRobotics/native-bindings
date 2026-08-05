@@ -411,7 +411,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             case VOID -> {
             }
             case OBJECT_HANDLE, CHAR_POINTER -> impl.write("auto ptr = ");
-            case VOID_WITH_ERROR_CODE -> impl.write("int status_ = ");
             case FLOAT64_SPAN -> impl.write("auto span_ = ");
             default -> impl.write(throwing ? "auto result_ = " : "return ");
         }
@@ -431,11 +430,6 @@ public class CppBindingsGenerator extends BindingGenerator {
                             throw Exception("Could not create %s in %s::%s");
                           }
                         """.formatted(getCppClassName(method.getReturnType()), getCppClassName(apiClass.getType()), method.getName()));
-                case VOID_WITH_ERROR_CODE -> impl.write("""
-                          if (status_ != 0) {
-                            throw Exception("Encountered error in %s::%s");
-                          }
-                        """.formatted(getCppClassName(apiClass.getType()), method.getName()));
             }
         }
 
@@ -450,7 +444,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             case FLOAT64_SPAN -> impl.write("""
                       return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
                     """);
-            case VOID, VOID_WITH_ERROR_CODE -> {
+            case VOID -> {
             }
             default -> {
                 if (throwing) {

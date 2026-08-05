@@ -582,11 +582,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 }
                 yield template;
             }
-            case VOID_WITH_ERROR_CODE -> """
-                    status_ = %%CALL%%
-                    if status_ != 0:
-                        raise RuntimeError(f'Encountered error in %%CLASS_NAME%%::%%METHOD%%%%REASON%%')
-                    """;
             case CHAR_POINTER -> """
                     ptr_ = %%CALL%%
                     return ptr_.decode("utf-8") if ptr_ is not None else ""

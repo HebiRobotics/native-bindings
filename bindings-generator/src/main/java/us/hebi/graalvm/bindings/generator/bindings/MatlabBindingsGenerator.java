@@ -194,7 +194,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private String getCToMex(TypeDescription type) {
         return switch (type.getDataType()) {
             // Numbers and Booleans
-            case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16, VOID_WITH_ERROR_CODE ->
+            case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16 ->
                     "createMexScalar(%%RETURN_VALUE%%)";
 
             // Too wide for the 53 bit mantissa of MATLAB's default double
@@ -746,16 +746,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         }
                     }
 
-                }
-
-                case VOID_WITH_ERROR_CODE -> {
-                    String result = "status_";
-                    internalOutput.add(result);
-                    postCallActions.append("""
-                            if status_ ~= 0
-                                error(['Encountered error in %%CLASS_NAME%%.%%FUNC_NAME%%'%%LAST_ERROR%%]);
-                            end
-                            """.stripTrailing());
                 }
 
                 case VOID -> {
