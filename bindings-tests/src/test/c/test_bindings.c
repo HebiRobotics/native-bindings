@@ -68,7 +68,7 @@ static void test_counter(void) {
     bindings_tests_Counter_resetClosedCount();
     assert(bindings_tests_Counter_getClosedCount() == 0);
 
-    counter = bindings_tests_Counter_create(10);
+    counter = bindings_tests_Counter_create(NULL, 10);
     assert(counter != NULL);
 
     bindings_tests_Counter_increment(counter);
@@ -84,7 +84,7 @@ static void test_counter(void) {
     assert(bindings_tests_Counter_isClosed(counter) == 0);
 
     /* The C ABI has no default arguments, so the zero is passed explicitly. */
-    defaultCounter = bindings_tests_Counter_create(0);
+    defaultCounter = bindings_tests_Counter_create(NULL, 0);
     assert(defaultCounter != NULL);
     assert(bindings_tests_Counter_getValue(defaultCounter) == 0);
 
@@ -111,7 +111,7 @@ static void test_naming(void) {
      */
     assert(custom_prefix_Naming_add_two_numbers(2, 3) == 5);
 
-    naming = custom_prefix_Naming_create(7);
+    naming = custom_prefix_Naming_create(NULL, 7);
     assert(naming != NULL);
     assert(custom_prefix_Naming_get_start_value(naming) == 7);
     custom_prefix_Naming_release(naming);
@@ -237,13 +237,13 @@ static void test_spans(void) {
     x.length = 3;
     y.data = ys;
     y.length = 3;
-    assert(bindings_tests_Arrays_dotProduct(x, y) == 32.0);
+    assert(bindings_tests_Arrays_dotProduct(NULL, x, y) == 32.0);
 
     /* The length check lives once in the Java implementation. A mismatch
        returns the type default and sets the last error. */
     bindings_tests_Errors_clearLastError();
     y.length = 2;
-    assert(bindings_tests_Arrays_dotProduct(x, y) == 0.0);
+    assert(bindings_tests_Arrays_dotProduct(NULL, x, y) == 0.0);
     assert(strstr(bindings_tests_Errors_getLastError(), "elements") != NULL);
     y.length = 3;
 
@@ -281,12 +281,12 @@ static void test_shapes(void) {
     bindings_tests_SquarePtr square;
     bindings_tests_ShapePtr shape;
 
-    circle = bindings_tests_Circle_create(2.0);
+    circle = bindings_tests_Circle_create(NULL, 2.0);
     assert(circle != NULL);
     assert(fabs(bindings_tests_Circle_area(circle) - 3.14159265358979323846 * 4.0) < 1e-9);
     assert(bindings_tests_Circle_sideCount(circle) == 0);
 
-    square = bindings_tests_Square_create(3.0);
+    square = bindings_tests_Square_create(NULL, 3.0);
     assert(square != NULL);
     assert(bindings_tests_Square_area(square) == 9.0);
     assert(bindings_tests_Square_sideCount(square) == 4);
@@ -340,12 +340,13 @@ static void test_palette(void) {
 
 static void test_errors(void) {
     const char* message;
+    bindings_tests_error_info_t error;
 
     bindings_tests_Errors_clearLastError();
 
     /* A throwing void method is promoted to an int status code: 0 means success. */
-    assert(bindings_tests_Errors_requireNonNegative(5) == 0);
-    assert(bindings_tests_Errors_requireNonNegative(-1) != 0);
+    assert(bindings_tests_Errors_requireNonNegative(NULL, 5) == 0);
+    assert(bindings_tests_Errors_requireNonNegative(NULL, -1) != 0);
 
     message = bindings_tests_Errors_getLastError();
     assert(message != NULL);
@@ -356,20 +357,46 @@ static void test_errors(void) {
     assert(message != NULL);
     assert(strstr(message, "must not be negative") != NULL);
 
-    /* Every other return type gets a type specific default on failure. */
-    assert(bindings_tests_Errors_divideInt32(10, 2) == 5);
-    assert(bindings_tests_Errors_divideInt32(1, 0) == 0);
+    /*
+     * The struct is what makes a value return checkable. The return value on failure is
+     * still the type specific default, but it is no longer the only thing the caller sees.
+     */
+    error.code = -1;
+    assert(bindings_tests_Errors_divideInt32(&error, 10, 2) == 5);
+    assert(error.code == 0);
+    assert(error.message == NULL);
+    assert(error.id == NULL);
 
-    assert(bindings_tests_Errors_failingFloat64(0) == 1.5);
-    assert(bindings_tests_Errors_failingFloat64(1) == 0.0);
+    assert(bindings_tests_Errors_divideInt32(&error, 1, 0) == 0);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "zero") != NULL);
+    assert(error.id != NULL && strcmp(error.id, "bindings_tests:ArithmeticException") == 0);
 
-    assert(bindings_tests_Errors_failingBool(0) != 0);
-    assert(bindings_tests_Errors_failingBool(1) == 0);
+    assert(bindings_tests_Errors_failingFloat64(&error, 0) == 1.5);
+    assert(error.code == 0);
+    assert(bindings_tests_Errors_failingFloat64(&error, 1) == 0.0);
+    assert(error.code != 0);
 
-    message = bindings_tests_Errors_failingString(0);
+    assert(bindings_tests_Errors_failingBool(&error, 0) != 0);
+    assert(error.code == 0);
+    assert(bindings_tests_Errors_failingBool(&error, 1) == 0);
+    assert(error.code != 0);
+
+    message = bindings_tests_Errors_failingString(&error, 0);
     assert(message != NULL);
     assert(strcmp(message, "ok") == 0);
-    assert(bindings_tests_Errors_failingString(1) == NULL);
+    assert(error.code == 0);
+    assert(bindings_tests_Errors_failingString(&error, 1) == NULL);
+    assert(error.code != 0);
+
+    /* An exception without a message crosses as NULL rather than an empty string. */
+    bindings_tests_Errors_failWithoutMessage(&error);
+    assert(error.code != 0);
+    assert(error.message == NULL);
+    assert(error.id != NULL && strcmp(error.id, "bindings_tests:IllegalStateException") == 0);
+
+    /* A caller that does not care passes NULL, which every entry point tolerates. */
+    assert(bindings_tests_Errors_divideInt32(NULL, 1, 0) == 0);
 
     /*
      * neverThrows is marked Noexcept, so it has no status code at all. The call
@@ -460,7 +487,7 @@ static void test_isolated(void) {
     assert(bindings_tests_Isolated_getCounter() == 3);
 
     bindings_tests_Errors_clearLastError();
-    assert(bindings_tests_Isolated_alwaysFails() != 0);
+    assert(bindings_tests_Isolated_alwaysFails(NULL) != 0);
 
     /*
      * The generated accessors exist once per isolate over a single entry point.

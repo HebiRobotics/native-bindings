@@ -190,12 +190,11 @@ class SpansTest(unittest.TestCase):
         self.assertEqual(32.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]))
 
     def test_length_mismatch(self):
-        # The length check lives once in the Java implementation. A mismatch
-        # returns the type default and sets the last error.
-        bindings_tests.Errors.clear_last_error()
-        self.assertEqual(0.0, bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0]))
-        self.assertIn("elements", bindings_tests.Errors.get_last_error())
-        bindings_tests.Errors.clear_last_error()
+        # The length check lives once in the Java implementation, and the wrapper
+        # raises with its message rather than handing back a silent zero.
+        with self.assertRaises(RuntimeError) as caught:
+            bindings_tests.Arrays.dot_product([1.0, 2.0, 3.0], [4.0, 5.0])
+        self.assertIn("elements", str(caught.exception))
 
     def test_add_offset(self):
         # Span in, numpy array out. The wrapper copies out of the library-owned
@@ -298,29 +297,44 @@ class ErrorsTest(unittest.TestCase):
 
         self.assertIn("must not be negative", bindings_tests.Errors.get_last_error())
 
-    def test_defaults_on_failure(self):
-        # Methods with a real return type get a type specific default on
-        # failure. The generated wrapper does not check those, so nothing is
-        # raised here and the Python result matches the raw C ABI.
+    def test_value_returns_raise(self):
+        # Methods with a real return type report through the same error struct, so
+        # a failure raises here too and the id travels with the message.
         self.assertEqual(5, bindings_tests.Errors.divide_int32(10, 2))
-        self.assertEqual(0, bindings_tests.Errors.divide_int32(1, 0))
+        with self.assertRaises(RuntimeError) as caught:
+            bindings_tests.Errors.divide_int32(1, 0)
+        self.assertIn("division by zero", str(caught.exception))
+        self.assertIn("bindings_tests:ArithmeticException", str(caught.exception))
+
+        # The id travels alongside the message as structured data
+        self.assertIsInstance(caught.exception, bindings_tests.Error)
+        self.assertEqual("bindings_tests:ArithmeticException", caught.exception.id)
 
         self.assertEqual(1.5, bindings_tests.Errors.failing_float64(False))
-        self.assertEqual(0.0, bindings_tests.Errors.failing_float64(True))
+        with self.assertRaises(RuntimeError):
+            bindings_tests.Errors.failing_float64(True)
 
         self.assertEqual(True, bindings_tests.Errors.failing_bool(False))
-        self.assertEqual(False, bindings_tests.Errors.failing_bool(True))
+        with self.assertRaises(RuntimeError):
+            bindings_tests.Errors.failing_bool(True)
 
         self.assertEqual("ok", bindings_tests.Errors.failing_string(False))
-        # A null char* comes back as an empty string
-        self.assertEqual("", bindings_tests.Errors.failing_string(True))
+        with self.assertRaises(RuntimeError):
+            bindings_tests.Errors.failing_string(True)
+
+        # An exception without a message falls back to a placeholder, the id still arrives
+        with self.assertRaises(RuntimeError) as caught:
+            bindings_tests.Errors.fail_without_message()
+        self.assertIn("unknown error", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalStateException", caught.exception.id)
 
     def test_never_throws(self):
         # Marked Noexcept, so there is no status code to check
         bindings_tests.Errors.never_throws()
 
     def test_clear(self):
-        bindings_tests.Errors.divide_int32(1, 0)
+        with self.assertRaises(RuntimeError):
+            bindings_tests.Errors.divide_int32(1, 0)
         bindings_tests.Errors.clear_last_error()
         self.assertEqual("", bindings_tests.Errors.get_last_error())
 

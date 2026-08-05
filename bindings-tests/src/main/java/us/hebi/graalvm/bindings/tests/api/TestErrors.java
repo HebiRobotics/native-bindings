@@ -74,6 +74,13 @@ public class TestErrors {
         return "ok";
     }
 
+    @CLibMethod
+    @CLibComment(value = "Throws an exception that carries no message.",
+            throwsOn = "always")
+    public static int failWithoutMessage() {
+        throw new IllegalStateException();
+    }
+
     @CLibMethod(flags = Noexcept)
     @CLibComment("Marked noexcept, so no status code is generated for it.")
     public static void neverThrows() {
