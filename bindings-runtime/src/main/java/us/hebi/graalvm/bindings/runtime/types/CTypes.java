@@ -4,15 +4,10 @@ import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.word.WordFactory;
-import us.hebi.glue.Buffer6;
-import us.hebi.glue.DirectBuffer6;
 import us.hebi.graalvm.bindings.runtime.Configuration;
 import us.hebi.graalvm.bindings.runtime.views.DoubleBufferView;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 

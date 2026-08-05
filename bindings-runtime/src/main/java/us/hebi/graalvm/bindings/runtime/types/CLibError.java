@@ -44,28 +44,24 @@ public interface CLibError {
      * success path is what keeps a struct that is reused across a loop from reporting the
      * first failure forever.
      *
-     * @param error input struct owned by the caller. should never be null, but checked just in case.
+     * @param error input struct owned by the caller
      */
     static void clearStruct(ErrorInfo error) {
-        if (error.isNull()) return;
+        if (error.isNull()) return; // shouldn't happen, but not safe to throw here
         error.setCode(STATUS_CODE_SUCCESS);
-        error.setMessage(tmpErrorMessage.get().setContent(null).getPointer()); // TODO: add some util like CTypes::nullCharPointer()
-        error.setId(tmpErrorId.get().setContent(null).getPointer());
+        error.setMessage(CCharPointerMock.nullPointer());
+        error.setId(CCharPointerMock.nullPointer());
     }
 
     /**
      * Fills a caller-provided error struct from a failure. The message and id go into the
      * calling thread's scratch buffer and are valid only until its next call.
      *
-     * @param error    input struct owned by the caller. should never be null, but checked just in case.
+     * @param error    input struct owned by the caller
      * @param idPrefix library name used for exceptions that carry no id of their own
      */
     static void fillStruct(Throwable throwable, ErrorInfo error, String idPrefix) {
-        // The input should never be null, but it's not safe to throw here
-        if (error.isNull()) {
-            return;
-        }
-
+        if (error.isNull()) return; // shouldn't happen, but not safe to throw here
         if (throwable instanceof CLibError clib) {
             error.setCode(clib.getStatusCode());
             error.setMessage(tmpErrorMessage.get().setContent(withDebugInfo(clib.getErrorMessage(), throwable)).getPointer());

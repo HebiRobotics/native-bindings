@@ -1,7 +1,9 @@
 package us.hebi.graalvm.bindings.runtime.types;
 
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.SignedWord;
+import org.graalvm.word.WordFactory;
 
 import java.util.Arrays;
 
@@ -13,6 +15,12 @@ import java.util.Arrays;
  * @since 05 Aug 2024
  */
 public class CCharPointerMock extends MockPointerBase implements CCharPointer {
+
+    public static CCharPointer nullPointer() {
+        return ImageInfo.inImageRuntimeCode() ? WordFactory.nullPointer() : NULL;
+    }
+
+    public static CCharPointerMock NULL = new CCharPointerMock(null, 0);
 
     public CCharPointerMock(byte[] array, int offset) {
         this.array = array;
