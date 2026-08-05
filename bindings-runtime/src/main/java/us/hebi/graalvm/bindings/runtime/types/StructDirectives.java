@@ -20,7 +20,7 @@ import java.util.Objects;
  * @author Florian Enner
  * @since 01 Aug 2026
  */
-public class SpanDirectives implements CContext.Directives {
+public class StructDirectives implements CContext.Directives {
 
     @Override
     public List<String> getHeaderFiles() {
@@ -30,7 +30,7 @@ public class SpanDirectives implements CContext.Directives {
 
     private static String extractHeader() {
         String resource = "/us/hebi/graalvm/bindings/runtime/include/" + HEADER_NAME;
-        try (InputStream input = SpanDirectives.class.getResourceAsStream(resource)) {
+        try (InputStream input = StructDirectives.class.getResourceAsStream(resource)) {
             Objects.requireNonNull(input, "Missing header resource: " + resource);
             Path header = Files.createTempDirectory("hebi_bindings_include").resolve(HEADER_NAME);
             Files.copy(input, header, StandardCopyOption.REPLACE_EXISTING);
