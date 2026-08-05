@@ -5,6 +5,7 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
+import us.hebi.glue.Buffer6;
 import us.hebi.glue.DirectBuffer6;
 import us.hebi.graalvm.bindings.runtime.types.CCharPointerMock;
 import us.hebi.graalvm.bindings.runtime.types.CDoublePointerMock;
@@ -57,7 +58,9 @@ public abstract class BufferView<Ptr extends PointerBase> {
     }
 
     /**
-     * Overridable for tests on the JVM that rely on isNull() being available on a non-null object
+     * Overridable for tests on the JVM that rely on isNull() being available on a non-null object.
+     * A direct buffer has no accessible backing array, so the implementations copy. Nothing
+     * outside a test reaches this path.
      */
     protected abstract Ptr getJvmPointer();
 
@@ -65,8 +68,14 @@ public abstract class BufferView<Ptr extends PointerBase> {
 
         @Override
         final protected CCharPointer getJvmPointer() {
-            var array = isNull() ? null : bytes.array();
-            return new CCharPointerMock(array, 0);
+            return new CCharPointerMock(isNull() ? null : toArray(), 0);
+        }
+
+        private byte[] toArray() {
+            byte[] array = new byte[bytes.position()];
+            Buffer6.rewind(bytes);
+            bytes.get(array);
+            return array;
         }
 
     }
@@ -75,13 +84,19 @@ public abstract class BufferView<Ptr extends PointerBase> {
 
         @Override
         final protected CDoublePointer getJvmPointer() {
-            var array = isNull() ? null : doubles.array();
-            return new CDoublePointerMock(array, 0);
+            return new CDoublePointerMock(isNull() ? null : toArray(), 0);
+        }
+
+        private double[] toArray() {
+            double[] array = new double[doubles.position()];
+            Buffer6.rewind(doubles);
+            doubles.get(array);
+            return array;
         }
 
         @Override
-        protected boolean ensureSpace(int numElements) {
-            if (super.ensureSpace(numElements)) {
+        protected boolean ensureSpace(int numBytes) {
+            if (super.ensureSpace(numBytes)) {
                 doubles = bytes.asDoubleBuffer();
                 return true;
             }

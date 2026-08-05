@@ -1,8 +1,6 @@
 package us.hebi.graalvm.bindings.runtime.views;
 
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import us.hebi.glue.Buffer6;
-import us.hebi.graalvm.bindings.runtime.types.CCharPointerMock;
 
 import java.nio.charset.StandardCharsets;
 
@@ -30,13 +28,6 @@ public final class Utf8StringView extends BufferView.CChar {
             bytes.put((byte) '\0');
         }
         return this;
-    }
-
-    private byte[] toByteArray() {
-        byte[] bytes = new byte[this.bytes.position()];
-        Buffer6.rewind(this.bytes);
-        this.bytes.get(bytes);
-        return bytes;
     }
 
 }
