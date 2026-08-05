@@ -10,24 +10,6 @@
 namespace bindings {
 namespace tests {
 
-class Exception : public std::exception {
-public:
-  Exception(const std::string& message) noexcept : msg_(message) {}
-  Exception(const char* message) noexcept : msg_(message != nullptr ? message : "unknown error") {}
-  Exception(const char* message, const char* id) noexcept : msg_(message != nullptr ? message : "unknown error"), id_(id != nullptr ? id : "") {}
-  virtual ~Exception() noexcept {}
-  const char* what() const noexcept override {
-    return msg_.c_str();
-  }
-  /** Kind of failure, e.g. "mylib:invalidArgument". Empty if the library did not set one. */
-  const char* id() const noexcept {
-    return id_.c_str();
-  }
-protected:
-  std::string msg_;
-  std::string id_;
-};
-
 enum class CircleColor : int32_t {
   Red = 0,
   Green = 1,
@@ -68,6 +50,24 @@ struct ErrorInfo {
   const char* id;
   int32_t code;
 };
+}
+
+class Exception : public std::runtime_error {
+public:
+  explicit Exception(const char* message) : std::runtime_error(message) {}
+  Exception(const char* message, const char* id) : std::runtime_error(message), id_(id) {}
+  virtual ~Exception() noexcept = default;
+  const char* id() const noexcept { return id_.c_str(); } // Kind of failure, e.g., bindings:Generic
+private:
+  std::string id_;
+};
+
+inline void checkError(const internal::ErrorInfo& error) {
+  if (error.code != 0) {
+    const char* message = error.message != nullptr ? error.message : "unknown error";
+    const char* id = error.id != nullptr ? error.id : "";
+    throw Exception(message, id);
+  }
 }
 
 // ==== Class Wrappers ====
@@ -792,9 +792,7 @@ extern "C" {
 inline Counter::Counter(int start) {
   internal::ErrorInfo error_ = {};
   ptr_ = bindings_tests_Counter_create(&error_, start);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Counter");
   }
@@ -842,9 +840,7 @@ inline Counter::~Counter() noexcept {
 inline Naming::Naming(int startValue) {
   internal::ErrorInfo error_ = {};
   ptr_ = custom_prefix_Naming_create(&error_, startValue);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   if (!ptr_) {
     throw Exception("Could not create Naming");
   }
@@ -914,9 +910,7 @@ namespace internal {
 inline internal::CirclePtr createCirclePointer(double radius) {
   internal::ErrorInfo error_ = {};
   auto ptr = bindings_tests_Circle_create(&error_, radius);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Circle");
   }
@@ -956,9 +950,7 @@ namespace internal {
 inline internal::SquarePtr createSquarePointer(double side) {
   internal::ErrorInfo error_ = {};
   auto ptr = bindings_tests_Square_create(&error_, side);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   if (!ptr) {
     throw Exception("Could not create Square");
   }
@@ -1014,9 +1006,7 @@ inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
 inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Arrays_dotProduct(&error_, x, y);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return result_;
 }
 inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
@@ -1046,48 +1036,36 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 inline void errors::requireNonNegative(int value) {
   internal::ErrorInfo error_ = {};
   bindings_tests_Errors_requireNonNegative(&error_, value);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
 }
 inline int errors::divideInt32(int a, int b) {
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Errors_divideInt32(&error_, a, b);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return result_;
 }
 inline double errors::failingFloat64(bool shouldFail) {
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Errors_failingFloat64(&error_, shouldFail);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return result_;
 }
 inline bool errors::failingBool(bool shouldFail) {
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Errors_failingBool(&error_, shouldFail);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return result_;
 }
 inline std::string errors::failingString(bool shouldFail) {
   internal::ErrorInfo error_ = {};
   auto ptr = bindings_tests_Errors_failingString(&error_, shouldFail);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return !ptr ? std::string() : std::string(ptr); // copy utf8
 }
 inline int errors::failWithoutMessage() {
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Errors_failWithoutMessage(&error_);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
   return result_;
 }
 inline void errors::neverThrows() noexcept {
@@ -1134,9 +1112,7 @@ inline void isolated::reset() noexcept {
 inline void isolated::alwaysFails() {
   internal::ErrorInfo error_ = {};
   bindings_tests_Isolated_alwaysFails(&error_);
-  if (error_.code != 0) {
-    throw Exception(error_.message, error_.id);
-  }
+  checkError(error_);
 }
 
 // Math

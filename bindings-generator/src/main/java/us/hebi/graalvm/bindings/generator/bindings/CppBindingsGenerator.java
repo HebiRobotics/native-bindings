@@ -57,9 +57,9 @@ public class CppBindingsGenerator extends BindingGenerator {
         out.write(getCppNamespace(lib, true));
         out.write("\n\n");
 
-        writeExceptionClass(out);
         writeEnumDefinitions(out);
         writeForwardDeclarations(out, apiClasses, useDynamicLookup);
+        writeExceptionClass(out);
 
         out.write("// ==== Class Wrappers ====\n");
         for (ClassDescription apiClass : apiClasses) {
@@ -120,26 +120,31 @@ public class CppBindingsGenerator extends BindingGenerator {
         // }
     }
 
+    /**
+     * The exception copies message and id out of the per-thread buffers, so it stays
+     * valid past the next call. checkError substitutes for NULL fields because it is
+     * the only caller that can see one.
+     */
     private void writeExceptionClass(Writer out) throws IOException {
         out.write("""
-                class Exception : public std::exception {
+                class Exception : public std::runtime_error {
                 public:
-                  Exception(const std::string& message) noexcept : msg_(message) {}
-                  Exception(const char* message) noexcept : msg_(message != nullptr ? message : "unknown error") {}
-                  Exception(const char* message, const char* id) noexcept : msg_(message != nullptr ? message : "unknown error"), id_(id != nullptr ? id : "") {}
-                  virtual ~Exception() noexcept {}
-                  const char* what() const noexcept override {
-                    return msg_.c_str();
-                  }
-                  /** Kind of failure, e.g. "mylib:invalidArgument". Empty if the library did not set one. */
-                  const char* id() const noexcept {
-                    return id_.c_str();
-                  }
-                protected:
-                  std::string msg_;
+                  explicit Exception(const char* message) : std::runtime_error(message) {}
+                  Exception(const char* message, const char* id) : std::runtime_error(message), id_(id) {}
+                  virtual ~Exception() noexcept = default;
+                  const char* id() const noexcept { return id_.c_str(); } // Kind of failure, e.g., bindings:Generic
+                private:
                   std::string id_;
                 };
-                """);
+
+                inline void checkError(const %s& error) {
+                  if (error.code != 0) {
+                    const char* message = error.message != nullptr ? error.message : "unknown error";
+                    const char* id = error.id != nullptr ? error.id : "";
+                    throw Exception(message, id);
+                  }
+                }
+                """.formatted(getErrorType()));
         out.write("\n");
     }
 
@@ -714,16 +719,8 @@ public class CppBindingsGenerator extends BindingGenerator {
         return INTERNAL_POINTER_NAMESPACE + "::" + ERROR_STRUCT_NAME;
     }
 
-    /**
-     * Message and id point into per-thread buffers, so the Exception copies both into a
-     * std::string. Either may be NULL, and the constructor substitutes a default for it.
-     */
     private static String getErrorCheck() {
-        return """
-                  if (%s.code != 0) {
-                    throw Exception(%s.message, %s.id);
-                  }
-                """.formatted(ERROR_LOCAL_NAME, ERROR_LOCAL_NAME, ERROR_LOCAL_NAME);
+        return "  checkError(%s);\n".formatted(ERROR_LOCAL_NAME);
     }
 
     /**
