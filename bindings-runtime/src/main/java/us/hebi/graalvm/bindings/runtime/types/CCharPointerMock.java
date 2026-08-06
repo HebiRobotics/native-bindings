@@ -16,12 +16,6 @@ import java.util.Arrays;
  */
 public class CCharPointerMock extends MockPointerBase implements CCharPointer {
 
-    public static CCharPointer nullPointer() {
-        return ImageInfo.inImageRuntimeCode() ? WordFactory.nullPointer() : NULL;
-    }
-
-    public static CCharPointerMock NULL = new CCharPointerMock(null, 0);
-
     public CCharPointerMock(byte[] array, int offset) {
         this.array = array;
         this.offset = offset;

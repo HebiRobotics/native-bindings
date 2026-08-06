@@ -1,5 +1,7 @@
 package us.hebi.graalvm.bindings.runtime.types;
 
+import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.Configuration;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
@@ -48,9 +50,11 @@ public interface CLibError {
      */
     static void clearStruct(ErrorInfo error) {
         if (error.isNull()) return; // shouldn't happen, but not safe to throw here
+        if (ImageInfo.inImageRuntimeCode()) {
+            error.setMessage(WordFactory.nullPointer());
+            error.setId(WordFactory.nullPointer());
+        }
         error.setCode(STATUS_CODE_SUCCESS);
-        error.setMessage(CCharPointerMock.nullPointer());
-        error.setId(CCharPointerMock.nullPointer());
     }
 
     /**

@@ -306,7 +306,7 @@ between languages is immediately visible.
 | `TestArrays` | The (pointer, length) pattern for input and output buffers, spans, and `@CConst` |
 | `TestShape`, `TestCircle`, `TestSquare` | Inheritance, a shared handle registry, and the generated upcast |
 | `TestPalette` | Enum round trips |
-| `TestErrors` | Status codes, per-type error defaults, and the last error provider |
+| `TestErrors` | Error struct reporting and per-type error defaults |
 | `TestOverloads` | Default arguments, per-language overloads, `postBody`, `postCall`, renaming, and `ignore` |
 | `TestIsolated` | A second isolate with its own state and its own error provider |
 | `TestCallbacks` | Synchronous function pointer callbacks |
