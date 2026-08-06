@@ -126,7 +126,7 @@ def _checked(error_, result_):
     return result_
 
 class _DoubleSpan(Structure):
-    # A (pointer, length) view of a double buffer, passed and returned by value
+    # Layout of the by-value struct in the C ABI, mirroring DoubleSpan
     _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
 
 class _StatusInfo(Structure):
@@ -773,10 +773,10 @@ class Arrays:
         elif not isinstance(values, _DoubleSpan):
             values_arr = np.ascontiguousarray(values, dtype=np.float64)
             values = _DoubleSpan(values_arr.ctypes.data_as(POINTER(c_double)), len(values_arr))
-        span_ = libbindings_tests.bindings_tests_Arrays_addOffset(values, offset)
-        if span_.length == 0 or not span_.data:
+        struct_ = libbindings_tests.bindings_tests_Arrays_addOffset(values, offset)
+        if struct_.length == 0 or not struct_.data:
             return np.empty(0, dtype=np.float64)
-        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
+        return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
 
     @classmethod
     def get_sequence(cls, count: int) -> Sequence[float]:
@@ -787,10 +787,10 @@ class Arrays:
             count:
         """
         np = _require_numpy()
-        span_ = libbindings_tests.bindings_tests_Arrays_getSequence(count)
-        if span_.length == 0 or not span_.data:
+        struct_ = libbindings_tests.bindings_tests_Arrays_getSequence(count)
+        if struct_.length == 0 or not struct_.data:
             return np.empty(0, dtype=np.float64)
-        return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
+        return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
 
 
 class Callbacks:

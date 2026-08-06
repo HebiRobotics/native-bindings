@@ -17,6 +17,15 @@ typedef struct {
     int32_t code;
 } bindings_tests_error_info_t;
 
+// A (pointer, length) view of a contiguous double buffer, passed and returned
+// by value. Inputs are caller-owned and only read during the call. Returned
+// spans are library-owned and stay valid until the calling thread's next
+// library call, so they have to be copied immediately.
+typedef struct {
+    const double* data;
+    size_t length;
+} bindings_tests_double_span;
+
 typedef struct {
     double voltage;
     int32_t state;
@@ -28,15 +37,6 @@ typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
-
-// A (pointer, length) view of a contiguous double buffer, passed and returned
-// by value. Inputs are caller-owned and only read during the call. Returned
-// spans are library-owned and stay valid until the calling thread's next
-// library call, so they have to be copied immediately.
-typedef struct {
-    const double* data;
-    size_t length;
-} bindings_tests_double_span;
 
 typedef enum bindings_tests_CircleColor {
   bindings_tests_CircleColor_Red = 0,

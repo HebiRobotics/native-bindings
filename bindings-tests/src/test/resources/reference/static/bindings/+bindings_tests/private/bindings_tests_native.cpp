@@ -165,22 +165,6 @@ inline mxArray* createEmpty() {
     return mxCreateDoubleMatrix(0, 0, mxREAL);
 }
 
-// Layout-compatible with the by-value span struct in the C ABI. Returned spans are
-// library-owned and only valid until the next call, so they get copied immediately.
-struct DoubleSpan {
-    const double* data;
-    size_t length;
-};
-
-inline mxArray* createMexDoubleArray(DoubleSpan span) {
-    if (!span.data || span.length == 0) {
-        return createEmpty();
-    }
-    mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
-    std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
-    return array;
-}
-
 // Reads one field of a MATLAB struct argument. mxGetField returns null for a field
 // that does not exist, which the scalar check cannot tell apart from a bad value.
 template <typename T>
@@ -190,6 +174,23 @@ inline T getStructField(const mxArray* arg, const char* structName, const char* 
         mexErrMsgIdAndTxt("bindings_tests:InvalidInput", "Struct '%s' is missing field '%s'.", structName, fieldName);
     }
     return getScalar<T>(field, fieldName);
+}
+
+// Layout-compatible with the by-value DoubleSpan struct in the C ABI
+struct DoubleSpan {
+    const double* data;
+    size_t length;
+};
+
+// Returned spans are library-owned and only valid until the next call,
+// so they get copied immediately
+inline mxArray* createMexDoubleArray(DoubleSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
+    std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
+    return array;
 }
 
 // Layout-compatible with the by-value StatusInfo struct in the C ABI

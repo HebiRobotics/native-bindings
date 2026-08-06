@@ -844,9 +844,7 @@ inline Counter::Counter(int start) {
   internal::ErrorInfo error_ = {};
   ptr_ = bindings_tests_Counter_create(&error_, start);
   checkError(error_);
-  if (!ptr_) {
-    throw Exception("Could not create Counter");
-  }
+  checkNotNull(ptr_, "Could not create Counter");
 }
 inline int Counter::getValue() const noexcept {
   return bindings_tests_Counter_getValue(ptr_);
@@ -892,9 +890,7 @@ inline Naming::Naming(int startValue) {
   internal::ErrorInfo error_ = {};
   ptr_ = custom_prefix_Naming_create(&error_, startValue);
   checkError(error_);
-  if (!ptr_) {
-    throw Exception("Could not create Naming");
-  }
+  checkNotNull(ptr_, "Could not create Naming");
 }
 inline int Naming::getStartValue() const noexcept {
   return custom_prefix_Naming_get_start_value(ptr_);
@@ -1060,15 +1056,15 @@ inline double arrays::dotProduct(const std::vector<double>& x, const std::vector
   return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
 }
 inline std::vector<double> arrays::addOffset(internal::double_span values, double offset) noexcept {
-  auto span_ = bindings_tests_Arrays_addOffset(values, offset);
-  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
+  auto struct_ = bindings_tests_Arrays_addOffset(values, offset);
+  return std::vector<double>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
 }
 inline std::vector<double> arrays::addOffset(const std::vector<double>& values, double offset) noexcept {
   return addOffset({values.data(), values.size()}, offset);
 }
 inline std::vector<double> arrays::getSequence(size_t count) noexcept {
-  auto span_ = bindings_tests_Arrays_getSequence(count);
-  return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
+  auto struct_ = bindings_tests_Arrays_getSequence(count);
+  return std::vector<double>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
 }
 
 // Callbacks
