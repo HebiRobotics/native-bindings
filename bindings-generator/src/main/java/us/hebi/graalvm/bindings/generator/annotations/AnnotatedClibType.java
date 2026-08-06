@@ -247,6 +247,13 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         return name;
     }
 
+    /**
+     * @return the declared type, or null for primitives and arrays
+     */
+    public TypeElement getTypeElement() {
+        return element;
+    }
+
     private final Element sourceElement;
     private final TypeMirror mirror;
     private final TypeMirror rawMirror;

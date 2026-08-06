@@ -80,6 +80,12 @@ public final class TypeMap {
             case INT16 -> "int16_t";
             case INT8 -> "int8_t";
             case BOOL -> "int32_t"; // native-image maps a Java boolean to a 4 byte int
+
+            // Const is a statement to the external consumer only. The Java setter keeps
+            // working, because the entry point writes the field through the view.
+            case FLOAT64_POINTER -> "const double*";
+            case CHAR_POINTER -> "const char*";
+
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
     }

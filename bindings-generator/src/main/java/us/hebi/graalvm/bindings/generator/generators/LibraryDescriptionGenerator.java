@@ -1,6 +1,7 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
 import com.google.common.base.CaseFormat;
+import org.graalvm.nativeimage.c.CContext;
 import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.generator.annotations.*;
 import us.hebi.graalvm.bindings.generator.bindings.BindingGenerator;
@@ -12,9 +13,13 @@ import us.hebi.quickbuf.JsonSink;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
+import static javax.tools.Diagnostic.Kind.*;
 import static us.hebi.quickbuf.ProtoUtil.*;
 
 /**
@@ -22,6 +27,10 @@ import static us.hebi.quickbuf.ProtoUtil.*;
  * @since 21 Feb 2024
  */
 public class LibraryDescriptionGenerator extends AbstractGenerator {
+
+    LibraryDescriptionGenerator(CLibStructGenerator structGenerator) {
+        this.structGenerator = structGenerator;
+    }
 
     @Override
     protected void process(AnnotatedCLibClass apiClass) {
@@ -44,6 +53,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setLowerUnderscoreName(CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getMethodName()))
                     .setCName(method.getCEntryPointName())
                     .setReturnType(method.getReturnTypeDescription());
+
+            collectStructView(method.getReturnType());
 
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
@@ -77,6 +88,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                 // Isolates are handled by the C wrapper layer
                 if (parameter.isIsolateOrThread()) continue;
 
+                collectStructView(parameter);
+
                 // The out parameter is already recorded as the return type
                 if (parameter.isOutParameter()) continue;
 
@@ -94,7 +107,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         }
 
         for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
-            description.addStructs(nestedStruct.toDescription());
+            registerStruct(nestedStruct);
         }
 
         for (CLibTypeDef typeDef : apiClass.getTypeDefs()) {
@@ -105,6 +118,68 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setPythonDefinition(typeDef.pythonDefinition());
         }
 
+    }
+
+    /**
+     * Discovery by use: a view participates because a signature mentions it, no matter whether
+     * it is declared here or comes from a dependency jar. Keyed by qualified name so that
+     * {@link #finish()} sees each view once.
+     */
+    private void collectStructView(AnnotatedClibType type) {
+        if (type.getDataType() != DataType.STRUCT) {
+            return;
+        }
+        var element = type.getTypeElement();
+        usedStructViews.computeIfAbsent(element.getQualifiedName().toString(),
+                name -> new AnnotatedCLibStruct(element, getEnv()));
+    }
+
+    /**
+     * The C header declares every struct the descriptor lists, so a view reaches it here or
+     * not at all. A view used by two classes arrives twice and is registered once.
+     */
+    private void registerStruct(AnnotatedCLibStruct struct) {
+        var declaredBy = struct.getElement().getQualifiedName().toString();
+        var previous = structNames.putIfAbsent(struct.getName(), declaredBy);
+        if (previous == null) {
+            description.addStructs(struct.toDescription());
+        } else if (!previous.equals(declaredBy)) {
+            error(struct, "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
+        }
+    }
+
+    /**
+     * Runs once every round is over, which is what makes the set of source-declared views
+     * complete. A classpath view cannot name a directives class the consumer's build has yet
+     * to generate, so its jar ships the directives and the mock alongside it.
+     */
+    private void registerUsedStructViews() {
+        for (var struct : usedStructViews.values()) {
+            // Presence is the whole check, the Class value is never read
+            if (!structGenerator.isSourceDeclared(struct) && struct.getElement().getAnnotation(CContext.class) == null) {
+                error(struct, "A precompiled @CLibStruct view must ship its own directives and name them in @CContext: %s",
+                        struct.getElement().getQualifiedName());
+                continue;
+            }
+            registerStruct(struct);
+        }
+    }
+
+    /**
+     * postRound does not catch, so a thrown error would escape the processor and bury the
+     * message in a javac stack trace.
+     */
+    private void error(AnnotatedCLibStruct struct, String message, Object... args) {
+        getMessager().printMessage(ERROR, String.format(message, args), struct.getElement());
+        errorReported = true;
+    }
+
+    /**
+     * A rejected view never made it into the description, so the language generators would
+     * crash on the dangling reference and bury the reported diagnostic.
+     */
+    boolean hasReportedErrors() {
+        return errorReported;
     }
 
     public void finish() {
@@ -124,6 +199,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         }
         if (options.enableGraphics()) description.setEnableGraphics(true);
         description.setCPrefix(options.getCPrefix());
+
+        registerUsedStructViews();
 
         // Sort classes by name so the output-diffs are predictable
         ProtoSortUtil.sortClassDescriptions(description.getClasses());
@@ -155,5 +232,11 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     final LibraryDescription description = LibraryDescription.newInstance();
+
+    private final CLibStructGenerator structGenerator;
+
+    private final Map<String, AnnotatedCLibStruct> usedStructViews = new LinkedHashMap<>();
+    private final Map<String, String> structNames = new HashMap<>();
+    private boolean errorReported = false;
 
 }

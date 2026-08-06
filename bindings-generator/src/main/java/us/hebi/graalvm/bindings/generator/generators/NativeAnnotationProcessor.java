@@ -142,6 +142,10 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
                 generator.finish();
             }
 
+            // A struct error leaves a dangling reference in the description, and the language
+            // generators would crash on it and bury the reported diagnostic.
+            if (apiDescription.hasReportedErrors()) return;
+
             try {
                 apiDescription.writeTo(this::createFile);
                 new CBindingsGenerator(apiDescription.getDescription()).writeTo(this::createFile);
@@ -218,9 +222,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
     private final Map<String, String> enumNames = new HashMap<>();
     private final Map<String, String> structNames = new HashMap<>();
 
-    final LibraryDescriptionGenerator apiDescription = new LibraryDescriptionGenerator();
     final CEnumGenerator enumGenerator = new CEnumGenerator();
     final CLibStructGenerator structGenerator = new CLibStructGenerator();
+    final LibraryDescriptionGenerator apiDescription = new LibraryDescriptionGenerator(structGenerator);
     final List<AbstractGenerator> generators = Arrays.asList(
             new CEntryPointGenerator(),
             enumGenerator,

@@ -31,7 +31,7 @@ import static com.google.common.base.Preconditions.*;
 
 /**
  * Annotated {@code @CStruct} view that describes a user struct crossing the public C ABI
- * by value. Version 1 allows primitive fields only.
+ * by value. Version 1 allows primitive fields and typed GraalVM pointers.
  *
  * @author Florian Enner
  * @since 6 Aug 2026
@@ -139,17 +139,24 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
     }
 
     private DataType getFieldDataType(String fieldName, TypeMirror type) {
-        var dataType = TypeMap.getGraalDataType(TypeName.get(type));
-        if (dataType == null || !isSupportedFieldType(dataType)) {
-            throw error("@CLibStruct fields may only be double, float, long, int, short, byte or boolean, got '%s %s': %s",
+        var javaType = TypeName.get(type);
+        var dataType = TypeMap.getGraalDataType(javaType);
+        if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
+            throw error("@CLibStruct fields may only be double, float, long, int, short, byte, boolean, "
+                            + "CDoublePointer or CCharPointer, got '%s %s': %s",
                     type, fieldName, getQualifiedName());
         }
         return dataType;
     }
 
-    private static boolean isSupportedFieldType(DataType dataType) {
+    /**
+     * TypeMap maps String to CHAR_POINTER as a convenience for method signatures, but a field
+     * accessor has to name the pointer type that native-image probes the layout against.
+     */
+    private static boolean isSupportedFieldType(TypeName javaType, DataType dataType) {
         return switch (dataType) {
             case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL -> true;
+            case FLOAT64_POINTER, CHAR_POINTER -> !STRING_TYPE.equals(javaType);
             default -> false;
         };
     }
@@ -333,5 +340,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
     final List<StructAccessor> accessors = new ArrayList<>();
 
     private static final List<String> ACCESSOR_PREFIXES = List.of("get", "set");
+
+    private static final TypeName STRING_TYPE = ClassName.get(String.class);
 
 }
