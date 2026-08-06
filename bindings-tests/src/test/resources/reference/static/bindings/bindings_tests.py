@@ -1,5 +1,6 @@
 from __future__ import annotations
 from ctypes import *
+from dataclasses import dataclass
 from enum import IntEnum
 import os
 import platform
@@ -128,6 +129,10 @@ class _DoubleSpan(Structure):
     # A (pointer, length) view of a double buffer, passed and returned by value
     _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
 
+class _StatusInfo(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring StatusInfo
+    _fields_ = [("voltage", c_double), ("state", c_int32), ("enabled", c_int32)]
+
 class struct_Counter_(Structure):
     pass
 CounterPtr = POINTER(struct_Counter_)
@@ -183,6 +188,10 @@ PalettePtr = POINTER(struct_Palette_)
 class struct_Strings_(Structure):
     pass
 StringsPtr = POINTER(struct_Strings_)
+
+class struct_Structs_(Structure):
+    pass
+StructsPtr = POINTER(struct_Structs_)
 
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 
@@ -390,6 +399,25 @@ libbindings_tests.bindings_tests_Strings_join.restype = c_char_p
 libbindings_tests.bindings_tests_Strings_repeat.argtypes = [c_char_p, c_size_t]
 libbindings_tests.bindings_tests_Strings_repeat.restype = c_char_p
 
+# ==== Structs ====
+libbindings_tests.bindings_tests_Structs_totalPower.argtypes = [_StatusInfo, c_double]
+libbindings_tests.bindings_tests_Structs_totalPower.restype = c_double
+libbindings_tests.bindings_tests_Structs_checkedVoltage.argtypes = [POINTER(_ErrorInfo), _StatusInfo]
+libbindings_tests.bindings_tests_Structs_checkedVoltage.restype = c_double
+libbindings_tests.bindings_tests_Structs_getStatus.argtypes = [c_int]
+libbindings_tests.bindings_tests_Structs_getStatus.restype = _StatusInfo
+libbindings_tests.bindings_tests_Structs_getCheckedStatus.argtypes = [POINTER(_ErrorInfo), c_int]
+libbindings_tests.bindings_tests_Structs_getCheckedStatus.restype = _StatusInfo
+
+# ==== Structs ====
+
+@dataclass
+class StatusInfo:
+    voltage: float
+    state: int
+    enabled: bool
+
+
 # ==== Enum Wrappers ====
 class CircleColor(IntEnum):
     RED = 0
@@ -417,6 +445,9 @@ class Counter:
 
         Args:
             start:
+
+        Returns:
+            A mutable counter, used to check handle creation and release.
 
         Raises:
             Exception: on internal errors
@@ -478,6 +509,9 @@ class Naming:
 
         Args:
             start_value:
+
+        Returns:
+            A counter exported under a custom prefix in snake case.
 
         Raises:
             Exception: on internal errors
@@ -575,7 +609,11 @@ class Circle(Shape):
         return libbindings_tests.bindings_tests_Circle_getRadius(self.ref_Circle)
 
     def get_color(self) -> CircleColor:
-        """Returns the fill color, which is always Blue until setters exist."""
+        """Returns the fill color, which is always Blue until setters exist.
+
+        Returns:
+            Fill color of a circle.
+        """
         return CircleColor(libbindings_tests.bindings_tests_Circle_getColor(self.ref_Circle))
 
     def area(self) -> float:
@@ -1143,6 +1181,9 @@ class Palette:
 
         Args:
             color:
+
+        Returns:
+            A named color. Values are ordinals, starting at zero.
         """
         return Color(libbindings_tests.bindings_tests_Palette_next(color))
 
@@ -1172,6 +1213,9 @@ class Palette:
 
         Args:
             ordinal:
+
+        Returns:
+            A named color. Values are ordinals, starting at zero.
         """
         return Color(libbindings_tests.bindings_tests_Palette_fromOrdinal(ordinal))
 
@@ -1266,3 +1310,66 @@ class Strings:
             value = c_char_p(value.encode('utf-8') if isinstance(value, str) else value)
         ptr_ = libbindings_tests.bindings_tests_Strings_repeat(value, times)
         return ptr_.decode("utf-8") if ptr_ is not None else ""
+
+
+class Structs:
+    """Reads fields out of a caller-owned struct."""
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError('Class is not instantiable')
+
+    @classmethod
+    def total_power(cls, status: StatusInfo, current_amps: float) -> float:
+        """Power draw in watts for the given current. Returns zero unless the actuator is
+        enabled and in the running state (2), so all three fields decide the result.
+
+        Args:
+            status:
+            current_amps:
+        """
+        if not isinstance(status, _StatusInfo):
+            status = _StatusInfo(status.voltage, status.state, int(status.enabled))
+        return libbindings_tests.bindings_tests_Structs_totalPower(status, current_amps)
+
+    @classmethod
+    def checked_voltage(cls, status: StatusInfo) -> float:
+        """Bus voltage in volts. Returns 0.0 through the ABI when it throws.
+
+        Args:
+            status:
+
+        Raises:
+            Exception: the actuator is disabled
+        """
+        if not isinstance(status, _StatusInfo):
+            status = _StatusInfo(status.voltage, status.state, int(status.enabled))
+        error_ = _ErrorInfo()
+        return _checked(error_, libbindings_tests.bindings_tests_Structs_checkedVoltage(byref(error_), status))
+
+    @classmethod
+    def get_status(cls, index: int) -> StatusInfo:
+        """Fills the out parameter with a canned reading for the given index: index 0
+        reads (48.0, running, enabled), every other index reads (12.5, 1, disabled).
+
+        Args:
+            index:
+
+        Returns:
+            Status reading for the given index.
+        """
+        struct_ = libbindings_tests.bindings_tests_Structs_getStatus(index)
+        return StatusInfo(struct_.voltage, struct_.state, bool(struct_.enabled))
+
+    @classmethod
+    def get_checked_status(cls, index: int) -> StatusInfo:
+        """Same readings as getStatus. Every field of the out parameter reads as zero through the ABI when it throws.
+
+        Args:
+            index:
+
+        Raises:
+            Exception: the index is negative
+        """
+        error_ = _ErrorInfo()
+        struct_ = _checked(error_, libbindings_tests.bindings_tests_Structs_getCheckedStatus(byref(error_), index))
+        return StatusInfo(struct_.voltage, struct_.state, bool(struct_.enabled))

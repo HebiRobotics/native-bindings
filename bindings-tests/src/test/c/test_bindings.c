@@ -274,6 +274,66 @@ static void test_spans(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Structs (a user defined struct passed by value)                     */
+/* ------------------------------------------------------------------ */
+
+static void test_structs(void) {
+    /* Declaration order is the ABI, so the initializer doubles as a layout check. */
+    bindings_tests_status_info status = {48.0, 2, 1};
+    bindings_tests_status_info out;
+    bindings_tests_error_info_t error;
+
+    assert(bindings_tests_Structs_totalPower(status, 2.5) == 120.0);
+    assert(bindings_tests_Structs_checkedVoltage(&error, status) == 48.0);
+    assert(error.code == 0);
+
+    /* State 1 is not the running state, so the power is zero while the voltage still reads. */
+    status.state = 1;
+    assert(bindings_tests_Structs_totalPower(status, 2.5) == 0.0);
+    assert(bindings_tests_Structs_checkedVoltage(&error, status) == 48.0);
+    status.state = 2;
+
+    /* A bool field crosses as an int32, so the C caller writes 0 rather than false. */
+    status.enabled = 0;
+    assert(bindings_tests_Structs_totalPower(status, 2.5) == 0.0);
+    assert(bindings_tests_Structs_checkedVoltage(&error, status) == 0.0);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "disabled") != NULL);
+    assert(error.id != NULL && strcmp(error.id, "bindings_tests:IllegalArgumentException") == 0);
+
+    /* getStatus/getCheckedStatus present the same struct the other way round, as a
+       by-value return keyed by index rather than an input struct the caller assembles. */
+    out = bindings_tests_Structs_getStatus(0);
+    assert(out.voltage == 48.0);
+    assert(out.state == 2);
+    assert(out.enabled != 0);
+
+    out = bindings_tests_Structs_getStatus(1);
+    assert(out.voltage == 12.5);
+    assert(out.state == 1);
+    assert(out.enabled == 0);
+
+    out = bindings_tests_Structs_getCheckedStatus(&error, 0);
+    assert(error.code == 0);
+    assert(out.voltage == 48.0);
+    assert(out.state == 2);
+    assert(out.enabled != 0);
+
+    /* A negative index throws, and the entry point zeroes every field of the out
+       parameter through its setters before returning, so a failed call cannot be
+       mistaken for a successful one that happens to read zero. */
+    out = bindings_tests_Structs_getCheckedStatus(&error, -1);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "negative") != NULL);
+    assert(error.id != NULL && strcmp(error.id, "bindings_tests:IllegalArgumentException") == 0);
+    assert(out.voltage == 0.0);
+    assert(out.state == 0);
+    assert(out.enabled == 0);
+
+    printf("structs ok\n");
+}
+
+/* ------------------------------------------------------------------ */
 /* Shapes (inheritance)                                                */
 /* ------------------------------------------------------------------ */
 
@@ -582,6 +642,7 @@ int main(void) {
     test_strings();
     test_arrays();
     test_spans();
+    test_structs();
     test_shapes();
     test_palette();
     test_errors();

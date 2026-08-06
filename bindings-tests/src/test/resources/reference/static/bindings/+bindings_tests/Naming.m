@@ -30,6 +30,9 @@ classdef (Sealed) Naming < handle & matlab.mixin.SetGet
             %   Inputs:
             %       startValue
             %
+            %   Outputs:
+            %       A counter exported under a custom prefix in snake case.
+            %
             %   Throws:
             %       Error on internal errors
             if nargin < 1

@@ -13,6 +13,9 @@ classdef (Sealed) Circle < bindings_tests.Shape
 
         function result = getColor(this)
             % Returns the fill color, which is always Blue until setters exist.
+            %
+            %   Outputs:
+            %       Fill color of a circle.
             result = bindings_tests_native('bindings_tests_Circle_getColor', this.ref_Circle);
         end
 

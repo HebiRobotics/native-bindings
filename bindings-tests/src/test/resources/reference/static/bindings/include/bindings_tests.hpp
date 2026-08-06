@@ -27,6 +27,13 @@ enum class Marker : int32_t {
   Cross = 1
 };
 
+// Plain data struct, passed by value. Layout changes are not ABI backwards compatible
+struct StatusInfo {
+  double voltage;
+  int32_t state;
+  int32_t enabled;
+};
+
 // ==== Forward Declarations ====
 class Counter;
 class Naming;
@@ -88,6 +95,7 @@ public:
    * @brief Creates a counter starting at the given value, or at zero by default.
    *
    * @param start 
+   * @return A mutable counter, used to check handle creation and release.
    * @throw on internal errors
    */
   Counter(int start = 0);
@@ -132,6 +140,7 @@ public:
    * @brief Creates an instance holding the given value, or zero by default.
    *
    * @param startValue 
+   * @return A counter exported under a custom prefix in snake case.
    * @throw on internal errors
    */
   Naming(int startValue = 0);
@@ -196,6 +205,8 @@ public:
 
   /**
    * @brief Returns the fill color, which is always Blue until setters exist.
+   *
+   * @return Fill color of a circle.
    */
   CircleColor getColor() const noexcept;
   double area() const noexcept;
@@ -602,6 +613,7 @@ namespace palette {
  * @brief Cycles Red to Green to Blue and back to Red.
  *
  * @param color 
+ * @return A named color. Values are ordinals, starting at zero.
  */
 Color next(Color color) noexcept;
 std::string nameOf(Color color) noexcept;
@@ -619,6 +631,7 @@ std::string describe(Color color, Marker marker) noexcept;
  * @brief Returns the enum with the given ordinal, or Red if it is out of range.
  *
  * @param ordinal 
+ * @return A named color. Values are ordinals, starting at zero.
  */
 Color fromOrdinal(int ordinal) noexcept;
 } // namespace palette
@@ -684,6 +697,49 @@ std::string join(const char** values, size_t count, const std::string& separator
 std::string repeat(const char* value, size_t times) noexcept;
 std::string repeat(const std::string& value, size_t times) noexcept;
 } // namespace strings
+
+
+/**
+ * @brief Reads fields out of a caller-owned struct.
+ */
+namespace structs {
+
+/**
+ * @details 
+ * Power draw in watts for the given current. Returns zero unless the actuator is
+ * enabled and in the running state (2), so all three fields decide the result.
+ *
+ * @param status 
+ * @param currentAmps 
+ */
+double totalPower(StatusInfo status, double currentAmps) noexcept;
+
+/**
+ * @brief Bus voltage in volts. Returns 0.0 through the ABI when it throws.
+ *
+ * @param status 
+ * @throw the actuator is disabled
+ */
+double checkedVoltage(StatusInfo status);
+
+/**
+ * @details 
+ * Fills the out parameter with a canned reading for the given index: index 0
+ * reads (48.0, running, enabled), every other index reads (12.5, 1, disabled).
+ *
+ * @param index 
+ * @return Status reading for the given index.
+ */
+StatusInfo getStatus(int index) noexcept;
+
+/**
+ * @brief Same readings as getStatus. Every field of the out parameter reads as zero through the ABI when it throws.
+ *
+ * @param index 
+ * @throw the index is negative
+ */
+StatusInfo getCheckedStatus(int index);
+} // namespace structs
 
 // ==== C Library Functions ====
 extern "C" {
@@ -775,6 +831,10 @@ extern "C" {
   const char* bindings_tests_Strings_nullString();
   const char* bindings_tests_Strings_join(const char**, size_t, const char*);
   const char* bindings_tests_Strings_repeat(const char*, size_t);
+  double bindings_tests_Structs_totalPower(StatusInfo, double);
+  double bindings_tests_Structs_checkedVoltage(internal::ErrorInfo*, StatusInfo);
+  StatusInfo bindings_tests_Structs_getStatus(int);
+  StatusInfo bindings_tests_Structs_getCheckedStatus(internal::ErrorInfo*, int);
   void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 }
 
@@ -1231,6 +1291,26 @@ inline std::string strings::repeat(const char* value, size_t times) noexcept {
 }
 inline std::string strings::repeat(const std::string& value, size_t times) noexcept {
   return repeat(value.c_str(), times);
+}
+
+// Structs
+inline double structs::totalPower(StatusInfo status, double currentAmps) noexcept {
+  return bindings_tests_Structs_totalPower(status, currentAmps);
+}
+inline double structs::checkedVoltage(StatusInfo status) {
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Structs_checkedVoltage(&error_, status);
+  checkError(error_);
+  return result_;
+}
+inline StatusInfo structs::getStatus(int index) noexcept {
+  return bindings_tests_Structs_getStatus(index);
+}
+inline StatusInfo structs::getCheckedStatus(int index) {
+  internal::ErrorInfo error_ = {};
+  auto result_ = bindings_tests_Structs_getCheckedStatus(&error_, index);
+  checkError(error_);
+  return result_;
 }
 
 

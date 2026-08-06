@@ -53,6 +53,9 @@ classdef (Sealed) Counter < handle & matlab.mixin.SetGet
             %   Inputs:
             %       start
             %
+            %   Outputs:
+            %       A mutable counter, used to check handle creation and release.
+            %
             %   Throws:
             %       Error on internal errors
             start = 0;

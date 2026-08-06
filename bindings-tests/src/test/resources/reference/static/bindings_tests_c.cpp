@@ -444,6 +444,28 @@ const char* __bindings_tests_Strings_repeat(bindings_tests_isolatethread_t* isol
 const char* bindings_tests_Strings_repeat(const char* value, size_t times) {
     return __bindings_tests_Strings_repeat(isolate::global(), value, static_cast<long long>(times));
 }
+
+// ==== Structs ====
+double __bindings_tests_Structs_totalPower(bindings_tests_isolatethread_t* isolate, const bindings_tests_status_info* status, double currentAmps);
+double bindings_tests_Structs_totalPower(bindings_tests_status_info status, double currentAmps) {
+    return __bindings_tests_Structs_totalPower(isolate::global(), &status, currentAmps);
+}
+double __bindings_tests_Structs_checkedVoltage(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, const bindings_tests_status_info* status);
+double bindings_tests_Structs_checkedVoltage(bindings_tests_error_info_t* _error, bindings_tests_status_info status) {
+    return __bindings_tests_Structs_checkedVoltage(isolate::global(), _error, &status);
+}
+void __bindings_tests_Structs_getStatus(bindings_tests_isolatethread_t* isolate, int index, bindings_tests_status_info* structOut);
+bindings_tests_status_info bindings_tests_Structs_getStatus(int index) {
+    bindings_tests_status_info result_;
+    __bindings_tests_Structs_getStatus(isolate::global(), index, &result_);
+    return result_;
+}
+void __bindings_tests_Structs_getCheckedStatus(bindings_tests_isolatethread_t* isolate, bindings_tests_error_info_t* _error, int index, bindings_tests_status_info* structOut);
+bindings_tests_status_info bindings_tests_Structs_getCheckedStatus(bindings_tests_error_info_t* _error, int index) {
+    bindings_tests_status_info result_;
+    __bindings_tests_Structs_getCheckedStatus(isolate::global(), _error, index, &result_);
+    return result_;
+}
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build) {
     *major = 1;
     *minor = 2;

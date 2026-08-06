@@ -17,6 +17,12 @@ typedef struct {
     int32_t code;
 } bindings_tests_error_info_t;
 
+typedef struct {
+    double voltage;
+    int32_t state;
+    int32_t enabled;
+} bindings_tests_status_info;
+
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
@@ -180,6 +186,12 @@ const char* bindings_tests_Strings_empty();
 const char* bindings_tests_Strings_nullString();
 const char* bindings_tests_Strings_join(const char** values, size_t count, const char* separator);
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
+
+// ==== Structs ====
+double bindings_tests_Structs_totalPower(bindings_tests_status_info status, double currentAmps);
+double bindings_tests_Structs_checkedVoltage(bindings_tests_error_info_t* _error, bindings_tests_status_info status);
+bindings_tests_status_info bindings_tests_Structs_getStatus(int index);
+bindings_tests_status_info bindings_tests_Structs_getCheckedStatus(bindings_tests_error_info_t* _error, int index);
 
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {

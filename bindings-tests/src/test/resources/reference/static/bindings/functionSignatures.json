@@ -703,5 +703,45 @@
         "name": "value",
         "type": ["char"]
       }]
+  },
+  "bindings_tests.Structs.checkedVoltage": {
+    "inputs": [{
+        "kind": "required",
+        "name": "status",
+        "type": ["struct"]
+      }]
+  },
+  "bindings_tests.Structs.getCheckedStatus": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["struct"]
+      }]
+  },
+  "bindings_tests.Structs.getStatus": {
+    "inputs": [{
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["struct"]
+      }]
+  },
+  "bindings_tests.Structs.totalPower": {
+    "inputs": [{
+        "kind": "required",
+        "name": "status",
+        "type": ["struct"]
+      }, {
+        "kind": "required",
+        "name": "currentAmps",
+        "type": ["numeric"]
+      }]
   }
 }
