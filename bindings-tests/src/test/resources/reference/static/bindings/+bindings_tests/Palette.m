@@ -8,6 +8,9 @@ classdef (Sealed) Palette
             %
             %   Inputs:
             %       color
+            %
+            %   Outputs:
+            %       A named color. Values are ordinals, starting at zero.
             result = bindings_tests_native('bindings_tests_Palette_next', bindings_tests.Color.toNativeValue(color));
         end
 
@@ -33,6 +36,9 @@ classdef (Sealed) Palette
             %
             %   Inputs:
             %       ordinal
+            %
+            %   Outputs:
+            %       A named color. Values are ordinals, starting at zero.
             result = bindings_tests_native('bindings_tests_Palette_fromOrdinal', ordinal);
         end
 

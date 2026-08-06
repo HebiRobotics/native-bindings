@@ -43,7 +43,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setName(method.getMethodName())
                     .setLowerUnderscoreName(CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getMethodName()))
                     .setCName(method.getCEntryPointName())
-                    .setReturnType(method.getReturnType().toDescription());
+                    .setReturnType(method.getReturnTypeDescription());
 
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
@@ -77,6 +77,9 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                 // Isolates are handled by the C wrapper layer
                 if (parameter.isIsolateOrThread()) continue;
 
+                // The out parameter is already recorded as the return type
+                if (parameter.isOutParameter()) continue;
+
                 // Only add non-isolates
                 methodDesc.getMutableParameters().next()
                         .copyFrom(parameter.toDescription())
@@ -88,6 +91,10 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
         for (AnnotatedCLibEnum nestedEnum : apiClass.getNestedEnums()) {
             description.addEnums(nestedEnum.toDescription());
+        }
+
+        for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
+            description.addStructs(nestedStruct.toDescription());
         }
 
         for (CLibTypeDef typeDef : apiClass.getTypeDefs()) {
@@ -121,6 +128,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         // Sort classes by name so the output-diffs are predictable
         ProtoSortUtil.sortClassDescriptions(description.getClasses());
         ProtoSortUtil.sortInPlace(description.getEnums(), Comparator.comparing(EnumDescription::getName));
+        ProtoSortUtil.sortInPlace(description.getStructs(), Comparator.comparing(StructDescription::getName));
 
         // Fill in children information
         List<TypeDescription> children = new ArrayList<>();

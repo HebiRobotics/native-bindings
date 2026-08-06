@@ -1512,6 +1512,89 @@
       "documentation": "Returns a string longer than the initial scratch buffer, forcing it to grow.",
       "flags": ["Noexcept"]
     }]
+  }, {
+    "type": {
+      "cPrefix": "bindings_tests_",
+      "typeName": "Structs",
+      "comment": "Reads fields out of a caller-owned struct.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": false,
+    "cDestructorName": "bindings_tests_Structs_release",
+    "methods": [{
+      "name": "totalPower",
+      "lowerUnderscoreName": "total_power",
+      "isStatic": true,
+      "cName": "bindings_tests_Structs_totalPower",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "status",
+        "lowerUnderscoreParamName": "status",
+        "cPrefix": "bindings_tests_",
+        "typeName": "StatusInfo",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "currentAmps",
+        "lowerUnderscoreParamName": "current_amps",
+        "dataType": "FLOAT64"
+      }],
+      "documentation": "Power draw in watts for the given current. Returns zero unless the actuator is\nenabled and in the running state (2), so all three fields decide the result.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "checkedVoltage",
+      "lowerUnderscoreName": "checked_voltage",
+      "isStatic": true,
+      "cName": "bindings_tests_Structs_checkedVoltage",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "status",
+        "lowerUnderscoreParamName": "status",
+        "cPrefix": "bindings_tests_",
+        "typeName": "StatusInfo",
+        "dataType": "STRUCT"
+      }],
+      "documentation": "Bus voltage in volts. Returns 0.0 through the ABI when it throws.",
+      "throwsOn": "the actuator is disabled"
+    }, {
+      "name": "getStatus",
+      "lowerUnderscoreName": "get_status",
+      "isStatic": true,
+      "cName": "bindings_tests_Structs_getStatus",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "StatusInfo",
+        "comment": "Status reading for the given index.",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Fills the out parameter with a canned reading for the given index: index 0\nreads (48.0, running, enabled), every other index reads (12.5, 1, disabled).\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getCheckedStatus",
+      "lowerUnderscoreName": "get_checked_status",
+      "isStatic": true,
+      "cName": "bindings_tests_Structs_getCheckedStatus",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "StatusInfo",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Same readings as getStatus. Every field of the out parameter reads as zero through the ABI when it throws.",
+      "throwsOn": "the index is negative"
+    }]
   }],
   "enums": [{
     "name": "CircleColor",
@@ -1566,5 +1649,23 @@
     "cDefinition": "typedef void (*IndexCallbackFunction)(void* userData, int index);",
     "cppDefinition": "using IndexCallbackFunction = void (*)(void* userData, int index);",
     "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
+  }],
+  "structs": [{
+    "name": "StatusInfo",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_status_info",
+    "fields": [{
+      "name": "voltage",
+      "lowerUnderscoreName": "voltage",
+      "dataType": "FLOAT64"
+    }, {
+      "name": "state",
+      "lowerUnderscoreName": "state",
+      "dataType": "INT32"
+    }, {
+      "name": "enabled",
+      "lowerUnderscoreName": "enabled",
+      "dataType": "BOOL"
+    }]
   }]
 }

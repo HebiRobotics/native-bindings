@@ -9,6 +9,7 @@ import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.MethodFlag;
 import us.hebi.graalvm.bindings.model.MethodOverload;
+import us.hebi.graalvm.bindings.model.TypeDescription;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
@@ -52,6 +53,41 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         for (var parameter : getParameters()) {
             checkArgument(!DOUBLE_ARRAY_TYPE.equals(parameter.getJavaType()),
                     "Span parameters must be declared as DoubleSpan, not double[]: %s", executableElement.getSimpleName());
+        }
+
+        // A struct view leaves the ABI through a caller-provided @CLibOut parameter, which
+        // every public face presents as a by-value return
+        checkArgument(!returnType.isStructView(),
+                "@CLibStruct views may not be returned, declare void with a @CLibOut parameter instead: %s",
+                executableElement.getSimpleName());
+        AnnotatedClibType outParam = null;
+        var parameters = getParameters();
+        int outIndex = -1;
+        for (int i = 0; i < parameters.size(); i++) {
+            var parameter = parameters.get(i);
+            if (!parameter.isOutParameter()) continue;
+            checkArgument(parameter.isStructView(),
+                    "@CLibOut may only be used with a @CLibStruct annotated type, got '%s': %s",
+                    parameter.getName(), executableElement.getSimpleName());
+            checkArgument(outParam == null,
+                    "at most one @CLibOut parameter is allowed, found a second one on '%s': %s",
+                    parameter.getName(), executableElement.getSimpleName());
+            outParam = parameter;
+            outIndex = i;
+        }
+        if (outParam != null) {
+            checkArgument(returnType.isVoid(),
+                    "a method with a @CLibOut parameter must be declared void, the out struct is the return value: %s",
+                    executableElement.getSimpleName());
+            // The C signature always carries the out struct last, so the Java form must match
+            checkArgument(outIndex == parameters.size() - 1,
+                    "the @CLibOut parameter must be declared last: %s",
+                    executableElement.getSimpleName());
+        }
+        outParameter = outParam;
+        outStruct = outParam == null ? null : new AnnotatedCLibStruct(outParam.element, processingEnvironment);
+        if (outStruct != null) {
+            outStruct.checkEveryFieldHasSetter();
         }
 
         // One-based languages convert indices by arithmetic, so the type has to be integral
@@ -202,8 +238,33 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         return Optional.ofNullable(annotation);
     }
 
+    /**
+     * The Java return type, which stays void for a method that fills a {@code @CLibOut} struct.
+     */
     public AnnotatedClibType getReturnType() {
         return returnType;
+    }
+
+    /**
+     * The return type the public faces see, e.g., a {@code @CLibOut} parameter as a return value
+     */
+    public TypeDescription getReturnTypeDescription() {
+        return outParameter == null ? returnType.toDescription() : outParameter.toDescription();
+    }
+
+    /**
+     * @return the {@code @CLibOut} parameter, which is described as the return value and
+     * therefore omitted from the descriptor's parameter list
+     */
+    public Optional<AnnotatedClibType> getOutParameter() {
+        return Optional.ofNullable(outParameter);
+    }
+
+    /**
+     * @return the struct view behind {@link #getOutParameter()}, whose setters fill it
+     */
+    public Optional<AnnotatedCLibStruct> getOutStruct() {
+        return Optional.ofNullable(outStruct);
     }
 
     public List<MethodFlag> getFlags() {
@@ -214,6 +275,9 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
     final AnnotatedCLibClass parent;
 
     final AnnotatedClibType returnType;
+
+    final AnnotatedClibType outParameter;
+    final AnnotatedCLibStruct outStruct;
 
     final List<MethodFlag> flags = new ArrayList<>(2);
 

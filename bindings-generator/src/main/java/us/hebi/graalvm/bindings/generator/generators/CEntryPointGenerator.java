@@ -7,6 +7,7 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibMethod;
 
 import java.util.TreeSet;
 
@@ -166,7 +167,7 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 }
             }
 
-            // Span returns fill a trailing caller-provided out-struct
+            // Span returns fill a trailing caller-provided struct
             if (returnType.isSpan()) {
                 builder.addParameter(DoubleSpan, SPAN_OUT);
             }
@@ -176,7 +177,8 @@ public class CEntryPointGenerator extends AbstractGenerator {
                     builder,
                     invocation.add(invocationClose.build()).build(),
                     method.getReturnType().getDataType(),
-                    method.isThrowing() ? getErrorIdPrefix() : null
+                    method.isThrowing() ? getErrorIdPrefix() : null,
+                    getOutStructZeroing(method)
             );
             cEntriesClass.addMethod(builder.build());
 
@@ -185,6 +187,25 @@ public class CEntryPointGenerator extends AbstractGenerator {
         // Build class
         return cEntriesClass.build();
 
+    }
+
+    /**
+     * A throw leaves the out struct as the caller passed it in, so every field gets zeroed to
+     * make the failure contents deterministic. The switches in {@link RuntimeClasses} are keyed
+     * on the data type alone and cannot express per-field writes, hence the block is built here.
+     */
+    private static CodeBlock getOutStructZeroing(AnnotatedCLibMethod method) {
+        var code = CodeBlock.builder();
+        if (method.getOutStruct().isEmpty()) {
+            return code.build();
+        }
+        var outName = method.getOutParameter().get().getName();
+        for (var accessor : method.getOutStruct().get().getAccessors()) {
+            if (accessor.isGetter()) continue;
+            code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
+                    TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+        }
+        return code.build();
     }
 
     /**

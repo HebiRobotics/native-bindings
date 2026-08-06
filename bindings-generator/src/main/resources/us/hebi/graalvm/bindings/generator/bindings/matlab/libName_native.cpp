@@ -179,7 +179,7 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
     std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
     return array;
-}
+}%%STRUCT_HELPERS%%
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
@@ -272,7 +272,7 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
-}
+}%%STRUCT_RETURN_HELPERS%%
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {

@@ -222,6 +222,56 @@ class SpansTest(unittest.TestCase):
         self.assertEqual([6.0, 6.0, 6.0], list(second))
 
 
+class StructsTest(unittest.TestCase):
+    """A user defined struct crossing by value, surfaced as a dataclass.
+
+    The wrapper packs the dataclass into its ctypes mirror at the call site, so
+    the bool field converts to the int32 the layout declares.
+    """
+
+    def test_total_power(self):
+        status = bindings_tests.StatusInfo(voltage=48.0, state=2, enabled=True)
+        self.assertEqual(120.0, bindings_tests.Structs.total_power(status, 2.5))
+        self.assertEqual(48.0, bindings_tests.Structs.checked_voltage(status))
+
+    def test_state_is_read(self):
+        # State 1 is not the running state, so the power is zero while the voltage still reads
+        status = bindings_tests.StatusInfo(voltage=48.0, state=1, enabled=True)
+        self.assertEqual(0.0, bindings_tests.Structs.total_power(status, 2.5))
+        self.assertEqual(48.0, bindings_tests.Structs.checked_voltage(status))
+
+    def test_disabled_raises(self):
+        status = bindings_tests.StatusInfo(voltage=48.0, state=2, enabled=False)
+        self.assertEqual(0.0, bindings_tests.Structs.total_power(status, 2.5))
+        with self.assertRaises(bindings_tests.Error) as caught:
+            bindings_tests.Structs.checked_voltage(status)
+        self.assertIn("disabled", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+
+    def test_get_status_returns_a_status_info(self):
+        # get_status/get_checked_status present the same struct the other way round, as
+        # a dataclass return keyed by index rather than an input struct the caller builds.
+        status = bindings_tests.Structs.get_status(0)
+        self.assertIsInstance(status, bindings_tests.StatusInfo)
+        self.assertEqual(48.0, status.voltage)
+        self.assertEqual(2, status.state)
+        self.assertIs(True, status.enabled)
+
+        status = bindings_tests.Structs.get_status(1)
+        self.assertEqual(12.5, status.voltage)
+        self.assertEqual(1, status.state)
+        self.assertIs(False, status.enabled)
+
+    def test_get_checked_status_raises_on_negative_index(self):
+        status = bindings_tests.Structs.get_checked_status(0)
+        self.assertEqual(48.0, status.voltage)
+
+        with self.assertRaises(bindings_tests.Error) as caught:
+            bindings_tests.Structs.get_checked_status(-1)
+        self.assertIn("negative", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+
+
 class ShapesTest(unittest.TestCase):
     """Inheritance, including the generated upcast."""
 

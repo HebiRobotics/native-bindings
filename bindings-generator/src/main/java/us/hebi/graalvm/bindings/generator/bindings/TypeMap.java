@@ -1,5 +1,6 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
+import com.google.common.base.CaseFormat;
 import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
@@ -52,7 +53,63 @@ public final class TypeMap {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
             case TYPEDEF, ENUM -> type.getCPrefix() + type.getTypeName();
             case FLOAT64_SPAN -> type.getCPrefix() + SPAN_STRUCT_NAME;
+            case STRUCT -> toStructCName(type.getCPrefix(), type.getTypeName());
             default -> toExternalC(type.getDataType());
+        };
+    }
+
+    /**
+     * Public C name of a user struct. Bare rather than suffixed with {@code _t}, which POSIX
+     * reserves and which here marks the hand-built plumbing typedefs, while generated data
+     * structs follow the span's style.
+     */
+    public static String toStructCName(String cPrefix, String name) {
+        return cPrefix + CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, name);
+    }
+
+    /**
+     * @return C type of a struct field. Fixed width on purpose: the public header and the
+     * native-image probe header declare the same layout and must not disagree on a 32 bit target.
+     */
+    public static String toStructFieldC(DataType type) {
+        return switch (type) {
+            case FLOAT64 -> "double";
+            case FLOAT32 -> "float";
+            case INT64 -> "int64_t";
+            case INT32 -> "int32_t";
+            case INT16 -> "int16_t";
+            case INT8 -> "int8_t";
+            case BOOL -> "int32_t"; // native-image maps a Java boolean to a 4 byte int
+            default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
+        };
+    }
+
+    /**
+     * @return ctypes type of a struct field. Fixed width like {@link #toStructFieldC}, because
+     * the mirror Structure has to reproduce the C layout exactly.
+     */
+    public static String toStructFieldCPython(DataType type) {
+        return switch (type) {
+            case FLOAT64 -> "c_double";
+            case FLOAT32 -> "c_float";
+            case INT64 -> "c_int64";
+            case INT32, BOOL -> "c_int32";
+            case INT16 -> "c_int16";
+            case INT8 -> "c_int8";
+            default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
+        };
+    }
+
+    /**
+     * @return Python type of a struct field as the dataclass declares it. Unlike the layout,
+     * the public face is idiomatic, so a boolean field stays a bool.
+     */
+    public static String toStructFieldPythonHint(DataType type) {
+        return switch (type) {
+            case FLOAT64, FLOAT32 -> "float";
+            case INT64, INT32, INT16, INT8 -> "int";
+            case BOOL -> "bool";
+            default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
     }
 
@@ -106,9 +163,9 @@ public final class TypeMap {
             case ENUM -> "int";               // @CEnum maps to int
             case OBJECT_HANDLE -> "void*";    // technically void*
 
-            // Spans only exist as a by-value struct in the public ABI. The internal entry
-            // point explodes them into (pointer, length), so they never have an internal name.
-            case FLOAT64_SPAN, TYPEDEF, UNSPECIFIED ->
+            // Spans and structs only exist as by-value structs in the public ABI. The internal
+            // entry point sees them as struct pointers, so they never have an internal name.
+            case FLOAT64_SPAN, STRUCT, TYPEDEF, UNSPECIFIED ->
                     throw new IllegalArgumentException("Can't determine C type for: " + type);
         };
     }
@@ -147,13 +204,16 @@ public final class TypeMap {
             // The span Structure emitted once per generated Python file
             case FLOAT64_SPAN -> "_DoubleSpan";
 
+            // ctypes mirror of the user struct, next to the public dataclass of the same name
+            case STRUCT -> "_" + type.getTypeName();
+
             case UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
         };
     }
 
     public static String toPythonTypeHint(TypeDescription desc) {
         return switch (desc.getDataType()) {
-            case OBJECT_HANDLE, TYPEDEF, ENUM -> desc.getTypeName();
+            case OBJECT_HANDLE, TYPEDEF, ENUM, STRUCT -> desc.getTypeName();
             case VOID -> "None";
             case BOOL -> "bool";
 

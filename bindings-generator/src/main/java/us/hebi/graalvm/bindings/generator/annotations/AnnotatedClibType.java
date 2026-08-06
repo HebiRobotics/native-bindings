@@ -12,6 +12,8 @@ import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibEnum;
 import us.hebi.graalvm.bindings.annotations.CLibIndex;
+import us.hebi.graalvm.bindings.annotations.CLibOut;
+import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
@@ -124,6 +126,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (dataType != null) return dataType;
 
         // Special types we added
+        if (isStructView()) return DataType.STRUCT;
         if (isGeneratedCEnumType()) return DataType.ENUM;
         if (isDefinedType(mirror)) return DataType.TYPEDEF;
         if (isNativeApiType()) return DataType.OBJECT_HANDLE;
@@ -178,6 +181,21 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         return isGeneratedCEnumType(mirror);
     }
 
+    /**
+     * A {@link CLibStruct} view that crosses the C ABI by value.
+     * TODO: also support user structs by ref? Most structs should be small and it'd be hard to allocate in Python/MATLAB
+     */
+    public boolean isStructView() {
+        return getTypeAnnotation(mirror, CLibStruct.class) != null;
+    }
+
+    /**
+     * @return {@link CLibOut} parameter that gets allocated by the wrapper and returned as value
+     */
+    public boolean isOutParameter() {
+        return sourceElement.getAnnotation(CLibOut.class) != null;
+    }
+
     public Optional<ClassName> getApiTypeWrapperClass() {
         if (isNativeApiType()) {
             TypeElement typeElement = (TypeElement) env.getTypeUtils().asElement(rawMirror);
@@ -196,6 +214,8 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
             }
             case ENUM -> Optional.ofNullable(getTypeAnnotation(mirror, CLibEnum.class))
                     .map(annotation -> AnnotatedCLibEnum.getCPrefix(getOptions(), annotation));
+            case STRUCT -> Optional.ofNullable(getTypeAnnotation(mirror, CLibStruct.class))
+                    .map(annotation -> AnnotatedCLibStruct.getCPrefix(getOptions(), annotation));
             // The span struct is defined once per library, so it uses the library-wide prefix
             case FLOAT64_SPAN -> Optional.of(AnnotationUtil.getCPrefix(getOptions(), "") + "_");
             default -> Optional.empty();
@@ -210,6 +230,8 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
             case TYPEDEF ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibTypeDef.class, CLibTypeDef::name);
+            case STRUCT -> Optional.of(AnnotatedCLibStruct.getName((TypeElement) env.getTypeUtils().asElement(mirror)))
+                    .filter(name -> !name.isEmpty());
             default -> Optional.empty();
         };
     }

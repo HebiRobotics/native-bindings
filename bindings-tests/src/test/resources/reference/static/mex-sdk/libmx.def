@@ -8,7 +8,9 @@ EXPORTS
     mxCreateCharArray_800
     mxCreateDoubleMatrix_800
     mxCreateDoubleScalar_800
+    mxCreateLogicalScalar_800
     mxCreateNumericMatrix_800
+    mxCreateStructMatrix_800
     mxDestroyArray_800
     mxFree_800
     mxGetCell_800
@@ -28,3 +30,4 @@ EXPORTS
     mxIsLogical_800
     mxIsNumeric_800
     mxIsUint64_800
+    mxSetField_800

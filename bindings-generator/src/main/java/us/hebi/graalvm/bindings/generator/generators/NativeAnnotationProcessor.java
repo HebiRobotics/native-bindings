@@ -130,6 +130,11 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
     }
 
     protected void postRound(RoundEnvironment roundEnv) {
+        // Struct artifacts are generated from the raw round rather than from the step: a view
+        // naming its own generated directives class in @CContext keeps the whole @CLibClass
+        // deferred by auto-common's validation until the class exists. See CLibStructGenerator.
+        structGenerator.processRound(roundEnv, processingEnv);
+
         if (roundEnv.processingOver()) {
             if (!hasProcessedElements) return;
 
@@ -162,6 +167,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         checkNameIsUnique(classNames, "@CLibClass", apiClass.getName(), apiClass.getElement());
         for (var nestedEnum : apiClass.getNestedEnums()) {
             checkNameIsUnique(enumNames, "@CLibEnum", nestedEnum.getName(), nestedEnum.getElement());
+        }
+        for (var nestedStruct : apiClass.getNestedStructs()) {
+            checkNameIsUnique(structNames, "@CLibStruct", nestedStruct.getName(), nestedStruct.getElement());
         }
     }
 
@@ -208,12 +216,15 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
 
     private final Map<String, String> classNames = new HashMap<>();
     private final Map<String, String> enumNames = new HashMap<>();
+    private final Map<String, String> structNames = new HashMap<>();
 
     final LibraryDescriptionGenerator apiDescription = new LibraryDescriptionGenerator();
     final CEnumGenerator enumGenerator = new CEnumGenerator();
+    final CLibStructGenerator structGenerator = new CLibStructGenerator();
     final List<AbstractGenerator> generators = Arrays.asList(
             new CEntryPointGenerator(),
             enumGenerator,
+            structGenerator,
             apiDescription
     );
 

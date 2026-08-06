@@ -21,6 +21,7 @@ message LibraryDescription {
   repeated ClassDescription classes = 10;
   repeated EnumDescription enums = 11;
   repeated TypeDef typedefs = 15;
+  repeated StructDescription structs = 16;
 
   optional bool enable_graphics = 14 [default = false];
 
@@ -44,6 +45,21 @@ message TypeDef {
   optional string c_definition = 2;
   optional string cpp_definition = 3;
   optional string python_definition = 4;
+}
+
+// A user-defined struct that crosses the public C ABI by value. The field order is
+// part of the ABI. Version 1 allows primitive fields only.
+message StructDescription {
+  optional string name = 1; // simple name
+  optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
+  optional string c_name = 3; // fully qualified C name
+  repeated StructFieldDescription fields = 4;
+}
+
+message StructFieldDescription {
+  optional string name = 1; // camelCase as authored, used for MATLAB struct fields
+  optional string lower_underscore_name = 2; // name for the C, C++ and Python faces
+  optional DataType data_type = 3;
 }
 
 enum DataType {
@@ -78,7 +94,7 @@ enum DataType {
   ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
   reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct
-  // STRUCT = 44;             // TODO: support structs?
+  STRUCT = 44;                // user-defined struct, passed and returned by value in the public C ABI
 
   // Spans: a (pointer, length) pair passed or returned as one by-value struct in the
   // public C ABI. The internal entry point explodes it into pointer + length. Params

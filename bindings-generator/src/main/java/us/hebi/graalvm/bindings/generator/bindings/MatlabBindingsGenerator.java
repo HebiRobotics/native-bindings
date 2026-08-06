@@ -150,6 +150,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         if (param.getDataType() == DataType.FLOAT64_SPAN) {
             return "DoubleSpan"; // layout-compatible local struct defined in the MEX template
         }
+        if (param.getDataType() == DataType.STRUCT) {
+            return param.getTypeName(); // layout-compatible local struct generated into the MEX gateway
+        }
         return (param.getIsConst() ? "const " : "") + TypeMap.toExternalC(param.getDataType());
     }
 
@@ -177,6 +180,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     "MatlabArray<int32_t, mxINT32_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
             case INT16_POINTER ->
                     "MatlabArray<int16_t, mxINT16_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
+
+            case STRUCT -> "%1$s %2$s = get%1$s(prhs[%3$d])".formatted(
+                    getMexCType(param), param.getParamName(), index);
 
             case CHAR_POINTER -> "MatlabString %s(prhs[%d])".formatted(param.getParamName(), index);
 
@@ -209,6 +215,10 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
             // Spans (copied into a MATLAB row vector)
             case FLOAT64_SPAN -> "createMexDoubleArray(%%RETURN_VALUE%%)";
+
+            // User structs (copied into a 1x1 MATLAB struct). Concatenated rather than
+            // formatted, because String::formatted would eat the %% around the token.
+            case STRUCT -> "createMex" + type.getTypeName() + "(%%RETURN_VALUE%%)";
 
             default -> throw new IllegalStateException("Unsupported output type: " + type.getDataType());
         };
@@ -312,9 +322,132 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return withLibVars()
                 .set("HASH_SEED", String.format("0x%08X", seed))
                 .set("HASH_PRIME", String.format("0x%08X", prime))
+                .set("STRUCT_HELPERS", createStructHelpers())
+                .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
                 .render();
+    }
+
+    /**
+     * Layout-compatible copies of the user structs plus their readers. The token they fill sits
+     * at the end of an existing line, so a library without structs renders the template unchanged.
+     */
+    private String createStructHelpers() {
+        if (lib.getStructs().length() == 0) {
+            return "";
+        }
+
+        var out = new IndentingTextRenderer().add("""
+
+
+                // Reads one field of a MATLAB struct argument. mxGetField returns null for a field
+                // that does not exist, which the scalar check cannot tell apart from a bad value.
+                template <typename T>
+                inline T getStructField(const mxArray* arg, const char* structName, const char* fieldName) {
+                    const mxArray* field = mxGetField(arg, 0, fieldName);
+                    if (!field) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "Struct '%s' is missing field '%s'.", structName, fieldName);
+                    }
+                    return getScalar<T>(field, fieldName);
+                }
+                """);
+
+        for (var struct : lib.getStructs()) {
+            var content = out.snapshot().set("STRUCT_NAME", struct.getName());
+            content.add("""
+
+                    // Layout-compatible with the by-value %%STRUCT_NAME%% struct in the C ABI
+                    struct %%STRUCT_NAME%% {
+                    """).indent();
+            for (var field : struct.getFields()) {
+                content.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
+            }
+            content.unindent().add("""
+                    };
+
+                    inline %%STRUCT_NAME%% get%%STRUCT_NAME%%(const mxArray* arg) {
+                        // mxIsStruct is not part of the clean-room SDK subset, and is documented as this check
+                        if (mxGetClassID(arg) != mxSTRUCT_CLASS) {
+                            mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Argument must be a '%%STRUCT_NAME%%' struct.");
+                        }
+                        return %%STRUCT_NAME%%{
+                    """).indentBy(2);
+            var fields = struct.getFields();
+            for (int i = 0; i < fields.length(); i++) {
+                var field = fields.get(i);
+                content.addLine("getStructField<" + TypeMap.toStructFieldC(field.getDataType())
+                                + ">(arg, \"%%STRUCT_NAME%%\", \"" + field.getName() + "\")"
+                                + (i == fields.length() - 1 ? "" : ","));
+            }
+            content.unindentBy(2).add("""
+                        };
+                    }
+                    """);
+        }
+
+        // The token sits at the end of a line, so the template supplies the newline
+        return out.stripTrailingWhitespace().render();
+    }
+
+    /**
+     * Writers for the structs that a method returns. They fill their own token rather than
+     * joining the readers above, because they call the scalar helpers that are declared
+     * further down in the template.
+     */
+    private String createStructReturnHelpers() {
+        var out = new IndentingTextRenderer();
+        for (var struct : lib.getStructs()) {
+            if (!isReturnedByValue(struct)) continue;
+            var content = out.snapshot().set("STRUCT_NAME", struct.getName());
+            var fields = struct.getFields();
+            List<String> names = new ArrayList<>();
+            for (var field : fields) {
+                names.add(cQuoted(field.getName()));
+            }
+            content.add("""
+
+
+                    // The 1x1 MATLAB struct a returned %%STRUCT_NAME%% maps to
+                    inline mxArray* createMex%%STRUCT_NAME%%(const %%STRUCT_NAME%%& value) {
+                    """).indent()
+                    .addLine("const char* fields[] = {" + joiner.join(names) + "};")
+                    .addLine("mxArray* result = mxCreateStructMatrix(1, 1, " + fields.length() + ", fields);");
+            for (var field : fields) {
+                content.addLine("mxSetField(result, 0, " + cQuoted(field.getName()) + ", "
+                                + getStructFieldToMex(field.getDataType(), "value." + field.getLowerUnderscoreName()) + ");");
+            }
+            content.addLine("return result;").unindent().add("}\n");
+        }
+
+        // The token sits at the end of a line, so the template supplies the newline
+        return out.stripTrailingWhitespace().render();
+    }
+
+    /** MATLAB string literals are single-quoted, the gateway is C++ */
+    private static String cQuoted(String input) {
+        return "\"" + input + "\"";
+    }
+
+    private static String getStructFieldToMex(DataType type, String value) {
+        return switch (type) {
+            case BOOL -> "mxCreateLogicalScalar(" + value + " != 0)"; // the layout keeps a boolean as int32
+            case INT64 -> "createMexInt64(" + value + ")"; // too wide for the 53 bit mantissa
+            default -> "createMexScalar(" + value + ")";
+        };
+    }
+
+    private boolean isReturnedByValue(StructDescription struct) {
+        for (var apiClass : lib.getClasses()) {
+            for (var method : apiClass.getMethods()) {
+                var returnType = method.getReturnType();
+                if (returnType.getDataType() == DataType.STRUCT
+                    && returnType.getTypeName().equals(struct.getName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // =========================================================================
@@ -1015,6 +1148,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                  INT16_POINTER, INT32_POINTER, INT64_POINTER, FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");
+            case STRUCT -> List.of("struct");
             case OBJECT_HANDLE -> List.of(getFullyQualifiedClassName(type));
             case ENUM -> List.of(
                     getFullyQualifiedClassName(type), "choices={" + getEnumChoices(type) + "}");

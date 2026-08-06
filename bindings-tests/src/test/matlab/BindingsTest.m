@@ -202,6 +202,62 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(long(200), 199);
         end
 
+        function testStructs(testCase)
+            % A user defined struct crosses by value. The gateway reads the fields
+            % by name, so a MATLAB struct only has to carry the right names, and
+            % both a logical and an int32 convert through the same scalar path.
+            s = struct('voltage', 48.0, 'state', int32(2), 'enabled', true);
+            testCase.verifyEqual(bindings_tests.Structs.totalPower(s, 2.5), 120);
+            testCase.verifyEqual(bindings_tests.Structs.checkedVoltage(s), 48);
+
+            % State 1 is not the running state, so the power is zero while the
+            % voltage still reads.
+            idle = struct('voltage', 48.0, 'state', int32(1), 'enabled', true);
+            testCase.verifyEqual(bindings_tests.Structs.totalPower(idle, 2.5), 0);
+            testCase.verifyEqual(bindings_tests.Structs.checkedVoltage(idle), 48);
+
+            disabled = struct('voltage', 48.0, 'state', int32(2), 'enabled', false);
+            testCase.verifyEqual(bindings_tests.Structs.totalPower(disabled, 2.5), 0);
+            [message, identifier] = testCase.captureError(@() bindings_tests.Structs.checkedVoltage(disabled));
+            testCase.verifyTrue(contains(message, 'disabled'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalArgumentException');
+
+            % Anything that is not a struct is rejected in the gateway rather than
+            % read as garbage.
+            testCase.verifyError(@() bindings_tests.Structs.checkedVoltage(48.0), 'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Structs.checkedVoltage(rmfield(s, 'enabled')), ...
+                'bindings_tests:InvalidInput');
+
+            % getStatus/getCheckedStatus present the same struct the other way round, as
+            % a 1x1 struct return keyed by index rather than an input the caller builds.
+            got = bindings_tests.Structs.getStatus(0);
+            testCase.verifyTrue(isstruct(got));
+            testCase.verifyEqual(fieldnames(got), {'voltage'; 'state'; 'enabled'});
+            testCase.verifyEqual(got.voltage, 48.0);
+            testCase.verifyEqual(got.state, 2); % scalars come back as double, like every other return
+            testCase.verifyTrue(islogical(got.enabled));
+            testCase.verifyTrue(got.enabled);
+
+            got1 = bindings_tests.Structs.getStatus(1);
+            testCase.verifyEqual(got1.voltage, 12.5);
+            testCase.verifyEqual(got1.state, 1);
+            testCase.verifyTrue(islogical(got1.enabled));
+            testCase.verifyFalse(got1.enabled);
+
+            % The returned struct round-trips back in as an input, the same shape totalPower
+            % and checkedVoltage already accept.
+            testCase.verifyEqual(bindings_tests.Structs.totalPower(got, 2.5), 120);
+            testCase.verifyEqual(bindings_tests.Structs.checkedVoltage(got), 48);
+
+            checked = bindings_tests.Structs.getCheckedStatus(0);
+            testCase.verifyEqual(checked.voltage, 48.0);
+
+            % A negative index throws, same identifier style as the other struct errors.
+            [message, identifier] = testCase.captureError(@() bindings_tests.Structs.getCheckedStatus(-1));
+            testCase.verifyTrue(contains(message, 'negative'));
+            testCase.verifyEqual(identifier, 'bindings_tests:IllegalArgumentException');
+        end
+
         function testShapes(testCase)
             % Inheritance. MATLAB models the hierarchy with real classdef
             % inheritance, and the generated cast function runs when the

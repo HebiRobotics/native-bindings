@@ -22,6 +22,8 @@ class RuntimeClasses {
 
     public static final ClassName ErrorInfo = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "ErrorInfo");
 
+    public static final ClassName MockPointerBase = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "MockPointerBase");
+
     /**
      * Name of the trailing out-struct param on entry points that return a span
      */
@@ -32,9 +34,11 @@ class RuntimeClasses {
 
     /**
      * @param idPrefix library name for the fallback error id, or null if there is no error struct
+     * @param onError  additional error handling the return type alone cannot express, e.g. zeroing
+     *                 the fields of a caller-provided out struct. May be empty.
      */
     public static void addGuardedInvocation(MethodSpec.Builder builder, CodeBlock invocation, DataType returnType,
-                                            String idPrefix) {
+                                            String idPrefix, CodeBlock onError) {
 
         if (idPrefix != null) {
             builder.addStatement("$T.clearStruct($N)", CLibError, ERROR_OUT_PARAM);
@@ -47,7 +51,8 @@ class RuntimeClasses {
         } else {
             builder.addComment("Declared noexcept, so there is no error struct to report through");
         }
-        builder.addCode(getOnErrorReturnCode(returnType))
+        builder.addCode(onError)
+                .addCode(getOnErrorReturnCode(returnType))
                 .endControlFlow();
 
     }

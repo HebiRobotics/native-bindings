@@ -181,6 +181,36 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     return array;
 }
 
+// Reads one field of a MATLAB struct argument. mxGetField returns null for a field
+// that does not exist, which the scalar check cannot tell apart from a bad value.
+template <typename T>
+inline T getStructField(const mxArray* arg, const char* structName, const char* fieldName) {
+    const mxArray* field = mxGetField(arg, 0, fieldName);
+    if (!field) {
+        mexErrMsgIdAndTxt("bindings_tests:InvalidInput", "Struct '%s' is missing field '%s'.", structName, fieldName);
+    }
+    return getScalar<T>(field, fieldName);
+}
+
+// Layout-compatible with the by-value StatusInfo struct in the C ABI
+struct StatusInfo {
+    double voltage;
+    int32_t state;
+    int32_t enabled;
+};
+
+inline StatusInfo getStatusInfo(const mxArray* arg) {
+    // mxIsStruct is not part of the clean-room SDK subset, and is documented as this check
+    if (mxGetClassID(arg) != mxSTRUCT_CLASS) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument must be a 'StatusInfo' struct.");
+    }
+    return StatusInfo{
+        getStructField<double>(arg, "StatusInfo", "voltage"),
+        getStructField<int32_t>(arg, "StatusInfo", "state"),
+        getStructField<int32_t>(arg, "StatusInfo", "enabled")
+    };
+}
+
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
 // as "either UTF-8 encoding or the local codepage encoding". The UTF-8 default was added in
@@ -272,6 +302,16 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
+}
+
+// The 1x1 MATLAB struct a returned StatusInfo maps to
+inline mxArray* createMexStatusInfo(const StatusInfo& value) {
+    const char* fields[] = {"voltage", "state", "enabled"};
+    mxArray* result = mxCreateStructMatrix(1, 1, 3, fields);
+    mxSetField(result, 0, "voltage", createMexScalar(value.voltage));
+    mxSetField(result, 0, "state", createMexScalar(value.state));
+    mxSetField(result, 0, "enabled", mxCreateLogicalScalar(value.enabled != 0));
+    return result;
 }
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
@@ -1098,6 +1138,45 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             size_t times = getScalar<size_t>(prhs[2], "times");
             const char* _value = bindings_tests_Strings_repeat(value, times);
             if (nlhs > 0) plhs[0] = createMexString(_value);
+            break;
+        }
+
+        // Structs
+        case /* hash32_fnv1a("bindings_tests_Structs_totalPower") */ 3391500522: {
+            static auto bindings_tests_Structs_totalPower = libLoader.getFunc<double(*)(StatusInfo, double)>("bindings_tests_Structs_totalPower");
+            checkArgCount(nrhs, 2, "bindings_tests_Structs_totalPower");
+            StatusInfo status = getStatusInfo(prhs[1]);
+            double currentAmps = getScalar<double>(prhs[2], "currentAmps");
+            double _value = bindings_tests_Structs_totalPower(status, currentAmps);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Structs_checkedVoltage") */ 2009819672: {
+            static auto bindings_tests_Structs_checkedVoltage = libLoader.getFunc<double(*)(ErrorInfo*, StatusInfo)>("bindings_tests_Structs_checkedVoltage");
+            checkArgCount(nrhs, 1, "bindings_tests_Structs_checkedVoltage");
+            ErrorInfo _error = {};
+            StatusInfo status = getStatusInfo(prhs[1]);
+            double _value = bindings_tests_Structs_checkedVoltage(&_error, status);
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Structs_getStatus") */ 1750292541: {
+            static auto bindings_tests_Structs_getStatus = libLoader.getFunc<StatusInfo(*)(int)>("bindings_tests_Structs_getStatus");
+            checkArgCount(nrhs, 1, "bindings_tests_Structs_getStatus");
+            int index = getScalar<int>(prhs[1], "index");
+            StatusInfo _value = bindings_tests_Structs_getStatus(index);
+            if (nlhs > 0) plhs[0] = createMexStatusInfo(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Structs_getCheckedStatus") */ 903593326: {
+            static auto bindings_tests_Structs_getCheckedStatus = libLoader.getFunc<StatusInfo(*)(ErrorInfo*, int)>("bindings_tests_Structs_getCheckedStatus");
+            checkArgCount(nrhs, 1, "bindings_tests_Structs_getCheckedStatus");
+            ErrorInfo _error = {};
+            int index = getScalar<int>(prhs[1], "index");
+            StatusInfo _value = bindings_tests_Structs_getCheckedStatus(&_error, index);
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexStatusInfo(_value);
             break;
         }
 

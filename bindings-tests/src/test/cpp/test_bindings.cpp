@@ -238,6 +238,56 @@ static void testSpans() {
 }
 
 // ---------------------------------------------------------------------------
+// Structs (a user defined struct passed by value)
+// ---------------------------------------------------------------------------
+
+static void testStructs() {
+  // Plain data with the same layout as the C struct, so aggregate initialization
+  // works and the trailing 1 is the bool field in its int32 slot.
+  bt::StatusInfo status{48.0, 2, 1};
+  CHECK(bt::structs::totalPower(status, 2.5) == 120.0);
+  CHECK(bt::structs::checkedVoltage(status) == 48.0);
+
+  // State 1 is not the running state, so the power is zero while the voltage still reads.
+  bt::StatusInfo idle{48.0, 1, 1};
+  CHECK(bt::structs::totalPower(idle, 2.5) == 0.0);
+  CHECK(bt::structs::checkedVoltage(idle) == 48.0);
+
+  bt::StatusInfo disabled{48.0, 2, 0};
+  CHECK(bt::structs::totalPower(disabled, 2.5) == 0.0);
+  CHECK(throwsWithMessage([disabled] { bt::structs::checkedVoltage(disabled); }, "disabled"));
+
+  bool threwWithId = false;
+  try {
+    bt::structs::checkedVoltage(disabled);
+  } catch (const bt::Exception& e) {
+    threwWithId = true;
+    CHECK(std::string(e.id()) == "bindings_tests:IllegalArgumentException");
+  }
+  CHECK(threwWithId);
+
+  // getStatus/getCheckedStatus present the same struct the other way round, as a
+  // by-value return keyed by index rather than an input struct the caller assembles.
+  bt::StatusInfo s0 = bt::structs::getStatus(0);
+  CHECK(s0.voltage == 48.0);
+  CHECK(s0.state == 2);
+  CHECK(s0.enabled == true);
+
+  bt::StatusInfo s1 = bt::structs::getStatus(1);
+  CHECK(s1.voltage == 12.5);
+  CHECK(s1.state == 1);
+  CHECK(s1.enabled == false);
+
+  bt::StatusInfo checked = bt::structs::getCheckedStatus(0);
+  CHECK(checked.voltage == 48.0);
+  CHECK(checked.state == 2);
+  CHECK(checked.enabled == true);
+
+  // A negative index throws, same as checkedVoltage above.
+  CHECK(throwsWithMessage([] { bt::structs::getCheckedStatus(-1); }, "negative"));
+}
+
+// ---------------------------------------------------------------------------
 // Shapes (inheritance)
 // ---------------------------------------------------------------------------
 
@@ -461,6 +511,7 @@ int main() {
   testStrings();
   testArrays();
   testSpans();
+  testStructs();
   testShapes();
   testPalette();
   testErrors();

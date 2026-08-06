@@ -41,6 +41,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         appendCStructDefinitions(content, apiClasses);
         appendTypedefs(content);
         appendCFunctionSignatures(content, apiClasses);
+        appendStructWrappers(content);
         appendEnumWrappers(content);
         appendClassWrappers(content, apiClasses);
 
@@ -56,7 +57,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private void appendLibLoader(StringBuilder content) {
         content.append(IndentingTextRenderer.of("""
                         from __future__ import annotations
-                        from ctypes import *
+                        from ctypes import *%%STRUCT_IMPORT%%
                         from enum import IntEnum
                         import os
                         import platform
@@ -129,6 +130,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .set("LIB_BUILD_NUMBER", lib.getBuild())
                 .set("LIB_FIELD", libField)
                 .set("DOWNLOAD_BLOCK", createDownloadBlock())
+                .set("STRUCT_IMPORT", hasStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
                 .render());
     }
 
@@ -214,6 +216,23 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
                     """);
         }
+        for (var struct : lib.getStructs()) {
+            List<String> fields = new ArrayList<>();
+            for (var field : struct.getFields()) {
+                fields.add("(\"%s\", %s)".formatted(
+                        field.getLowerUnderscoreName(),
+                        TypeMap.toStructFieldCPython(field.getDataType())));
+            }
+            content.append(IndentingTextRenderer.of("""
+                            class _%%STRUCT_NAME%%(Structure):
+                                # Layout of the by-value struct in the C ABI, mirroring %%STRUCT_NAME%%
+                                _fields_ = [%%FIELDS%%]
+
+                            """)
+                    .set("STRUCT_NAME", struct.getName())
+                    .set("FIELDS", joiner.join(fields))
+                    .render());
+        }
         for (ClassDescription apiClass : apiClasses) {
             content.append(IndentingTextRenderer.of("""
                             class struct_%%CLASS_NAME%%_(Structure):
@@ -284,6 +303,30 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .render());
             }
         }
+    }
+
+    /**
+     * The public face of a user struct. Users build a dataclass and the call site packs it
+     * into the ctypes mirror, so nothing in the API asks for ctypes types.
+     */
+    private void appendStructWrappers(StringBuilder content) {
+        if (!hasStructs()) return;
+
+        content.append("\n# ==== Structs ====\n");
+        for (var struct : lib.getStructs()) {
+            content.append("\n@dataclass\n");
+            content.append("class %s:\n".formatted(struct.getName()));
+            for (var field : struct.getFields()) {
+                content.append("    %s: %s\n".formatted(
+                        field.getLowerUnderscoreName(),
+                        TypeMap.toStructFieldPythonHint(field.getDataType())));
+            }
+        }
+        content.append("\n");
+    }
+
+    private boolean hasStructs() {
+        return lib.getStructs().length() > 0;
     }
 
     private void appendEnumWrappers(StringBuilder content) {
@@ -579,6 +622,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         return np.empty(0, dtype=np.float64)
                     return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
                     """;
+            // The mirror carries the C layout, so the public dataclass gets unpacked field by field
+            case STRUCT -> IndentingTextRenderer.of("""
+                            struct_ = %%CALL%%
+                            return %%RETURN_TYPE%%(%%FIELDS%%)
+                            """)
+                    .set("FIELDS", getStructUnpackArgs(desc.getReturnType(), "struct_"))
+                    .render();
             case ENUM -> "return %%RETURN_TYPE%%(%%CALL%%)";
             case BOOL -> "return %%CALL%% != 0";
             case VOID -> "%%CALL%%";
@@ -587,6 +637,28 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         return IndentingTextRenderer.of(string.stripTrailing())
                 .set("RETURN_TYPE", desc.getReturnType().getTypeName());
+    }
+
+    /**
+     * Constructor arguments that turn the ctypes mirror into the public dataclass. The layout
+     * keeps a boolean field as an int32, so the public face converts it back.
+     */
+    private String getStructUnpackArgs(TypeDescription type, String local) {
+        List<String> args = new ArrayList<>();
+        for (var field : getStructDescription(lib, type).getFields()) {
+            String value = local + "." + field.getLowerUnderscoreName();
+            args.add(field.getDataType() == DataType.BOOL ? "bool(" + value + ")" : value);
+        }
+        return joiner.join(args);
+    }
+
+    private static StructDescription getStructDescription(LibraryDescription lib, TypeDescription type) {
+        for (var struct : lib.getStructs()) {
+            if (struct.getName().equals(type.getTypeName())) {
+                return struct;
+            }
+        }
+        throw new IllegalArgumentException("No struct found for type " + type.getTypeName());
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {
@@ -718,7 +790,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // Conversions and C call
             for (var parameter : desc.getParameters()) {
                 // Convert from input to C type
-                appendInputConversion(parameter, conversions);
+                appendInputConversion(lib, parameter, conversions);
 
                 // Call the C method
                 if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
@@ -737,11 +809,27 @@ public class PythonBindingsGenerator extends BindingGenerator {
             this.inputConversions = conversions.toString();
         }
 
-        private static void appendInputConversion(TypeDescription desc, StringBuilder out) {
+        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc, StringBuilder out) {
             String pyType = getCPythonType(desc);
             String name = desc.getLowerUnderscoreParamName();
 
-            if (pyType.equals("c_char_p")) {
+            if (desc.getDataType() == DataType.STRUCT) {
+                // The dataclass is the public face, so the mirror gets packed field by field
+                List<String> args = new ArrayList<>();
+                for (var field : getStructDescription(lib, desc).getFields()) {
+                    String value = name + "." + field.getLowerUnderscoreName();
+                    args.add(field.getDataType() == DataType.BOOL ? "int(" + value + ")" : value);
+                }
+                out.append(IndentingTextRenderer.of("""
+                                if not isinstance(%%NAME%%, %%CTYPE%%):
+                                    %%NAME%% = %%CTYPE%%(%%ARGS%%)
+                                """)
+                        .set("NAME", name)
+                        .set("CTYPE", pyType)
+                        .set("ARGS", joiner.join(args))
+                        .render());
+
+            } else if (pyType.equals("c_char_p")) {
                 out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, c_char_p):
                             %%NAME%% = c_char_p(%%NAME%%.encode('utf-8') if isinstance(%%NAME%%, str) else %%NAME%%)

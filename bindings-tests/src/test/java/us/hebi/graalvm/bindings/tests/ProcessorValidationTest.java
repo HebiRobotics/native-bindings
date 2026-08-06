@@ -198,6 +198,386 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("Duplicate @CLibEnum value 'Color'");
     }
 
+    @Test
+    public void acceptsAStructView() {
+        assertThat(compile(source("Points", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("Points")
+                public class Points {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                        @CField("y") double y();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void acceptsAReferenceToGeneratedStructDirectives() {
+        // The view names its own generated directives class, which only exists once the
+        // processor has run. BasicAnnotationProcessor would defer the @CLibClass on the
+        // unresolved reference forever, so the artifacts are generated from the raw round in
+        // postRound, and this pins that the deferred class then resolves and processes.
+        assertThat(compile(source("Contexts", """
+                import org.graalvm.nativeimage.c.CContext;
+                import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("Contexts")
+                public class Contexts {
+                    @CLibStruct
+                    @CContext(validation.generated.Contexts_Point$$Directives.class)
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                        @CField("enabled") @AllowNarrowingCast boolean isEnabled();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void rejectsStructViewOnNonInterface() {
+        assertThat(compile(source("StructClass", """
+                @CLibClass("StructClass")
+                public class StructClass {
+                    @CLibStruct("Point")
+                    public static class Point { }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibStruct may only be used on an interface");
+    }
+
+    @Test
+    public void rejectsStructViewWithoutCStruct() {
+        assertThat(compile(source("NoCStruct", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("NoCStruct")
+                public class NoCStruct {
+                    @CLibStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibStruct requires a GraalVM @CStruct annotation");
+    }
+
+    @Test
+    public void rejectsStructViewWithoutPointerBase() {
+        assertThat(compile(source("NoPointerBase", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                @CLibClass("NoPointerBase")
+                public class NoPointerBase {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibStruct view must extend PointerBase");
+    }
+
+    @Test
+    public void rejectsNonAccessorOnStructView() {
+        assertThat(compile(source("DefaultMethod", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("DefaultMethod")
+                public class DefaultMethod {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        default double twiceX() { return 2 * x(); }
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("may only declare @CField accessors, found 'twiceX'");
+    }
+
+    @Test
+    public void rejectsStructSetterWithoutGetter() {
+        assertThat(compile(source("SetterOnly", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("SetterOnly")
+                public class SetterOnly {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("y") void setY(double y);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("@CField 'y' has a setter but no matching getter");
+    }
+
+    @Test
+    public void rejectsNonPrimitiveStructField() {
+        assertThat(compile(source("StringField", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("StringField")
+                public class StringField {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("label") String label();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibStruct fields may only be double, float, long, int, short, byte or boolean");
+    }
+
+    @Test
+    public void rejectsBoolAccessorWithoutCastAnnotation() {
+        // The field is stored as int32 while a Java boolean is 1 byte, so the image build
+        // rejects the accessor unless it allows the cast explicitly
+        assertThat(compile(source("BoolField", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("BoolField")
+                public class BoolField {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("enabled") boolean enabled();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+                }
+                """))).hadErrorContaining("boolean accessor 'enabled' requires @AllowNarrowingCast");
+    }
+
+    @Test
+    public void rejectsStructViewReturn() {
+        assertThat(compile(source("StructReturn", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("StructReturn")
+                public class StructReturn {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Point origin() { return null; }
+                }
+                """))).hadErrorContaining("@CLibStruct views may not be returned, declare void with a @CLibOut parameter");
+    }
+
+    @Test
+    public void acceptsAStructViewParameter() {
+        assertThat(compile(source("StructParam", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("StructParam")
+                public class StructParam {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("y") double y();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static double distance(Point point) { return 0; }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void acceptsAnOutParameter() {
+        assertThat(compile(source("OutParam", """
+                import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
+                import org.graalvm.nativeimage.c.struct.AllowWideningCast;
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("OutParam")
+                public class OutParam {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                        @CField("valid") @AllowNarrowingCast boolean valid();
+                        @CField("valid") @AllowWideningCast void setValid(boolean valid);
+                    }
+
+                    @CLibMethod
+                    public static void corner(int index, @CLibOut Point point) { }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void rejectsANonTrailingOutParameter() {
+        assertThat(compile(source("LeadingOutParam", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("LeadingOutParam")
+                public class LeadingOutParam {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void corner(@CLibOut Point point, int index) { }
+                }
+                """))).hadErrorContaining("the @CLibOut parameter must be declared last");
+    }
+
+    @Test
+    public void rejectsOutParameterOnNonStructView() {
+        assertThat(compile(source("OutOnPrimitive", """
+                @CLibClass("OutOnPrimitive")
+                public class OutOnPrimitive {
+                    @CLibMethod(flags = Noexcept)
+                    public static void origin(@CLibOut double x) { }
+                }
+                """))).hadErrorContaining("@CLibOut may only be used with a @CLibStruct annotated type, got 'x'");
+    }
+
+    @Test
+    public void rejectsTwoOutParameters() {
+        assertThat(compile(source("TwoOutParams", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("TwoOutParams")
+                public class TwoOutParams {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void corners(@CLibOut Point first, @CLibOut Point second) { }
+                }
+                """))).hadErrorContaining("at most one @CLibOut parameter is allowed, found a second one on 'second'");
+    }
+
+    @Test
+    public void rejectsOutParameterWithNonVoidReturn() {
+        assertThat(compile(source("OutWithReturn", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("OutWithReturn")
+                public class OutWithReturn {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int origin(@CLibOut Point point) { return 0; }
+                }
+                """))).hadErrorContaining("a method with a @CLibOut parameter must be declared void");
+    }
+
+    @Test
+    public void rejectsOutViewWithoutSetterForEveryField() {
+        assertThat(compile(source("PartialOutView", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("PartialOutView")
+                public class PartialOutView {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                        @CField("x") void setX(double x);
+                        @CField("y") double y();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void origin(@CLibOut Point point) { }
+                }
+                """))).hadErrorContaining("@CLibOut view requires a setter for every field, missing [y]");
+    }
+
+    @Test
+    public void rejectsDuplicateStructName() {
+        assertThat(compile(source("Shapes", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("Shapes")
+                public class Shapes {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int count() { return 1; }
+
+                    @CLibClass("OtherShapes")
+                    public static class Other {
+                        @CLibStruct("Point")
+                        @CStruct("OtherPoint")
+                        public interface Corner extends PointerBase {
+                            @CField("x") double x();
+                        }
+
+                        @CLibMethod(flags = Noexcept)
+                        public static int count() { return 2; }
+                    }
+                }
+                """))).hadErrorContaining("Duplicate @CLibStruct value 'Point'");
+    }
+
     private Compilation compile(JavaFileObject source) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred
