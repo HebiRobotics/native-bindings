@@ -43,7 +43,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setName(method.getMethodName())
                     .setLowerUnderscoreName(CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getMethodName()))
                     .setCName(method.getCEntryPointName())
-                    .setReturnType(method.getReturnType().toDescription());
+                    .setReturnType(method.getReturnTypeDescription());
 
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
@@ -76,6 +76,9 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
             for (AnnotatedClibType parameter : method.getParameters()) {
                 // Isolates are handled by the C wrapper layer
                 if (parameter.isIsolateOrThread()) continue;
+
+                // The out parameter is already recorded as the return type
+                if (parameter.isOutParameter()) continue;
 
                 // Only add non-isolates
                 methodDesc.getMutableParameters().next()

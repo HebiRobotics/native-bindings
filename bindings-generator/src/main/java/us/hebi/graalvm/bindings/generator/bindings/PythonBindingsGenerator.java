@@ -622,6 +622,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         return np.empty(0, dtype=np.float64)
                     return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
                     """;
+            // The mirror carries the C layout, so the public dataclass gets unpacked field by field
+            case STRUCT -> IndentingTextRenderer.of("""
+                            struct_ = %%CALL%%
+                            return %%RETURN_TYPE%%(%%FIELDS%%)
+                            """)
+                    .set("FIELDS", getStructUnpackArgs(desc.getReturnType(), "struct_"))
+                    .render();
             case ENUM -> "return %%RETURN_TYPE%%(%%CALL%%)";
             case BOOL -> "return %%CALL%% != 0";
             case VOID -> "%%CALL%%";
@@ -630,6 +637,28 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         return IndentingTextRenderer.of(string.stripTrailing())
                 .set("RETURN_TYPE", desc.getReturnType().getTypeName());
+    }
+
+    /**
+     * Constructor arguments that turn the ctypes mirror into the public dataclass. The layout
+     * keeps a boolean field as an int32, so the public face converts it back.
+     */
+    private String getStructUnpackArgs(TypeDescription type, String local) {
+        List<String> args = new ArrayList<>();
+        for (var field : getStructDescription(lib, type).getFields()) {
+            String value = local + "." + field.getLowerUnderscoreName();
+            args.add(field.getDataType() == DataType.BOOL ? "bool(" + value + ")" : value);
+        }
+        return joiner.join(args);
+    }
+
+    private static StructDescription getStructDescription(LibraryDescription lib, TypeDescription type) {
+        for (var struct : lib.getStructs()) {
+            if (struct.getName().equals(type.getTypeName())) {
+                return struct;
+            }
+        }
+        throw new IllegalArgumentException("No struct found for type " + type.getTypeName());
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {
@@ -834,15 +863,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("NUMPY", getNumpyType(baseType))
                         .render());
             }
-        }
-
-        private static StructDescription getStructDescription(LibraryDescription lib, TypeDescription type) {
-            for (var struct : lib.getStructs()) {
-                if (struct.getName().equals(type.getTypeName())) {
-                    return struct;
-                }
-            }
-            throw new IllegalArgumentException("No struct found for type " + type.getTypeName());
         }
 
         private static String getNumpyType(String baseType) {

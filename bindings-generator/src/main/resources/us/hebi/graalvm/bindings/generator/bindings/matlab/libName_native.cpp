@@ -272,7 +272,7 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
-}
+}%%STRUCT_RETURN_HELPERS%%
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {

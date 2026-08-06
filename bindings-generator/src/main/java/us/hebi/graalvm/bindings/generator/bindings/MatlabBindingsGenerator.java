@@ -216,6 +216,10 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             // Spans (copied into a MATLAB row vector)
             case FLOAT64_SPAN -> "createMexDoubleArray(%%RETURN_VALUE%%)";
 
+            // User structs (copied into a 1x1 MATLAB struct). Concatenated rather than
+            // formatted, because String::formatted would eat the %% around the token.
+            case STRUCT -> "createMex" + type.getTypeName() + "(%%RETURN_VALUE%%)";
+
             default -> throw new IllegalStateException("Unsupported output type: " + type.getDataType());
         };
     }
@@ -319,6 +323,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("HASH_SEED", String.format("0x%08X", seed))
                 .set("HASH_PRIME", String.format("0x%08X", prime))
                 .set("STRUCT_HELPERS", createStructHelpers())
+                .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
                 .render();
@@ -383,6 +388,66 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         // The token sits at the end of a line, so the template supplies the newline
         return out.stripTrailingWhitespace().render();
+    }
+
+    /**
+     * Writers for the structs that a method returns. They fill their own token rather than
+     * joining the readers above, because they call the scalar helpers that are declared
+     * further down in the template.
+     */
+    private String createStructReturnHelpers() {
+        var out = new IndentingTextRenderer();
+        for (var struct : lib.getStructs()) {
+            if (!isReturnedByValue(struct)) continue;
+            var content = out.snapshot().set("STRUCT_NAME", struct.getName());
+            var fields = struct.getFields();
+            List<String> names = new ArrayList<>();
+            for (var field : fields) {
+                names.add(cQuoted(field.getName()));
+            }
+            content.add("""
+
+
+                    // The 1x1 MATLAB struct a returned %%STRUCT_NAME%% maps to
+                    inline mxArray* createMex%%STRUCT_NAME%%(const %%STRUCT_NAME%%& value) {
+                    """).indent()
+                    .addLine("const char* fields[] = {" + joiner.join(names) + "};")
+                    .addLine("mxArray* result = mxCreateStructMatrix(1, 1, " + fields.length() + ", fields);");
+            for (var field : fields) {
+                content.addLine("mxSetField(result, 0, " + cQuoted(field.getName()) + ", "
+                                + getStructFieldToMex(field.getDataType(), "value." + field.getLowerUnderscoreName()) + ");");
+            }
+            content.addLine("return result;").unindent().add("}\n");
+        }
+
+        // The token sits at the end of a line, so the template supplies the newline
+        return out.stripTrailingWhitespace().render();
+    }
+
+    /** MATLAB string literals are single-quoted, the gateway is C++ */
+    private static String cQuoted(String input) {
+        return "\"" + input + "\"";
+    }
+
+    private static String getStructFieldToMex(DataType type, String value) {
+        return switch (type) {
+            case BOOL -> "mxCreateLogicalScalar(" + value + " != 0)"; // the layout keeps a boolean as int32
+            case INT64 -> "createMexInt64(" + value + ")"; // too wide for the 53 bit mantissa
+            default -> "createMexScalar(" + value + ")";
+        };
+    }
+
+    private boolean isReturnedByValue(StructDescription struct) {
+        for (var apiClass : lib.getClasses()) {
+            for (var method : apiClass.getMethods()) {
+                var returnType = method.getReturnType();
+                if (returnType.getDataType() == DataType.STRUCT
+                    && returnType.getTypeName().equals(struct.getName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // =========================================================================

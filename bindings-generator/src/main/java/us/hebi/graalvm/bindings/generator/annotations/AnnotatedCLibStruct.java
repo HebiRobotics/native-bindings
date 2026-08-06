@@ -172,6 +172,20 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         return methodName;
     }
 
+    /**
+     * An out-parameter is filled through its setters, so a view used as one needs a setter
+     * for every field. An input view is read-only and gets away with getters alone.
+     */
+    public void checkEveryFieldHasSetter() {
+        var missing = fields.stream()
+                .filter(field -> !field.hasSetter)
+                .map(StructField::getName)
+                .toList();
+        if (!missing.isEmpty()) {
+            throw error("@CLibOut view requires a setter for every field, missing %s: %s", missing, getQualifiedName());
+        }
+    }
+
     public StructDescription toDescription() {
         var desc = StructDescription.newInstance()
                 .setName(getName())

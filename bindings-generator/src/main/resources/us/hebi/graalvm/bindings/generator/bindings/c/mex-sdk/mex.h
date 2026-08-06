@@ -26,6 +26,9 @@ typedef struct mxArray_tag mxArray;
 // MATLAB char data is UTF-16 code units.
 typedef uint16_t mxChar;
 
+// MATLAB logical data is one byte per element.
+typedef bool mxLogical;
+
 // 64-bit MATLAB uses pointer-width sizes and indices.
 typedef size_t mwSize;
 typedef size_t mwIndex;
@@ -60,7 +63,9 @@ void* mxCalloc_800(mwSize n, mwSize size);
 mxArray* mxCreateCharArray_800(mwSize ndim, const mwSize* dims);
 mxArray* mxCreateDoubleMatrix_800(mwSize m, mwSize n, mxComplexity flag);
 mxArray* mxCreateDoubleScalar_800(double value);
+mxArray* mxCreateLogicalScalar_800(mxLogical value);
 mxArray* mxCreateNumericMatrix_800(mwSize m, mwSize n, mxClassID classid, mxComplexity flag);
+mxArray* mxCreateStructMatrix_800(mwSize m, mwSize n, int nfields, const char** fieldnames);
 void mxDestroyArray_800(mxArray* pa);
 void mxFree_800(void* ptr);
 mxArray* mxGetCell_800(const mxArray* pa, mwIndex index);
@@ -80,6 +85,7 @@ bool mxIsEmpty_800(const mxArray* pa);
 bool mxIsLogical_800(const mxArray* pa);
 bool mxIsNumeric_800(const mxArray* pa);
 bool mxIsUint64_800(const mxArray* pa);
+void mxSetField_800(mxArray* pa, mwIndex index, const char* fieldname, mxArray* value);
 
 // MEX API (libmex)
 int mexCallMATLAB_800(int nlhs, mxArray* plhs[], int nrhs, mxArray* prhs[], const char* functionName);
@@ -92,7 +98,9 @@ void mexErrMsgTxt_800(const char* errormsg);
 #define mxCreateCharArray mxCreateCharArray_800
 #define mxCreateDoubleMatrix mxCreateDoubleMatrix_800
 #define mxCreateDoubleScalar mxCreateDoubleScalar_800
+#define mxCreateLogicalScalar mxCreateLogicalScalar_800
 #define mxCreateNumericMatrix mxCreateNumericMatrix_800
+#define mxCreateStructMatrix mxCreateStructMatrix_800
 #define mxDestroyArray mxDestroyArray_800
 #define mxFree mxFree_800
 #define mxGetCell mxGetCell_800
@@ -112,6 +120,7 @@ void mexErrMsgTxt_800(const char* errormsg);
 #define mxIsLogical mxIsLogical_800
 #define mxIsNumeric mxIsNumeric_800
 #define mxIsUint64 mxIsUint64_800
+#define mxSetField mxSetField_800
 #define mexCallMATLAB mexCallMATLAB_800
 #define mexErrMsgIdAndTxt mexErrMsgIdAndTxt_800
 #define mexErrMsgTxt mexErrMsgTxt_800
