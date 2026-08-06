@@ -54,6 +54,14 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
                     "Span parameters must be declared as DoubleSpan, not double[]: %s", executableElement.getSimpleName());
         }
 
+        // Struct views are input-only for now, the by-value return path is not built yet
+        checkArgument(!returnType.isStructView(),
+                "@CLibStruct returns are not supported yet: %s", executableElement.getSimpleName());
+        for (var parameter : getParameters()) {
+            checkArgument(!parameter.isOutParameter(),
+                    "@CLibOut is not supported yet: %s", executableElement.getSimpleName());
+        }
+
         // One-based languages convert indices by arithmetic, so the type has to be integral
         checkArgument(!returnType.isIndex() || isIndexType(returnType),
                 "@CLibIndex may only be used on integral types: %s", executableElement.getSimpleName());

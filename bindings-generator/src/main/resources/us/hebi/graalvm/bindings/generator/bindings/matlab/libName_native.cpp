@@ -179,7 +179,7 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
     std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
     return array;
-}
+}%%STRUCT_HELPERS%%
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes

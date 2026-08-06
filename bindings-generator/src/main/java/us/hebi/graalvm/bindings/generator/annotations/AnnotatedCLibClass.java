@@ -34,6 +34,11 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
                 .map(element -> new AnnotatedCLibEnum(element, processingEnvironment, this))
                 .toList();
 
+        nestedStructs = typeElement.getEnclosedElements().stream()
+                .filter(AnnotatedCLibStruct::isNativeStruct)
+                .map(element -> new AnnotatedCLibStruct(element, processingEnvironment))
+                .toList();
+
         typeDefs = typeElement.getEnclosedElements().stream()
                 .map(element -> element.getAnnotation(CLibTypeDef.class))
                 .filter(Objects::nonNull)
@@ -217,6 +222,10 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         return nestedEnums;
     }
 
+    public List<AnnotatedCLibStruct> getNestedStructs() {
+        return nestedStructs;
+    }
+
     public List<CLibTypeDef> getTypeDefs() {
         return typeDefs;
     }
@@ -224,6 +233,8 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     final List<AnnotatedCLibMethod> publicApiMethods;
 
     final List<AnnotatedCLibEnum> nestedEnums;
+
+    final List<AnnotatedCLibStruct> nestedStructs;
 
     final List<CLibTypeDef> typeDefs;
 

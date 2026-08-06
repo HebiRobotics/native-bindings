@@ -22,6 +22,8 @@ class RuntimeClasses {
 
     public static final ClassName ErrorInfo = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "ErrorInfo");
 
+    public static final ClassName MockPointerBase = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "MockPointerBase");
+
     /**
      * Name of the trailing out-struct param on entry points that return a span
      */

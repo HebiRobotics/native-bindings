@@ -90,6 +90,10 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
             description.addEnums(nestedEnum.toDescription());
         }
 
+        for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
+            description.addStructs(nestedStruct.toDescription());
+        }
+
         for (CLibTypeDef typeDef : apiClass.getTypeDefs()) {
             description.getMutableTypedefs().next()
                     .setName(typeDef.name())
@@ -121,6 +125,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         // Sort classes by name so the output-diffs are predictable
         ProtoSortUtil.sortClassDescriptions(description.getClasses());
         ProtoSortUtil.sortInPlace(description.getEnums(), Comparator.comparing(EnumDescription::getName));
+        ProtoSortUtil.sortInPlace(description.getStructs(), Comparator.comparing(StructDescription::getName));
 
         // Fill in children information
         List<TypeDescription> children = new ArrayList<>();

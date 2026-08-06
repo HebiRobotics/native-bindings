@@ -58,6 +58,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         out.write("\n\n");
 
         writeEnumDefinitions(out);
+        writeStructDefinitions(out);
         writeForwardDeclarations(out, apiClasses, useDynamicLookup);
         writeExceptionClass(out);
 
@@ -161,6 +162,20 @@ public class CppBindingsGenerator extends BindingGenerator {
         for (EnumDescription generatedEnum : lib.getEnums()) {
             out.write(CEnumGenerator.getCppEnumDefinition(generatedEnum));
             out.write("\n");
+        }
+    }
+
+    /**
+     * User structs are part of the public API, so they live in the library namespace
+     */
+    private void writeStructDefinitions(Writer out) throws IOException {
+        for (StructDescription struct : lib.getStructs()) {
+            out.write("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible\n");
+            out.write("struct " + struct.getName() + " {\n");
+            for (var field : struct.getFields()) {
+                out.write("  " + TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";\n");
+            }
+            out.write("};\n\n");
         }
     }
 
@@ -697,7 +712,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
-            case TYPEDEF, OBJECT_HANDLE, ENUM, FLOAT64_SPAN -> getCppType(type, true);
+            case TYPEDEF, OBJECT_HANDLE, ENUM, FLOAT64_SPAN, STRUCT -> getCppType(type, true);
             default -> TypeMap.toExternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -708,7 +723,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             case OBJECT_HANDLE -> internalPtr
                     ? INTERNAL_POINTER_NAMESPACE + "::" + type.getTypeName() + C_PTR_SUFFIX
                     : type.getTypeName();
-            case ENUM, TYPEDEF -> type.getTypeName();
+            case ENUM, TYPEDEF, STRUCT -> type.getTypeName();
             case FLOAT64_SPAN -> INTERNAL_POINTER_NAMESPACE + "::" + TypeMap.SPAN_STRUCT_NAME;
             default -> TypeMap.toExternalCpp(type.getDataType());
         };

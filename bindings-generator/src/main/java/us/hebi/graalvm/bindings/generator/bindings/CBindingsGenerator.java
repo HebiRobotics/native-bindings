@@ -166,6 +166,19 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private static final String DLL_PUBLIC = "DLL_PUBLIC ";
 
+    private static String getCStructDefinition(StructDescription struct) {
+        // Note: the names have no effect on the memory layout, so each language can use their matching convention
+        var out = IndentingTextRenderer.of("""
+                        
+                        typedef struct {
+                        """)
+                .indent();
+        for (var field : struct.getFields()) {
+            out.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
+        }
+        return out.unindent().addLine("} " + struct.getCName() + ";").render();
+    }
+
     private void writeHeader(Writer fileWriter, boolean exportSymbols) throws IOException {
         final String DLL_DEFINES = !exportSymbols ? "" : """
                 #if !defined(_WIN32) && (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__)))
@@ -205,6 +218,9 @@ public class CBindingsGenerator extends BindingGenerator {
                         """)
                 .set("ERROR_TYPE", getErrorType())
                 .render());
+        for (var struct : lib.getStructs()) {
+            writer.write(getCStructDefinition(struct));
+        }
         writer.write("\n");
         writer.write(typeDefs.toString());
         writer.write("\n");
@@ -387,7 +403,7 @@ public class CBindingsGenerator extends BindingGenerator {
                 out.append(", ").append(errorParam);
             }
             for (var param : params) {
-                if (param.getKey().getDataType() == DataType.FLOAT64_SPAN) {
+                if (isPassedByAddress(param.getKey().getDataType())) {
                     out.append(", const ").append(TypeMap.toExternalC(param.getKey(), false))
                             .append("* ").append(param.getValue());
                 } else {
@@ -437,8 +453,8 @@ public class CBindingsGenerator extends BindingGenerator {
                 String name = param.getValue();
                 String value = switch (param.getKey().getDataType()) {
                     case SIZE_T -> "static_cast<long long>(" + name + ")";
-                    // spans cross the entry point as a pointer to the by-value parameter
-                    case FLOAT64_SPAN -> "&" + name;
+                    // spans and user structs cross the entry point as a pointer to the by-value parameter
+                    case FLOAT64_SPAN, STRUCT -> "&" + name;
                     default -> name;
                 };
 
@@ -460,6 +476,10 @@ public class CBindingsGenerator extends BindingGenerator {
                 body.addLine(invocation + ");");
             }
             out.append(body.unindent().addLine("}").render());
+        }
+
+        private static boolean isPassedByAddress(DataType type) {
+            return type == DataType.FLOAT64_SPAN || type == DataType.STRUCT;
         }
 
         private static String getInternalName(String cEntryPointName) {
