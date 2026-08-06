@@ -6,7 +6,6 @@ import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
 import us.hebi.graalvm.bindings.annotations.CDefault;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
@@ -16,6 +15,8 @@ import us.hebi.graalvm.bindings.annotations.CLibOut;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -84,9 +85,6 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (isNativeApiType(mirror)) return TypeName.get(ObjectHandle.class);
         if (isString()) return ClassName.get(CCharPointer.class);
         if (isSizeType()) return TypeName.LONG;
-        // Span parameters cross as a pointer to the by-value ABI struct, a word type
-        // with zero allocation. Span returns get a trailing out-param of the same type.
-        if (isSpan()) return ClassName.get(DoubleSpan.class);
 
         // Map enums to int rather than going through a generated header. We already know all numbers anyways
         var generatedEnum = getGeneratedCEnumType();
@@ -126,7 +124,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (dataType != null) return dataType;
 
         // Special types we added
-        if (isStructView()) return DataType.STRUCT;
+        if (getStructElement().isPresent()) return DataType.STRUCT;
         if (isGeneratedCEnumType()) return DataType.ENUM;
         if (isDefinedType(mirror)) return DataType.TYPEDEF;
         if (isNativeApiType()) return DataType.OBJECT_HANDLE;
@@ -165,14 +163,6 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         return isTypeOf(rawMirror, String.class);
     }
 
-    /**
-     * True for both forms of {@link DataType#FLOAT64_SPAN}: DoubleSpan parameters
-     * (borrowed view) and double[] returns (copied out via a temp buffer).
-     */
-    public boolean isSpan() {
-        return TypeMap.getGraalDataType(type) == DataType.FLOAT64_SPAN;
-    }
-
     public boolean isNativeApiType() {
         return isNativeApiType(rawMirror);
     }
@@ -187,6 +177,41 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
      */
     public boolean isStructView() {
         return getTypeAnnotation(mirror, CLibStruct.class) != null;
+    }
+
+    /**
+     * The struct view this type resolves to, which is either the declared type itself or the
+     * view a registered marshaller accepts this Java type as the authoring form of, e.g. a
+     * {@code double[]} return standing in for the span the entry point fills.
+     */
+    private Optional<TypeElement> getStructElement() {
+        if (isStructView()) {
+            return Optional.of((TypeElement) env.getTypeUtils().asElement(mirror));
+        }
+        return getAllocatingMarshaller().map(marshaller -> env.getElementUtils().getTypeElement(marshaller.viewType()));
+    }
+
+    /**
+     * @return the view a trailing out-parameter for this type has to be declared as
+     */
+    public Optional<ClassName> getStructViewType() {
+        return getStructElement().map(ClassName::get);
+    }
+
+    /**
+     * A marshaller may accept a second Java form for returns, e.g. a {@code double[]} that the
+     * entry point copies into the span view it fills. Empty for the view type itself.
+     */
+    public Optional<StructMarshaller.AllocatingReturn> getAllocatingReturn() {
+        return getAllocatingMarshaller().flatMap(StructMarshaller::allocatingReturn);
+    }
+
+    private Optional<StructMarshaller> getAllocatingMarshaller() {
+        return StructMarshallers.getAll().stream()
+                .filter(marshaller -> marshaller.allocatingReturn()
+                        .filter(allocating -> allocating.javaType().equals(type))
+                        .isPresent())
+                .findFirst();
     }
 
     /**
@@ -214,10 +239,9 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
             }
             case ENUM -> Optional.ofNullable(getTypeAnnotation(mirror, CLibEnum.class))
                     .map(annotation -> AnnotatedCLibEnum.getCPrefix(getOptions(), annotation));
-            case STRUCT -> Optional.ofNullable(getTypeAnnotation(mirror, CLibStruct.class))
+            case STRUCT -> getStructElement()
+                    .map(element -> element.getAnnotation(CLibStruct.class))
                     .map(annotation -> AnnotatedCLibStruct.getCPrefix(getOptions(), annotation));
-            // The span struct is defined once per library, so it uses the library-wide prefix
-            case FLOAT64_SPAN -> Optional.of(AnnotationUtil.getCPrefix(getOptions(), "") + "_");
             default -> Optional.empty();
         };
     }
@@ -230,7 +254,8 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
             case TYPEDEF ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibTypeDef.class, CLibTypeDef::name);
-            case STRUCT -> Optional.of(AnnotatedCLibStruct.getName((TypeElement) env.getTypeUtils().asElement(mirror)))
+            case STRUCT -> getStructElement()
+                    .map(AnnotatedCLibStruct::getName)
                     .filter(name -> !name.isEmpty());
             default -> Optional.empty();
         };
@@ -248,10 +273,11 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * @return the declared type, or null for primitives and arrays
+     * @return the declared type, the view a marshalled authoring form resolves to, or null
+     * for primitives and arrays
      */
     public TypeElement getTypeElement() {
-        return element;
+        return getStructElement().orElse(element);
     }
 
     private final Element sourceElement;

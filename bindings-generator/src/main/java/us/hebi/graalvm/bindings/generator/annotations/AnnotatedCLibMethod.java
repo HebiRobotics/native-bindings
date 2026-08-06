@@ -1,12 +1,10 @@
 package us.hebi.graalvm.bindings.generator.annotations;
 
 import com.google.common.base.Strings;
-import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.TypeName;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.model.DataType;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
 import us.hebi.graalvm.bindings.model.MethodFlag;
 import us.hebi.graalvm.bindings.model.MethodOverload;
 import us.hebi.graalvm.bindings.model.TypeDescription;
@@ -46,13 +44,21 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
             flags.add(toModelFlag(flag));
         }
 
-        // Spans have one Java form per direction: parameters borrow a caller-owned buffer
-        // through the DoubleSpan view, returns hand back a copied double[]
-        checkArgument(!DOUBLE_SPAN_TYPE.equals(returnType.getJavaType()),
-                "Span returns must be declared as double[], not DoubleSpan: %s", executableElement.getSimpleName());
-        for (var parameter : getParameters()) {
-            checkArgument(!DOUBLE_ARRAY_TYPE.equals(parameter.getJavaType()),
-                    "Span parameters must be declared as DoubleSpan, not double[]: %s", executableElement.getSimpleName());
+        // A marshaller that allocates its return has one Java form per direction: parameters
+        // borrow the caller-owned buffer through the view, returns hand back a copy
+        for (var marshaller : StructMarshallers.getAll()) {
+            var allocating = marshaller.allocatingReturn();
+            if (allocating.isEmpty()) continue;
+            var view = ClassName.bestGuess(marshaller.viewType());
+            var javaType = allocating.get().javaType();
+            checkArgument(!view.equals(returnType.getJavaType()),
+                    "%s returns must be declared as %s, not %s: %s",
+                    view.simpleName(), javaType, view.simpleName(), executableElement.getSimpleName());
+            for (var parameter : getParameters()) {
+                checkArgument(!javaType.equals(parameter.getJavaType()),
+                        "%s parameters must be declared as %s, not %s: %s",
+                        view.simpleName(), view.simpleName(), javaType, executableElement.getSimpleName());
+            }
         }
 
         // A struct view leaves the ABI through a caller-provided @CLibOut parameter, which
@@ -118,10 +124,6 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
             return false;
         }
     }
-
-    private static final TypeName DOUBLE_SPAN_TYPE =
-            ClassName.get("us.hebi.graalvm.bindings.runtime.types", "DoubleSpan");
-    private static final TypeName DOUBLE_ARRAY_TYPE = ArrayTypeName.of(TypeName.DOUBLE);
 
     /**
      * @return the name this method is exported under, which the annotation may override

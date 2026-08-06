@@ -9,6 +9,7 @@ import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.word.PointerBase;
+import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
@@ -27,6 +28,7 @@ import javax.lang.model.type.TypeMirror;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
 
@@ -209,11 +211,16 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         }
     }
 
+    public Optional<String> getComment() {
+        return AnnotationUtil.tryGetAnnotationValue(element, CLibComment.class, CLibComment::value);
+    }
+
     public StructDescription toDescription() {
         var desc = StructDescription.newInstance()
                 .setName(getName())
                 .setCPrefix(getCPrefix())
                 .setCName(getCName());
+        getComment().ifPresent(desc::setComment);
 
         for (var field : fields) {
             desc.getMutableFields().next()

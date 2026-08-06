@@ -1,14 +1,12 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
 import com.google.common.base.CaseFormat;
-import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.*;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.TypeDescription;
-import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,7 +50,6 @@ public final class TypeMap {
         return switch (type.getDataType()) {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
             case TYPEDEF, ENUM -> type.getCPrefix() + type.getTypeName();
-            case FLOAT64_SPAN -> type.getCPrefix() + SPAN_STRUCT_NAME;
             case STRUCT -> toStructCName(type.getCPrefix(), type.getTypeName());
             default -> toExternalC(type.getDataType());
         };
@@ -122,12 +119,6 @@ public final class TypeMap {
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
     }
-
-    /**
-     * Simple name of the by-value span struct, prefixed with the library c_prefix
-     * in the public header.
-     */
-    public static final String SPAN_STRUCT_NAME = "double_span";
 
     public static final String C_PTR_SUFFIX = "Ptr";
 
@@ -211,19 +202,27 @@ public final class TypeMap {
             case ENUM -> "c_int32";             // @CEnum maps to int
             case OBJECT_HANDLE -> "c_void_p";   // Opaque handles
 
-            // The span Structure emitted once per generated Python file
-            case FLOAT64_SPAN -> "_DoubleSpan";
+            case STRUCT -> toStructMirrorCPython(type.getTypeName());
 
-            // ctypes mirror of the user struct, next to the public dataclass of the same name
-            case STRUCT -> "_" + type.getTypeName();
-
-            case UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
+            case FLOAT64_SPAN, UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
         };
+    }
+
+    /**
+     * @return name of the ctypes Structure mirroring the C layout, which sits next to the
+     * public dataclass of the same name
+     */
+    public static String toStructMirrorCPython(String structName) {
+        return "_" + structName;
     }
 
     public static String toPythonTypeHint(TypeDescription desc) {
         return switch (desc.getDataType()) {
-            case OBJECT_HANDLE, TYPEDEF, ENUM, STRUCT -> desc.getTypeName();
+            case STRUCT -> StructMarshallers.resolve(desc)
+                    .flatMap(StructMarshaller::python)
+                    .map(StructMarshaller.PyStructMarshaller::typeHint)
+                    .orElseGet(desc::getTypeName);
+            case OBJECT_HANDLE, TYPEDEF, ENUM -> desc.getTypeName();
             case VOID -> "None";
             case BOOL -> "bool";
 
@@ -240,7 +239,7 @@ public final class TypeMap {
             case VOID_POINTER -> "Any | bytes | None";
 
             // Note: we could use numpy.typing's ArrayLike, but we want to be compatible without numpy
-            case FLOAT32_POINTER, FLOAT64_POINTER, FLOAT64_SPAN -> "Sequence[float]";
+            case FLOAT32_POINTER, FLOAT64_POINTER -> "Sequence[float]";
             case INT32_POINTER, INT64_POINTER -> "Sequence[int]";
 
             // Map string arrays to List of strings
@@ -291,10 +290,6 @@ public final class TypeMap {
             addMapping(CFloatPointer.class, DataType.FLOAT32_POINTER);
             addMapping(CDoublePointer.class, DataType.FLOAT64_POINTER);
             addMapping(ObjectHandle.class, DataType.OBJECT_HANDLE);
-
-            // Spans: DoubleSpan params (borrowed view) and double[] returns (copied out)
-            addMapping(DoubleSpan.class, DataType.FLOAT64_SPAN);
-            mapping.put(ArrayTypeName.of(TypeName.DOUBLE), DataType.FLOAT64_SPAN);
         }
     }
 

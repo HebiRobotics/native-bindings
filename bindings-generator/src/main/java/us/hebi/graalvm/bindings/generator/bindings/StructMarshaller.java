@@ -71,6 +71,21 @@ public interface StructMarshaller {
 
         String write(String structVar);
 
+        /**
+         * @return gateway-local functions the conversions call, emitted after the layout mirror
+         */
+        default String helpers() {
+            return "";
+        }
+
+        /**
+         * @return argument validation type for functionSignatures.json, a plain MATLAB
+         * struct by default
+         */
+        default String typeHint() {
+            return "struct";
+        }
+
     }
 
 }

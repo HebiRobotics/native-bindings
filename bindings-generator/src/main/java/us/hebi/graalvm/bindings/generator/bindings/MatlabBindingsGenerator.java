@@ -147,9 +147,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         if (param.getDataType() == DataType.TYPEDEF) {
             return "void*"; // callbacks are not supported at this time
         }
-        if (param.getDataType() == DataType.FLOAT64_SPAN) {
-            return "DoubleSpan"; // layout-compatible local struct defined in the MEX template
-        }
         if (param.getDataType() == DataType.STRUCT) {
             return param.getTypeName(); // layout-compatible local struct generated into the MEX gateway
         }
@@ -181,17 +178,14 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             case INT16_POINTER ->
                     "MatlabArray<int16_t, mxINT16_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
 
-            case STRUCT -> "%1$s %2$s = get%1$s(prhs[%3$d])".formatted(
-                    getMexCType(param), param.getParamName(), index);
+            case STRUCT -> getMexMarshaller(param)
+                    .map(marshaller -> marshaller.read("prhs[%d]".formatted(index), param.getParamName()))
+                    .orElseGet(() -> "%1$s %2$s = get%1$s(prhs[%3$d])".formatted(
+                            getMexCType(param), param.getParamName(), index));
 
             case CHAR_POINTER -> "MatlabString %s(prhs[%d])".formatted(param.getParamName(), index);
 
             case CHAR_POINTER_POINTER -> "MatlabStringArray %s(prhs[%d])".formatted(param.getParamName(), index);
-
-            // MatlabArray handles class conversion, and the element count rides along in the span
-            case FLOAT64_SPAN -> ("MatlabArray<double, mxDOUBLE_CLASS> %1$s_arr(prhs[%2$d]);\n" +
-                                  "DoubleSpan %1$s = {%1$s_arr.ptr, mxGetNumberOfElements(prhs[%2$d])}")
-                    .formatted(param.getParamName(), index);
 
             default -> throw new IllegalStateException("Unsupported input type: " + param.getDataType());
         };
@@ -213,12 +207,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             // Strings (C-String to MATLAB String)
             case CHAR_POINTER -> "createMexString(%%RETURN_VALUE%%)";
 
-            // Spans (copied into a MATLAB row vector)
-            case FLOAT64_SPAN -> "createMexDoubleArray(%%RETURN_VALUE%%)";
-
             // User structs (copied into a 1x1 MATLAB struct). Concatenated rather than
             // formatted, because String::formatted would eat the %% around the token.
-            case STRUCT -> "createMex" + type.getTypeName() + "(%%RETURN_VALUE%%)";
+            case STRUCT -> getMexMarshaller(type)
+                    .map(marshaller -> marshaller.write("%%RETURN_VALUE%%"))
+                    .orElseGet(() -> "createMex" + type.getTypeName() + "(%%RETURN_VALUE%%)");
 
             default -> throw new IllegalStateException("Unsupported output type: " + type.getDataType());
         };
@@ -338,20 +331,23 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             return "";
         }
 
-        var out = new IndentingTextRenderer().add("""
+        var out = new IndentingTextRenderer();
+        if (needsStructFieldReader()) {
+            out.add("""
 
 
-                // Reads one field of a MATLAB struct argument. mxGetField returns null for a field
-                // that does not exist, which the scalar check cannot tell apart from a bad value.
-                template <typename T>
-                inline T getStructField(const mxArray* arg, const char* structName, const char* fieldName) {
-                    const mxArray* field = mxGetField(arg, 0, fieldName);
-                    if (!field) {
-                        mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "Struct '%s' is missing field '%s'.", structName, fieldName);
+                    // Reads one field of a MATLAB struct argument. mxGetField returns null for a field
+                    // that does not exist, which the scalar check cannot tell apart from a bad value.
+                    template <typename T>
+                    inline T getStructField(const mxArray* arg, const char* structName, const char* fieldName) {
+                        const mxArray* field = mxGetField(arg, 0, fieldName);
+                        if (!field) {
+                            mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "Struct '%s' is missing field '%s'.", structName, fieldName);
+                        }
+                        return getScalar<T>(field, fieldName);
                     }
-                    return getScalar<T>(field, fieldName);
-                }
-                """);
+                    """);
+        }
 
         for (var struct : lib.getStructs()) {
             var content = out.snapshot().set("STRUCT_NAME", struct.getName());
@@ -363,8 +359,16 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             for (var field : struct.getFields()) {
                 content.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
             }
-            content.unindent().add("""
-                    };
+            content.unindent().add("};\n");
+
+            // A marshalled struct brings its own conversions, the struct field reader below is the default
+            var marshaller = StructMarshallers.resolve(struct).flatMap(StructMarshaller::matlab);
+            if (marshaller.isPresent()) {
+                content.add(marshaller.get().helpers());
+                continue;
+            }
+
+            content.add("""
 
                     inline %%STRUCT_NAME%% get%%STRUCT_NAME%%(const mxArray* arg) {
                         // mxIsStruct is not part of the clean-room SDK subset, and is documented as this check
@@ -402,6 +406,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         var out = new IndentingTextRenderer();
         for (var struct : lib.getStructs()) {
             if (!isReturnedByValue(struct)) continue;
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::matlab).isPresent()) continue;
             var content = out.snapshot().set("STRUCT_NAME", struct.getName());
             var fields = struct.getFields();
             List<String> names = new ArrayList<>();
@@ -428,6 +433,21 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         // The token sits at the end of a line, so the template supplies the newline
         return out.stripTrailingWhitespace().render();
+    }
+
+    private static Optional<StructMarshaller.MexStructMarshaller> getMexMarshaller(TypeDescription type) {
+        if (type.getDataType() != DataType.STRUCT) return Optional.empty();
+        return StructMarshallers.resolve(type).flatMap(StructMarshaller::matlab);
+    }
+
+    /**
+     * @return true if any struct is read from a MATLAB struct argument, which is what needs the field reader
+     */
+    private boolean needsStructFieldReader() {
+        for (var struct : lib.getStructs()) {
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::matlab).isEmpty()) return true;
+        }
+        return false;
     }
 
     /** MATLAB string literals are single-quoted, the gateway is C++ */
@@ -1151,11 +1171,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private List<String> mapToMatlabType(TypeDescription type) {
         return switch (type.getDataType()) {
             case BOOL -> List.of("logical");
-            case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, FLOAT64_SPAN,
+            case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T,
                  INT16_POINTER, INT32_POINTER, INT64_POINTER, FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");
-            case STRUCT -> List.of("struct");
+            case STRUCT -> List.of(getMexMarshaller(type)
+                    .map(StructMarshaller.MexStructMarshaller::typeHint)
+                    .orElse("struct"));
             case OBJECT_HANDLE -> List.of(getFullyQualifiedClassName(type));
             case ENUM -> List.of(
                     getFullyQualifiedClassName(type), "choices={" + getEnumChoices(type) + "}");

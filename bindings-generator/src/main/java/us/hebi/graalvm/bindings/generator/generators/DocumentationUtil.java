@@ -95,6 +95,19 @@ public class DocumentationUtil {
     private static final String TRIPPLE_QUOTES = "\"\"\"";
     private static final String INDENT = "    ";
 
+    /**
+     * Plain line comments, wrapped the way the comment was authored. Used where a definition
+     * carries documentation but no doxygen block, i.e. the C and C++ struct typedefs.
+     */
+    public static String generateLineComments(String indent, String comment) {
+        var out = new StringBuilder();
+        for (String line : comment.trim().split("\n")) {
+            line = line.stripTrailing();
+            out.append(indent).append(line.isEmpty() ? "//" : "// " + line).append("\n");
+        }
+        return out.toString();
+    }
+
     public static String wrapInDoxygen(String indent, String comment) {
         return finishDoxygenBlock(indent, startDoxygenBlock(indent, comment.trim()));
     }

@@ -54,6 +54,7 @@ message StructDescription {
   optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
   optional string c_name = 3; // fully qualified C name
   repeated StructFieldDescription fields = 4;
+  optional string comment = 5; // documentation emitted above the C and C++ definitions
 }
 
 message StructFieldDescription {
