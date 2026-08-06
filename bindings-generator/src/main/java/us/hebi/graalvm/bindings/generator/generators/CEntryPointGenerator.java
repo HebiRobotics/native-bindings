@@ -141,8 +141,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 if (param.isIsolateThread()) {
                     // Pass the existing isolate parameter
                     invocation.add("$N", ISOLATE_NAME);
-                } else if (param.isOutParameter()) {
-                    invocation.add("$N", param.getName()); // can be declared anywhere, but for C we move it to the end
                 } else {
                     builder.addParameter(param.getCEntryType(), param.getName());
                     var apiTypeWrapper = param.getApiTypeWrapperClass();
@@ -169,11 +167,10 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 }
             }
 
-            // Span returns and @CLibOut parameters fill a trailing caller-provided struct
+            // Span returns fill a trailing caller-provided struct
             if (returnType.isSpan()) {
                 builder.addParameter(DoubleSpan, SPAN_OUT);
             }
-            method.getOutParameter().ifPresent(param -> builder.addParameter(param.getCEntryType(), param.getName()));
 
             // Add guards
             addGuardedInvocation(

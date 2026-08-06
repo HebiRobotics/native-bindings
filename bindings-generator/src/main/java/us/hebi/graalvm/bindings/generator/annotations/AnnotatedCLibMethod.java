@@ -61,7 +61,10 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
                 "@CLibStruct views may not be returned, declare void with a @CLibOut parameter instead: %s",
                 executableElement.getSimpleName());
         AnnotatedClibType outParam = null;
-        for (var parameter : getParameters()) {
+        var parameters = getParameters();
+        int outIndex = -1;
+        for (int i = 0; i < parameters.size(); i++) {
+            var parameter = parameters.get(i);
             if (!parameter.isOutParameter()) continue;
             checkArgument(parameter.isStructView(),
                     "@CLibOut may only be used with a @CLibStruct annotated type, got '%s': %s",
@@ -70,10 +73,15 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
                     "at most one @CLibOut parameter is allowed, found a second one on '%s': %s",
                     parameter.getName(), executableElement.getSimpleName());
             outParam = parameter;
+            outIndex = i;
         }
         if (outParam != null) {
             checkArgument(returnType.isVoid(),
                     "a method with a @CLibOut parameter must be declared void, the out struct is the return value: %s",
+                    executableElement.getSimpleName());
+            // The C signature always carries the out struct last, so the Java form must match
+            checkArgument(outIndex == parameters.size() - 1,
+                    "the @CLibOut parameter must be declared last: %s",
                     executableElement.getSimpleName());
         }
         outParameter = outParam;

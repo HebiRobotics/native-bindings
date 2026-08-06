@@ -28,6 +28,11 @@ public class DocumentationUtil {
             }
         }
 
+        if (hasReturnComment(methodDesc)) {
+            out.append("\n\nOutputs:");
+            out.append("\n").append(INDENT).append(methodDesc.getReturnType().getComment());
+        }
+
         if (isThrowing(methodDesc)) {
             out.append("\n\nThrows:");
             out.append("\n").append(INDENT).append("Error " + methodDesc.tryGetThrowsOn().orElse(DEFAULT_THROWS_ON));
@@ -56,6 +61,11 @@ public class DocumentationUtil {
                 String name = param.getLowerUnderscoreParamName();
                 out.append("\n").append(INDENT).append(name).append(": ").append(param.getComment());
             }
+        }
+
+        if (hasReturnComment(methodDesc)) {
+            out.append("\n\nReturns:");
+            out.append("\n").append(INDENT).append(methodDesc.getReturnType().getComment());
         }
 
         if (isThrowing(methodDesc)) {
@@ -95,16 +105,27 @@ public class DocumentationUtil {
 
     public static String generateDoxygen(String indent, MethodDescription methodDesc) {
         var out = startDoxygenBlock(indent, methodDesc.getDocumentation().trim());
-        if (methodDesc.getParameters().length() > 0) {
+        if (methodDesc.getParameters().length() > 0 || hasReturnComment(methodDesc)) {
             out.append("\n *");
             for (TypeDescription parameter : methodDesc.getParameters()) {
                 out.append("\n * @param ").append(parameter.getParamName()).append(" ").append(parameter.getComment());
+            }
+            if (hasReturnComment(methodDesc)) {
+                out.append("\n * @return ").append(methodDesc.getReturnType().getComment());
             }
         }
         if (isThrowing(methodDesc)) {
             out.append("\n * @throw " + methodDesc.tryGetThrowsOn().orElse(DEFAULT_THROWS_ON));
         }
         return finishDoxygenBlock(indent, out);
+    }
+
+    /**
+     * A comment on the return value, today only set through a {@code @CLibComment}
+     * on the {@code @CLibOut} parameter that the faces present as the return.
+     */
+    private static boolean hasReturnComment(MethodDescription methodDesc) {
+        return methodDesc.hasReturnType() && methodDesc.getReturnType().hasComment();
     }
 
     /**
