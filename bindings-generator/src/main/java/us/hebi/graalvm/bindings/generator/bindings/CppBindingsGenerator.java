@@ -144,6 +144,12 @@ public class CppBindingsGenerator extends BindingGenerator {
                     throw Exception(message, id);
                   }
                 }
+                
+                inline void checkNotNull(const void* ptr, const char* message) {
+                  if (!ptr) {
+                    throw Exception(message);
+                  }
+                }
                 """.formatted(getErrorType()));
         out.write("\n");
     }
@@ -329,9 +335,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             if (isThrowing(method)) {
                 impl.write(getErrorCheck());
                 impl.write("""
-                          if (!ptr) {
-                            throw Exception("Could not create %s");
-                          }
+                          checkNotNull(ptr, "Could not create %s");
                         """.formatted(getCppClassName(apiClass.getType())));
             }
             impl.write("  return ptr;\n");

@@ -78,6 +78,12 @@ inline void checkError(const internal::ErrorInfo& error) {
   }
 }
 
+inline void checkNotNull(const void* ptr, const char* message) {
+  if (!ptr) {
+    throw Exception(message);
+  }
+}
+
 // ==== Class Wrappers ====
 
 /**
@@ -858,9 +864,7 @@ inline internal::CirclePtr createCirclePointer(double radius) {
   internal::ErrorInfo error_ = {};
   auto ptr = bindings_tests_Circle_create(&error_, radius);
   checkError(error_);
-  if (!ptr) {
-    throw Exception("Could not create Circle");
-  }
+  checkNotNull(ptr, "Could not create Circle");
   return ptr;
 }
 }
@@ -904,9 +908,7 @@ inline internal::SquarePtr createSquarePointer(double side) {
   internal::ErrorInfo error_ = {};
   auto ptr = bindings_tests_Square_create(&error_, side);
   checkError(error_);
-  if (!ptr) {
-    throw Exception("Could not create Square");
-  }
+  checkNotNull(ptr, "Could not create Square");
   return ptr;
 }
 }
