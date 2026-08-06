@@ -130,7 +130,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .set("LIB_BUILD_NUMBER", lib.getBuild())
                 .set("LIB_FIELD", libField)
                 .set("DOWNLOAD_BLOCK", createDownloadBlock())
-                .set("STRUCT_IMPORT", hasStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
+                .set("STRUCT_IMPORT", hasDataclassStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
                 .render());
     }
 
@@ -208,14 +208,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     return result_
 
                 """);
-        if (GeneratorUtil.usesSpans(lib)) {
-            content.append("""
-                    class _DoubleSpan(Structure):
-                        # A (pointer, length) view of a double buffer, passed and returned by value
-                        _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
-
-                    """);
-        }
         for (var struct : lib.getStructs()) {
             List<String> fields = new ArrayList<>();
             for (var field : struct.getFields()) {
@@ -310,13 +302,17 @@ public class PythonBindingsGenerator extends BindingGenerator {
      * into the ctypes mirror, so nothing in the API asks for ctypes types.
      */
     private void appendStructWrappers(StringBuilder content) {
-        if (!hasStructs()) return;
+        if (!hasDataclassStructs()) return;
 
         content.append("\n# ==== Structs ====\n");
         for (var struct : lib.getStructs()) {
+            // A marshalled struct has no public face, users see the Python type it maps to
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::python).isPresent()) continue;
             content.append("\n@dataclass\n");
             content.append("class %s:\n".formatted(struct.getName()));
             for (var field : struct.getFields()) {
+                // Pointer fields have no lifetime story here, only the layout mirror carries them
+                if (TypeMap.isPointerType(field.getDataType())) continue;
                 content.append("    %s: %s\n".formatted(
                         field.getLowerUnderscoreName(),
                         TypeMap.toStructFieldPythonHint(field.getDataType())));
@@ -325,8 +321,14 @@ public class PythonBindingsGenerator extends BindingGenerator {
         content.append("\n");
     }
 
-    private boolean hasStructs() {
-        return lib.getStructs().length() > 0;
+    /**
+     * @return true if any struct is emitted as a dataclass, which is what needs the dataclass import
+     */
+    private boolean hasDataclassStructs() {
+        for (var struct : lib.getStructs()) {
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::python).isEmpty()) return true;
+        }
+        return false;
     }
 
     private void appendEnumWrappers(StringBuilder content) {
@@ -615,20 +617,16 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     ptr_ = %%CALL%%
                     return ptr_.decode("utf-8") if ptr_ is not None else ""
                     """;
-            // Copied out immediately because the span is only valid until the next call
-            case FLOAT64_SPAN -> """
-                    span_ = %%CALL%%
-                    if span_.length == 0 or not span_.data:
-                        return np.empty(0, dtype=np.float64)
-                    return np.ctypeslib.as_array(span_.data, shape=(span_.length,)).copy()
-                    """;
             // The mirror carries the C layout, so the public dataclass gets unpacked field by field
-            case STRUCT -> IndentingTextRenderer.of("""
-                            struct_ = %%CALL%%
-                            return %%RETURN_TYPE%%(%%FIELDS%%)
-                            """)
-                    .set("FIELDS", getStructUnpackArgs(desc.getReturnType(), "struct_"))
-                    .render();
+            case STRUCT -> getPythonMarshaller(desc.getReturnType())
+                    .map(marshaller -> marshaller.unpack(STRUCT_LOCAL_NAME))
+                    .orElseGet(() -> IndentingTextRenderer.of("""
+                                    %%VAR%% = %%CALL%%
+                                    return %%RETURN_TYPE%%(%%FIELDS%%)
+                                    """)
+                            .set("VAR", STRUCT_LOCAL_NAME)
+                            .set("FIELDS", getStructUnpackArgs(desc.getReturnType(), STRUCT_LOCAL_NAME))
+                            .render());
             case ENUM -> "return %%RETURN_TYPE%%(%%CALL%%)";
             case BOOL -> "return %%CALL%% != 0";
             case VOID -> "%%CALL%%";
@@ -646,10 +644,16 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private String getStructUnpackArgs(TypeDescription type, String local) {
         List<String> args = new ArrayList<>();
         for (var field : getStructDescription(lib, type).getFields()) {
+            if (TypeMap.isPointerType(field.getDataType())) continue;
             String value = local + "." + field.getLowerUnderscoreName();
             args.add(field.getDataType() == DataType.BOOL ? "bool(" + value + ")" : value);
         }
         return joiner.join(args);
+    }
+
+    private static Optional<StructMarshaller.PyStructMarshaller> getPythonMarshaller(TypeDescription type) {
+        if (type.getDataType() != DataType.STRUCT) return Optional.empty();
+        return StructMarshallers.resolve(type).flatMap(StructMarshaller::python);
     }
 
     private static StructDescription getStructDescription(LibraryDescription lib, TypeDescription type) {
@@ -739,6 +743,9 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return method.getIsConstructor() || !method.getIsStatic() ? "self" : "cls";
     }
 
+    /** Name of the local holding the ctypes mirror a struct return arrives in */
+    private static final String STRUCT_LOCAL_NAME = "struct_";
+
     /**
      * Annotation values are written without a trailing newline, but the generated code
      * appends the next statement directly after them.
@@ -813,10 +820,20 @@ public class PythonBindingsGenerator extends BindingGenerator {
             String pyType = getCPythonType(desc);
             String name = desc.getLowerUnderscoreParamName();
 
-            if (desc.getDataType() == DataType.STRUCT) {
-                // The dataclass is the public face, so the mirror gets packed field by field
+            var marshaller = getPythonMarshaller(desc);
+            if (marshaller.isPresent()) {
+                out.append(marshaller.get().pack(name));
+
+            } else if (desc.getDataType() == DataType.STRUCT) {
+                // The dataclass is the public face, so the mirror gets packed field by field.
+                // The mirror is constructed positionally, so a field the dataclass does not
+                // carry still needs its slot.
                 List<String> args = new ArrayList<>();
                 for (var field : getStructDescription(lib, desc).getFields()) {
+                    if (TypeMap.isPointerType(field.getDataType())) {
+                        args.add("None");
+                        continue;
+                    }
                     String value = name + "." + field.getLowerUnderscoreName();
                     args.add(field.getDataType() == DataType.BOOL ? "int(" + value + ")" : value);
                 }
@@ -840,16 +857,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(c_char_p)):
                             encoded_list = [s.encode('utf-8') if isinstance(s, str) else s for s in %%NAME%%]
                             %%NAME%% = (c_char_p * len(encoded_list))(*encoded_list)
-                        """).set("NAME", name).render());
-
-            } else if (pyType.equals("_DoubleSpan")) {
-                // The temporary array keeps the buffer alive until the call returns
-                out.append(IndentingTextRenderer.of("""
-                        if %%NAME%% is None:
-                            %%NAME%% = _DoubleSpan(None, 0)
-                        elif not isinstance(%%NAME%%, _DoubleSpan):
-                            %%NAME%%_arr = np.ascontiguousarray(%%NAME%%, dtype=np.float64)
-                            %%NAME%% = _DoubleSpan(%%NAME%%_arr.ctypes.data_as(POINTER(c_double)), len(%%NAME%%_arr))
                         """).set("NAME", name).render());
 
             } else if (pyType.startsWith("POINTER(c_")) {

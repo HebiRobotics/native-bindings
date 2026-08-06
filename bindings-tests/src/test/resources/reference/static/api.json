@@ -519,12 +519,14 @@
         "paramName": "x",
         "lowerUnderscoreParamName": "x",
         "cPrefix": "bindings_tests_",
-        "dataType": "FLOAT64_SPAN"
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
       }, {
         "paramName": "y",
         "lowerUnderscoreParamName": "y",
         "cPrefix": "bindings_tests_",
-        "dataType": "FLOAT64_SPAN"
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
       }],
       "documentation": "Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.",
       "throwsOn": "mismatched lengths"
@@ -535,13 +537,15 @@
       "cName": "bindings_tests_Arrays_addOffset",
       "returnType": {
         "cPrefix": "bindings_tests_",
-        "dataType": "FLOAT64_SPAN"
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
       },
       "parameters": [{
         "paramName": "values",
         "lowerUnderscoreParamName": "values",
         "cPrefix": "bindings_tests_",
-        "dataType": "FLOAT64_SPAN"
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
       }, {
         "paramName": "offset",
         "lowerUnderscoreParamName": "offset",
@@ -556,7 +560,8 @@
       "cName": "bindings_tests_Arrays_getSequence",
       "returnType": {
         "cPrefix": "bindings_tests_",
-        "dataType": "FLOAT64_SPAN"
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
       },
       "parameters": [{
         "paramName": "count",
@@ -1651,6 +1656,20 @@
     "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
   }],
   "structs": [{
+    "name": "DoubleSpan",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_double_span",
+    "fields": [{
+      "name": "data",
+      "lowerUnderscoreName": "data",
+      "dataType": "FLOAT64_POINTER"
+    }, {
+      "name": "length",
+      "lowerUnderscoreName": "length",
+      "dataType": "SIZE_T"
+    }],
+    "comment": "A (pointer, length) view of a contiguous double buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
+  }, {
     "name": "StatusInfo",
     "cPrefix": "bindings_tests_",
     "cName": "bindings_tests_status_info",

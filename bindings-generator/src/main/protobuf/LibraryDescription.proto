@@ -48,12 +48,13 @@ message TypeDef {
 }
 
 // A user-defined struct that crosses the public C ABI by value. The field order is
-// part of the ABI. Version 1 allows primitive fields only.
+// part of the ABI. Fields may be primitives, @CSizeType longs or typed pointers.
 message StructDescription {
   optional string name = 1; // simple name
   optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
   optional string c_name = 3; // fully qualified C name
   repeated StructFieldDescription fields = 4;
+  optional string comment = 5; // documentation emitted above the C and C++ definitions
 }
 
 message StructFieldDescription {
@@ -95,12 +96,7 @@ enum DataType {
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
   reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct
   STRUCT = 44;                // user-defined struct, passed and returned by value in the public C ABI
-
-  // Spans: a (pointer, length) pair passed or returned as one by-value struct in the
-  // public C ABI. The internal entry point explodes it into pointer + length. Params
-  // map to Java DoubleSpan (borrowed), returns to Java double[] (copied into a
-  // per-thread scratch buffer, valid until the thread's next call).
-  FLOAT64_SPAN = 50;          // Java DoubleSpan / double[] -> struct { const double* data; size_t length; }
+  reserved 50;                // was FLOAT64_SPAN, replaced by STRUCT with the span marshaller
 
 }
 

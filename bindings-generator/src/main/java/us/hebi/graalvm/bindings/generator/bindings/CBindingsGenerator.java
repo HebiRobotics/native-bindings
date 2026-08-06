@@ -5,7 +5,7 @@ import com.google.common.base.Joiner;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEntryPointGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
-import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
+import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
@@ -87,26 +87,6 @@ public class CBindingsGenerator extends BindingGenerator {
             ));
         }
 
-        // Define the span struct once, before the first method that uses it
-        if (!spanTypedefWritten) {
-            GeneratorUtil.findSpanType(apiClass).ifPresent(spanType -> {
-                typeDefs.append(IndentingTextRenderer.of("""
-
-                                // A (pointer, length) view of a contiguous double buffer, passed and returned
-                                // by value. Inputs are caller-owned and only read during the call. Returned
-                                // spans are library-owned and stay valid until the calling thread's next
-                                // library call, so they have to be copied immediately.
-                                typedef struct {
-                                    const double* data;
-                                    size_t length;
-                                } %%SPAN_TYPE%%;
-                                """)
-                        .set("SPAN_TYPE", TypeMap.toExternalC(spanType, false))
-                        .render());
-                spanTypedefWritten = true;
-            });
-        }
-
         header.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
         cFile.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
         SignatureBuilder func = new SignatureBuilder(getIsolateThreadType(), getErrorType());
@@ -168,11 +148,9 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private static String getCStructDefinition(StructDescription struct) {
         // Note: the names have no effect on the memory layout, so each language can use their matching convention
-        var out = IndentingTextRenderer.of("""
-                        
-                        typedef struct {
-                        """)
-                .indent();
+        var out = new IndentingTextRenderer().addLine();
+        struct.tryGetComment().ifPresent(comment -> out.add(DocumentationUtil.generateLineComments("", comment)));
+        out.addLine("typedef struct {").indent();
         for (var field : struct.getFields()) {
             out.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
         }
@@ -411,7 +389,7 @@ public class CBindingsGenerator extends BindingGenerator {
             }
             if (structReturn) {
                 out.append(", ").append(TypeMap.toExternalC(returnType, false))
-                        .append("* ").append(getOutParamName(returnType));
+                        .append("* ").append(OUT_PARAM_NAME);
             }
             out.append(");\n");
         }
@@ -453,8 +431,8 @@ public class CBindingsGenerator extends BindingGenerator {
                 String name = param.getValue();
                 String value = switch (param.getKey().getDataType()) {
                     case SIZE_T -> "static_cast<long long>(" + name + ")";
-                    // spans and user structs cross the entry point as a pointer to the by-value parameter
-                    case FLOAT64_SPAN, STRUCT -> "&" + name;
+                    // structs cross the entry point as a pointer to the by-value parameter
+                    case STRUCT -> "&" + name;
                     default -> name;
                 };
 
@@ -483,11 +461,7 @@ public class CBindingsGenerator extends BindingGenerator {
          * and as the trailing out-struct a by-value return is written through.
          */
         private static boolean isPassedByAddress(DataType type) {
-            return type == DataType.FLOAT64_SPAN || type == DataType.STRUCT;
-        }
-
-        private static String getOutParamName(TypeDescription returnType) {
-            return returnType.getDataType() == DataType.STRUCT ? "structOut" : "spanOut";
+            return type == DataType.STRUCT;
         }
 
         private static String getInternalName(String cEntryPointName) {
@@ -507,9 +481,9 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     private static final String isolateNamespace = "isolate::";
-    private boolean spanTypedefWritten = false;
 
     static final String ERROR_PARAM_NAME = "_error";
+    static final String OUT_PARAM_NAME = "structOut";
     StringBuilder typeDefs = new StringBuilder();
     StringBuilder header = new StringBuilder();
     StringBuilder cFile = new StringBuilder();

@@ -92,15 +92,15 @@ public final class TestArrays$CEntries {
             name = "__bindings_tests_Arrays_addOffset"
     )
     public static void bindings_tests_Arrays_addOffset(IsolateThread _isolate, DoubleSpan values,
-            double offset, DoubleSpan _spanOut) {
+            double offset, DoubleSpan _structOut) {
         try {
             double[] _values = TestArrays.addOffset(values, offset);
-            _spanOut.setData(CTypes.toTempDoublePointer(_values));
-            _spanOut.setLength(_values == null ? 0 : _values.length);
+            _structOut.setData(CTypes.toTempDoublePointer(_values));
+            _structOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
-            _spanOut.setData(WordFactory.nullPointer());
-            _spanOut.setLength(0);
+            _structOut.setData(WordFactory.nullPointer());
+            _structOut.setLength(0);
         }
     }
 
@@ -108,15 +108,15 @@ public final class TestArrays$CEntries {
             name = "__bindings_tests_Arrays_getSequence"
     )
     public static void bindings_tests_Arrays_getSequence(IsolateThread _isolate, long count,
-            DoubleSpan _spanOut) {
+            DoubleSpan _structOut) {
         try {
             double[] _values = TestArrays.getSequence(CTypes.capSizeToInt(count));
-            _spanOut.setData(CTypes.toTempDoublePointer(_values));
-            _spanOut.setLength(_values == null ? 0 : _values.length);
+            _structOut.setData(CTypes.toTempDoublePointer(_values));
+            _structOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
-            _spanOut.setData(WordFactory.nullPointer());
-            _spanOut.setLength(0);
+            _structOut.setData(WordFactory.nullPointer());
+            _structOut.setLength(0);
         }
     }
 }

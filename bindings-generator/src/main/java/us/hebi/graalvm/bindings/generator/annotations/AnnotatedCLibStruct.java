@@ -9,7 +9,9 @@ import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.word.PointerBase;
+import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
+import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -26,12 +28,13 @@ import javax.lang.model.type.TypeMirror;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
 
 /**
  * Annotated {@code @CStruct} view that describes a user struct crossing the public C ABI
- * by value. Version 1 allows primitive fields only.
+ * by value. Version 1 allows primitive fields and typed GraalVM pointers.
  *
  * @author Florian Enner
  * @since 6 Aug 2026
@@ -139,17 +142,39 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
     }
 
     private DataType getFieldDataType(String fieldName, TypeMirror type) {
-        var dataType = TypeMap.getGraalDataType(TypeName.get(type));
-        if (dataType == null || !isSupportedFieldType(dataType)) {
-            throw error("@CLibStruct fields may only be double, float, long, int, short, byte or boolean, got '%s %s': %s",
+        var javaType = TypeName.get(type);
+        var dataType = isSizeType(fieldName, type, javaType) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
+        if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
+            throw error("@CLibStruct fields may only be double, float, long, int, short, byte, boolean, "
+                            + "@CSizeType long, CDoublePointer or CCharPointer, got '%s %s': %s",
                     type, fieldName, getQualifiedName());
         }
         return dataType;
     }
 
-    private static boolean isSupportedFieldType(DataType dataType) {
+    /**
+     * Checked before the type lookup, because JavaPoet drops the type-use annotation and the
+     * field would map to a plain long. Only long is allowed: unlike a method parameter, which
+     * gets converted at the boundary, the field is the probed layout.
+     */
+    private boolean isSizeType(String fieldName, TypeMirror type, TypeName javaType) {
+        if (!type.toString().contains(CSizeType.class.getSimpleName())) {
+            return false;
+        }
+        if (!TypeName.LONG.equals(javaType)) {
+            throw error("@CSizeType field '%s' must be a long, got '%s': %s", fieldName, type, getQualifiedName());
+        }
+        return true;
+    }
+
+    /**
+     * TypeMap maps String to CHAR_POINTER as a convenience for method signatures, but a field
+     * accessor has to name the pointer type that native-image probes the layout against.
+     */
+    private static boolean isSupportedFieldType(TypeName javaType, DataType dataType) {
         return switch (dataType) {
-            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL -> true;
+            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL, SIZE_T -> true;
+            case FLOAT64_POINTER, CHAR_POINTER -> !STRING_TYPE.equals(javaType);
             default -> false;
         };
     }
@@ -186,11 +211,16 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         }
     }
 
+    public Optional<String> getComment() {
+        return AnnotationUtil.tryGetAnnotationValue(element, CLibComment.class, CLibComment::value);
+    }
+
     public StructDescription toDescription() {
         var desc = StructDescription.newInstance()
                 .setName(getName())
                 .setCPrefix(getCPrefix())
                 .setCName(getCName());
+        getComment().ifPresent(desc::setComment);
 
         for (var field : fields) {
             desc.getMutableFields().next()
@@ -333,5 +363,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
     final List<StructAccessor> accessors = new ArrayList<>();
 
     private static final List<String> ACCESSOR_PREFIXES = List.of("get", "set");
+
+    private static final TypeName STRING_TYPE = ClassName.get(String.class);
 
 }

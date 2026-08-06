@@ -212,13 +212,13 @@ double __bindings_tests_Arrays_dotProduct(bindings_tests_isolatethread_t* isolat
 double bindings_tests_Arrays_dotProduct(bindings_tests_error_info_t* _error, bindings_tests_double_span x, bindings_tests_double_span y) {
     return __bindings_tests_Arrays_dotProduct(isolate::global(), _error, &x, &y);
 }
-void __bindings_tests_Arrays_addOffset(bindings_tests_isolatethread_t* isolate, const bindings_tests_double_span* values, double offset, bindings_tests_double_span* spanOut);
+void __bindings_tests_Arrays_addOffset(bindings_tests_isolatethread_t* isolate, const bindings_tests_double_span* values, double offset, bindings_tests_double_span* structOut);
 bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset) {
     bindings_tests_double_span result_;
     __bindings_tests_Arrays_addOffset(isolate::global(), &values, offset, &result_);
     return result_;
 }
-void __bindings_tests_Arrays_getSequence(bindings_tests_isolatethread_t* isolate, long long count, bindings_tests_double_span* spanOut);
+void __bindings_tests_Arrays_getSequence(bindings_tests_isolatethread_t* isolate, long long count, bindings_tests_double_span* structOut);
 bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count) {
     bindings_tests_double_span result_;
     __bindings_tests_Arrays_getSequence(isolate::global(), static_cast<long long>(count), &result_);

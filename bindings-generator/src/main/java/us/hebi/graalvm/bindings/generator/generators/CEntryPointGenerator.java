@@ -6,8 +6,10 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibMethod;
+import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 
 import java.util.TreeSet;
 
@@ -102,10 +104,11 @@ public class CEntryPointGenerator extends AbstractGenerator {
             CodeBlock.Builder invocation = CodeBlock.builder();
             CodeBlock.Builder invocationClose = CodeBlock.builder();
 
-            // Handle conversions with return types. Span returns stay void: the entry
-            // point fills a trailing out-struct instead (see below).
+            // Handle conversions with return types. A marshalled return stays void: the
+            // entry point fills a trailing out-struct instead (see below).
             var returnType = method.getReturnType();
-            if (!returnType.isVoid() && !returnType.isSpan()) {
+            var allocatingReturn = returnType.getAllocatingReturn();
+            if (!returnType.isVoid() && allocatingReturn.isEmpty()) {
                 builder.returns(returnType.getCEntryType());
 
                 // Wrap known Java types as handles if needed
@@ -167,9 +170,9 @@ public class CEntryPointGenerator extends AbstractGenerator {
                 }
             }
 
-            // Span returns fill a trailing caller-provided struct
-            if (returnType.isSpan()) {
-                builder.addParameter(DoubleSpan, SPAN_OUT);
+            // A marshalled return fills a trailing caller-provided struct
+            if (allocatingReturn.isPresent()) {
+                builder.addParameter(returnType.getStructViewType().get(), STRUCT_OUT);
             }
 
             // Add guards
@@ -177,6 +180,7 @@ public class CEntryPointGenerator extends AbstractGenerator {
                     builder,
                     invocation.add(invocationClose.build()).build(),
                     method.getReturnType().getDataType(),
+                    allocatingReturn.orElse(null),
                     method.isThrowing() ? getErrorIdPrefix() : null,
                     getOutStructZeroing(method)
             );
@@ -202,8 +206,13 @@ public class CEntryPointGenerator extends AbstractGenerator {
         var outName = method.getOutParameter().get().getName();
         for (var accessor : method.getOutStruct().get().getAccessors()) {
             if (accessor.isGetter()) continue;
-            code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
-                    TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+            // A word type is never assigned null, hence the factory call
+            if (TypeMap.isPointerType(TypeMap.getGraalDataType(accessor.getJavaType()))) {
+                code.addStatement("$N.$N($T.nullPointer())", outName, accessor.getMethodName(), WordFactory.class);
+            } else {
+                code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
+                        TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+            }
         }
         return code.build();
     }

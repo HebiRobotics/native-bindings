@@ -84,6 +84,14 @@ public class CLibStructGenerator extends AbstractGenerator {
         }
     }
 
+    /**
+     * A view declared in this compilation gets its artifacts generated here. One that is only
+     * ever used, never declared, comes from a jar and ships its own directives and mock.
+     */
+    boolean isSourceDeclared(AnnotatedCLibStruct struct) {
+        return processedViews.contains(struct.getClassName().canonicalName());
+    }
+
     @Override
     protected void process(AnnotatedCLibClass apiClass) {
         for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
@@ -124,6 +132,7 @@ public class CLibStructGenerator extends AbstractGenerator {
                  * library-prefixed name, which is safe because only the layout crosses the linker.
                  */
 
+                #include <stddef.h>
                 #include <stdint.h>
 
                 typedef struct {

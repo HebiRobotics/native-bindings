@@ -97,7 +97,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                     #include <iostream>
                     #include <string>
                     #include <vector>
-
+                    
                     #ifdef WIN32
                     #include <Windows.h>
                     #else
@@ -137,7 +137,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                 private:
                   std::string id_;
                 };
-
+                
                 inline void checkError(const %s& error) {
                   if (error.code != 0) {
                     const char* message = error.message != nullptr ? error.message : "unknown error";
@@ -170,7 +170,15 @@ public class CppBindingsGenerator extends BindingGenerator {
      */
     private void writeStructDefinitions(Writer out) throws IOException {
         for (StructDescription struct : lib.getStructs()) {
-            out.write("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible\n");
+            // A marshalled struct has no public face, users see the language type it maps to
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isPresent()) {
+                continue;
+            }
+            if (struct.hasComment()) {
+                out.write(DocumentationUtil.generateLineComments("", struct.getComment()));
+            } else {
+                out.write("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible\n");
+            }
             out.write("struct " + struct.getName() + " {\n");
             for (var field : struct.getFields()) {
                 out.write("  " + TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";\n");
@@ -203,9 +211,14 @@ public class CppBindingsGenerator extends BindingGenerator {
             }
         }
 
-        // Span structs
-        if (GeneratorUtil.usesSpans(lib)) {
-            out.write("struct %s {\n  const double* data;\n  size_t length;\n};\n".formatted(TypeMap.SPAN_STRUCT_NAME));
+        // Struct layouts for the internal mapping
+        for (StructDescription struct : lib.getStructs()) {
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isEmpty()) continue;
+            out.write("struct %s {\n".formatted(getInternalStructName(struct.getName())));
+            for (var field : struct.getFields()) {
+                out.write("  " + TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";\n");
+            }
+            out.write("};\n");
         }
 
         // Error struct
@@ -296,8 +309,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         final List<String> cParams = new ArrayList<>();
         final List<String> cppParams = new ArrayList<>();
         final List<String> cppHeaderParams = new ArrayList<>();
-        /** Declared arguments only, for the delegating constructor that forwards to the factory */
-        final List<String> paramNames = new ArrayList<>();
+        final List<String> paramNames = new ArrayList<>(); // declared-only, for the delegating constructor -> factory
 
     }
 
@@ -373,9 +385,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             if (isThrowing(method)) {
                 impl.write(getErrorCheck());
                 impl.write("""
-                          if (!ptr_) {
-                            throw Exception("Could not create %s");
-                          }
+                          checkNotNull(ptr_, "Could not create %s");
                         """.formatted(getCppClassName(apiClass.getType())));
             }
             impl.write("}\n");
@@ -431,14 +441,20 @@ public class CppBindingsGenerator extends BindingGenerator {
         impl.write("  ");
 
         // return
+        var marshaller = getCppMarshaller(method.getReturnType());
         switch (method.getReturnType().getDataType()) {
             case VOID -> {
             }
             case OBJECT_HANDLE, CHAR_POINTER -> impl.write("auto ptr = ");
-            case FLOAT64_SPAN -> impl.write("auto span_ = ");
-            default -> impl.write(throwing ? "auto result_ = " : "return ");
+            default -> {
+                // The layout mirror has to be captured, the public type is built from it below
+                if (marshaller.isPresent()) {
+                    impl.write("auto " + STRUCT_LOCAL_NAME + " = ");
+                } else {
+                    impl.write(throwing ? "auto result_ = " : "return ");
+                }
+            }
         }
-
 
         // Call C method
         impl.write(String.format("%s(%s);\n",
@@ -450,9 +466,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             impl.write(getErrorCheck());
             switch (method.getReturnType().getDataType()) {
                 case OBJECT_HANDLE -> impl.write("""
-                          if (!ptr) {
-                            throw Exception("Could not create %s in %s::%s");
-                          }
+                          checkNotNull(ptr, "Could not create %s in %s::%s");
                         """.formatted(getCppClassName(method.getReturnType()), getCppClassName(apiClass.getType()), method.getName()));
             }
         }
@@ -465,13 +479,12 @@ public class CppBindingsGenerator extends BindingGenerator {
             case CHAR_POINTER -> impl.write("""
                       return !ptr ? std::string() : std::string(ptr); // copy utf8
                     """);
-            case FLOAT64_SPAN -> impl.write("""
-                      return std::vector<double>(span_.data, span_.data + span_.length); // copy before the next call invalidates it
-                    """);
             case VOID -> {
             }
             default -> {
-                if (throwing) {
+                if (marshaller.isPresent()) {
+                    impl.write(marshaller.get().unpack(STRUCT_LOCAL_NAME));
+                } else if (throwing) {
                     impl.write("  return result_;\n");
                 }
             }
@@ -699,8 +712,9 @@ public class CppBindingsGenerator extends BindingGenerator {
         if (method.getReturnType().getDataType() == DataType.CHAR_POINTER) {
             return "std::string";
         }
-        if (method.getReturnType().getDataType() == DataType.FLOAT64_SPAN) {
-            return "std::vector<double>"; // copied out, the raw span is only valid until the next call
+        var marshalled = getCppMarshaller(method.getReturnType());
+        if (marshalled.isPresent()) {
+            return marshalled.get().returnType();
         }
         return getCppType(method.getReturnType(), false);
     }
@@ -710,9 +724,14 @@ public class CppBindingsGenerator extends BindingGenerator {
         return getCType(method.getReturnType());
     }
 
+    private static Optional<StructMarshaller.CppStructMarshaller> getCppMarshaller(TypeDescription type) {
+        if (type.getDataType() != DataType.STRUCT) return Optional.empty();
+        return StructMarshallers.resolve(type).flatMap(StructMarshaller::cpp);
+    }
+
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
-            case TYPEDEF, OBJECT_HANDLE, ENUM, FLOAT64_SPAN, STRUCT -> getCppType(type, true);
+            case TYPEDEF, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
             default -> TypeMap.toExternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -723,16 +742,28 @@ public class CppBindingsGenerator extends BindingGenerator {
             case OBJECT_HANDLE -> internalPtr
                     ? INTERNAL_POINTER_NAMESPACE + "::" + type.getTypeName() + C_PTR_SUFFIX
                     : type.getTypeName();
-            case ENUM, TYPEDEF, STRUCT -> type.getTypeName();
-            case FLOAT64_SPAN -> INTERNAL_POINTER_NAMESPACE + "::" + TypeMap.SPAN_STRUCT_NAME;
+            case ENUM, TYPEDEF -> type.getTypeName();
+            // A marshalled struct only exists as the internal layout mirror
+            case STRUCT -> StructMarshallers.resolve(type).flatMap(StructMarshaller::cpp).isPresent()
+                    ? INTERNAL_POINTER_NAMESPACE + "::" + getInternalStructName(type.getTypeName())
+                    : type.getTypeName();
             default -> TypeMap.toExternalCpp(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
     }
 
+    /**
+     * The mirror shares the C name minus the library prefix, which no public type can collide
+     * with because a public struct keeps its UpperCamel name.
+     */
+    private static String getInternalStructName(String structName) {
+        return TypeMap.toStructCName("", structName);
+    }
+
     private static final String INTERNAL_POINTER_NAMESPACE = "internal";
     private static final String ERROR_STRUCT_NAME = "ErrorInfo";
     private static final String ERROR_LOCAL_NAME = "error_";
+    private static final String STRUCT_LOCAL_NAME = "struct_";
 
     private static String getErrorType() {
         return INTERNAL_POINTER_NAMESPACE + "::" + ERROR_STRUCT_NAME;
@@ -824,12 +855,15 @@ public class CppBindingsGenerator extends BindingGenerator {
                         continue;
                     }
                 }
-                case FLOAT64_SPAN -> {
-                    // vectors carry their own length, so the span packs without extra arguments
-                    parameters.add("const std::vector<double>& " + p.getParamName() + getDefaultParamInit(p));
-                    call.add("{" + p.getParamName() + ".data(), " + p.getParamName() + ".size()}");
-                    needsDefaultOverload = true;
-                    continue;
+                case STRUCT -> {
+                    // The raw layout overload stays next to it, so the call site can avoid the copy
+                    var marshaller = getCppMarshaller(p);
+                    if (marshaller.isPresent()) {
+                        parameters.add(marshaller.get().paramType() + " " + p.getParamName() + getDefaultParamInit(p));
+                        call.add(marshaller.get().pack(p.getParamName()));
+                        needsDefaultOverload = true;
+                        continue;
+                    }
                 }
             }
 
@@ -944,13 +978,13 @@ public class CppBindingsGenerator extends BindingGenerator {
                 #endif
                     return lib;
                   }
-
+                
                   bool isLoaded() const { return lib_ != nullptr; };
-
+                
                   template<typename FuncType> FuncType getFunc(const char* func) const;
                   DynamicLookup(const DynamicLookup&) = delete;
                   DynamicLookup &operator = (const DynamicLookup&) = delete;
-
+                
                 private:
                   explicit DynamicLookup(const std::string& path, const std::string& alt_path = "");
                   void* lib_{};
@@ -961,7 +995,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     private void writeDynamicLookupImplementations(Writer out) throws IOException {
         out.write("""
-
+                
                 template<typename FuncType> FuncType DynamicLookup::getFunc(const char* func) const {
                   assert(lib_ != nullptr && "Fatal error -- cannot call %%CPP_NAMESPACE%% functions on unloaded library");
                   if (!lib_) {
@@ -979,7 +1013,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                   assert(symbol != nullptr);
                   return reinterpret_cast<FuncType>(symbol);
                 }
-
+                
                 DynamicLookup:: DynamicLookup(const std::string& path, const std::string& alt_path) {
                   path_ = path;
                 #ifdef WIN32
@@ -1004,10 +1038,10 @@ public class CppBindingsGenerator extends BindingGenerator {
                     std::cerr << "%%CPP_NAMESPACE%% library not found! Include \\""<< path <<"\\" in library search path.\\n";
                     return;
                   }
-
+                
                 %%VERSION_CHECK%%
                 }
-
+                
                 """
                 .replaceAll("%%VERSION_CHECK%%", new LibraryInfoFeature(lib).getVersionCompatibilityCheckCpp())
                 .replaceAll("%%LIB_NAME%%", lib.getName())
