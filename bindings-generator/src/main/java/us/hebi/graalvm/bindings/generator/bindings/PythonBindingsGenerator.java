@@ -317,6 +317,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
             content.append("\n@dataclass\n");
             content.append("class %s:\n".formatted(struct.getName()));
             for (var field : struct.getFields()) {
+                // Pointer fields have no lifetime story here, only the layout mirror carries them
+                if (TypeMap.isPointerType(field.getDataType())) continue;
                 content.append("    %s: %s\n".formatted(
                         field.getLowerUnderscoreName(),
                         TypeMap.toStructFieldPythonHint(field.getDataType())));
@@ -646,6 +648,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private String getStructUnpackArgs(TypeDescription type, String local) {
         List<String> args = new ArrayList<>();
         for (var field : getStructDescription(lib, type).getFields()) {
+            if (TypeMap.isPointerType(field.getDataType())) continue;
             String value = local + "." + field.getLowerUnderscoreName();
             args.add(field.getDataType() == DataType.BOOL ? "bool(" + value + ")" : value);
         }
@@ -814,9 +817,15 @@ public class PythonBindingsGenerator extends BindingGenerator {
             String name = desc.getLowerUnderscoreParamName();
 
             if (desc.getDataType() == DataType.STRUCT) {
-                // The dataclass is the public face, so the mirror gets packed field by field
+                // The dataclass is the public face, so the mirror gets packed field by field.
+                // The mirror is constructed positionally, so a field the dataclass does not
+                // carry still needs its slot.
                 List<String> args = new ArrayList<>();
                 for (var field : getStructDescription(lib, desc).getFields()) {
+                    if (TypeMap.isPointerType(field.getDataType())) {
+                        args.add("None");
+                        continue;
+                    }
                     String value = name + "." + field.getLowerUnderscoreName();
                     args.add(field.getDataType() == DataType.BOOL ? "int(" + value + ")" : value);
                 }

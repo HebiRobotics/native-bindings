@@ -6,8 +6,10 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibMethod;
+import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 
 import java.util.TreeSet;
 
@@ -202,8 +204,13 @@ public class CEntryPointGenerator extends AbstractGenerator {
         var outName = method.getOutParameter().get().getName();
         for (var accessor : method.getOutStruct().get().getAccessors()) {
             if (accessor.isGetter()) continue;
-            code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
-                    TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+            // A word type is never assigned null, hence the factory call
+            if (TypeMap.isPointerType(TypeMap.getGraalDataType(accessor.getJavaType()))) {
+                code.addStatement("$N.$N($T.nullPointer())", outName, accessor.getMethodName(), WordFactory.class);
+            } else {
+                code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
+                        TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+            }
         }
         return code.build();
     }

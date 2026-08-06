@@ -359,7 +359,40 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct fields may only be double, float, long, int, short, byte or boolean");
+                """))).hadErrorContaining("@CLibStruct fields may only be double, float, long, int, short, byte, boolean");
+    }
+
+    @Test
+    public void acceptsPointerStructFields() {
+        // Pins pointer fields through the full pipeline: the layout mirrors carry every
+        // field, the record faces skip the pointer ones, and the throwing @CLibOut method
+        // exercises the generated out-struct zeroing for pointer setters.
+        assertThat(compile(source("PointerFields", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.nativeimage.c.type.CCharPointer;
+                import org.graalvm.nativeimage.c.type.CDoublePointer;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("PointerFields")
+                public class PointerFields {
+                    @CLibStruct
+                    @CStruct("Row")
+                    public interface Row extends PointerBase {
+                        @CField("scale") double scale();
+                        @CField("scale") void setScale(double scale);
+                        @CField("values") CDoublePointer values();
+                        @CField("values") void setValues(CDoublePointer values);
+                        @CField("label") CCharPointer label();
+                        @CField("label") void setLabel(CCharPointer label);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static double sum(Row row) { return 0; }
+
+                    @CLibMethod
+                    public static void fill(int index, @CLibOut Row row) throws Exception { }
+                }
+                """))).succeeded();
     }
 
     @Test
@@ -578,7 +611,32 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("Duplicate @CLibStruct value 'Point'");
     }
 
-    private Compilation compile(JavaFileObject source) {
+    @Test
+    public void rejectsClasspathViewWithoutContext() {
+        assertThat(compile(source("ClasspathNoContext", """
+                import us.hebi.graalvm.bindings.tests.fixtures.NoContextView;
+                @CLibClass("ClasspathNoContext")
+                public class ClasspathNoContext {
+                    @CLibMethod(flags = Noexcept)
+                    public static double x(NoContextView point) { return 0; }
+                }
+                """))).hadErrorContaining(
+                "A precompiled @CLibStruct view must ship its own directives and name them in @CContext");
+    }
+
+    @Test
+    public void acceptsClasspathViewWithContext() {
+        assertThat(compile(source("ClasspathWithContext", """
+                import us.hebi.graalvm.bindings.tests.fixtures.WithContextView;
+                @CLibClass("ClasspathWithContext")
+                public class ClasspathWithContext {
+                    @CLibMethod(flags = Noexcept)
+                    public static double x(WithContextView point) { return 0; }
+                }
+                """))).succeeded();
+    }
+
+    private Compilation compile(JavaFileObject... sources) {
         return Compiler.javac()
                 // A new instance per compilation: BasicAnnotationProcessor keeps deferred
                 // elements between rounds and is not safe to reuse across compilations.
@@ -587,7 +645,7 @@ public class ProcessorValidationTest {
                         "-Abindings.outputDir=" + outputDir.getRoot().getAbsolutePath(),
                         "-Abindings.libName=validation",
                         "-Abindings.namespace=validation")
-                .compile(source);
+                .compile(sources);
     }
 
     private static JavaFileObject source(String name, String body) {

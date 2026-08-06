@@ -376,9 +376,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             var fields = struct.getFields();
             for (int i = 0; i < fields.length(); i++) {
                 var field = fields.get(i);
-                content.addLine("getStructField<" + TypeMap.toStructFieldC(field.getDataType())
-                                + ">(arg, \"%%STRUCT_NAME%%\", \"" + field.getName() + "\")"
-                                + (i == fields.length() - 1 ? "" : ","));
+                // A pointer field is not read from MATLAB, but the initializer is positional
+                String value = TypeMap.isPointerType(field.getDataType())
+                        ? "nullptr"
+                        : "getStructField<" + TypeMap.toStructFieldC(field.getDataType())
+                          + ">(arg, \"%%STRUCT_NAME%%\", \"" + field.getName() + "\")";
+                content.addLine(value + (i == fields.length() - 1 ? "" : ","));
             }
             content.unindentBy(2).add("""
                         };
@@ -402,7 +405,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             var content = out.snapshot().set("STRUCT_NAME", struct.getName());
             var fields = struct.getFields();
             List<String> names = new ArrayList<>();
+            // Pointer fields have no lifetime story here, only the layout mirror carries them
             for (var field : fields) {
+                if (TypeMap.isPointerType(field.getDataType())) continue;
                 names.add(cQuoted(field.getName()));
             }
             content.add("""
@@ -412,8 +417,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     inline mxArray* createMex%%STRUCT_NAME%%(const %%STRUCT_NAME%%& value) {
                     """).indent()
                     .addLine("const char* fields[] = {" + joiner.join(names) + "};")
-                    .addLine("mxArray* result = mxCreateStructMatrix(1, 1, " + fields.length() + ", fields);");
+                    .addLine("mxArray* result = mxCreateStructMatrix(1, 1, " + names.size() + ", fields);");
             for (var field : fields) {
+                if (TypeMap.isPointerType(field.getDataType())) continue;
                 content.addLine("mxSetField(result, 0, " + cQuoted(field.getName()) + ", "
                                 + getStructFieldToMex(field.getDataType(), "value." + field.getLowerUnderscoreName()) + ");");
             }

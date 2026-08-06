@@ -102,6 +102,8 @@ public final class TypeMap {
             case INT32, BOOL -> "c_int32";
             case INT16 -> "c_int16";
             case INT8 -> "c_int8";
+            case FLOAT64_POINTER -> "POINTER(c_double)";
+            case CHAR_POINTER -> "c_char_p";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
     }
