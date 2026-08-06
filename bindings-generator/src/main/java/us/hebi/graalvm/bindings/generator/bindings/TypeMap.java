@@ -164,9 +164,9 @@ public final class TypeMap {
             case ENUM -> "int";               // @CEnum maps to int
             case OBJECT_HANDLE -> "void*";    // technically void*
 
-            // Spans and structs only exist as by-value structs in the public ABI. The internal
-            // entry point sees them as struct pointers, so they never have an internal name.
-            case FLOAT64_SPAN, STRUCT, TYPEDEF, UNSPECIFIED ->
+            // Structs only cross the public ABI by value. The internal entry point sees
+            // them as struct pointers, so they never have an internal name.
+            case STRUCT, TYPEDEF, UNSPECIFIED ->
                     throw new IllegalArgumentException("Can't determine C type for: " + type);
         };
     }
@@ -204,7 +204,7 @@ public final class TypeMap {
 
             case STRUCT -> toStructMirrorCPython(type.getTypeName());
 
-            case FLOAT64_SPAN, UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
+            case UNSPECIFIED -> throw new IllegalArgumentException("Unknown data type: " + type);
         };
     }
 
