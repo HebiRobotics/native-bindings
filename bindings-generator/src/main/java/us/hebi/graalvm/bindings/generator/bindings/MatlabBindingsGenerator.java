@@ -439,6 +439,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return switch (type) {
             case BOOL -> "mxCreateLogicalScalar(" + value + " != 0)"; // the layout keeps a boolean as int32
             case INT64 -> "createMexInt64(" + value + ")"; // too wide for the 53 bit mantissa
+            case SIZE_T -> "createMexSize(" + value + ")"; // unsigned and too wide for the 53 bit mantissa
             default -> "createMexScalar(" + value + ")";
         };
     }

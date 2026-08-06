@@ -80,6 +80,7 @@ public final class TypeMap {
             case INT16 -> "int16_t";
             case INT8 -> "int8_t";
             case BOOL -> "int32_t"; // native-image maps a Java boolean to a 4 byte int
+            case SIZE_T -> "size_t"; // the exception to the fixed width rule, both headers say size_t
 
             // Const is a statement to the external consumer only. The Java setter keeps
             // working, because the entry point writes the field through the view.
@@ -102,6 +103,7 @@ public final class TypeMap {
             case INT32, BOOL -> "c_int32";
             case INT16 -> "c_int16";
             case INT8 -> "c_int8";
+            case SIZE_T -> "c_size_t";
             case FLOAT64_POINTER -> "POINTER(c_double)";
             case CHAR_POINTER -> "c_char_p";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
@@ -115,7 +117,7 @@ public final class TypeMap {
     public static String toStructFieldPythonHint(DataType type) {
         return switch (type) {
             case FLOAT64, FLOAT32 -> "float";
-            case INT64, INT32, INT16, INT8 -> "int";
+            case INT64, INT32, INT16, INT8, SIZE_T -> "int";
             case BOOL -> "bool";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };

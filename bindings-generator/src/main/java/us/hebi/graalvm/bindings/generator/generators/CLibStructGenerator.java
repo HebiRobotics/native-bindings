@@ -132,6 +132,7 @@ public class CLibStructGenerator extends AbstractGenerator {
                  * library-prefixed name, which is safe because only the layout crosses the linker.
                  */
 
+                #include <stddef.h>
                 #include <stdint.h>
 
                 typedef struct {

@@ -10,6 +10,7 @@ import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
+import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -140,13 +141,28 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
 
     private DataType getFieldDataType(String fieldName, TypeMirror type) {
         var javaType = TypeName.get(type);
-        var dataType = TypeMap.getGraalDataType(javaType);
+        var dataType = isSizeType(fieldName, type, javaType) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
         if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
             throw error("@CLibStruct fields may only be double, float, long, int, short, byte, boolean, "
-                            + "CDoublePointer or CCharPointer, got '%s %s': %s",
+                            + "@CSizeType long, CDoublePointer or CCharPointer, got '%s %s': %s",
                     type, fieldName, getQualifiedName());
         }
         return dataType;
+    }
+
+    /**
+     * Checked before the type lookup, because JavaPoet drops the type-use annotation and the
+     * field would map to a plain long. Only long is allowed: unlike a method parameter, which
+     * gets converted at the boundary, the field is the probed layout.
+     */
+    private boolean isSizeType(String fieldName, TypeMirror type, TypeName javaType) {
+        if (!type.toString().contains(CSizeType.class.getSimpleName())) {
+            return false;
+        }
+        if (!TypeName.LONG.equals(javaType)) {
+            throw error("@CSizeType field '%s' must be a long, got '%s': %s", fieldName, type, getQualifiedName());
+        }
+        return true;
     }
 
     /**
@@ -155,7 +171,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
      */
     private static boolean isSupportedFieldType(TypeName javaType, DataType dataType) {
         return switch (dataType) {
-            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL -> true;
+            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL, SIZE_T -> true;
             case FLOAT64_POINTER, CHAR_POINTER -> !STRING_TYPE.equals(javaType);
             default -> false;
         };
