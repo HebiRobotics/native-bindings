@@ -600,6 +600,25 @@
       "documentation": "Returns a new array with the offset added to every element. Checks a float span in and an array out.",
       "flags": ["Noexcept"]
     }, {
+      "name": "sumUint8",
+      "lowerUnderscoreName": "sum_uint8",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_sumUint8",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "parameters": [{
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "dataType": "UINT8_POINTER"
+      }, {
+        "paramName": "count",
+        "lowerUnderscoreParamName": "count",
+        "dataType": "SIZE_T"
+      }],
+      "documentation": "Sum of the unsigned byte values. Checks the raw uint8 pointer with an explicit count, the shape an image row uses.",
+      "flags": ["Noexcept"]
+    }, {
       "name": "addOffsetUint8",
       "lowerUnderscoreName": "add_offset_uint8",
       "isStatic": true,
@@ -1596,6 +1615,35 @@
     "instantiable": false,
     "cDestructorName": "bindings_tests_Structs_release",
     "methods": [{
+      "name": "fillFieldTypes",
+      "lowerUnderscoreName": "fill_field_types",
+      "isStatic": true,
+      "cName": "bindings_tests_Structs_fillFieldTypes",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "FieldTypes",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "unit",
+        "lowerUnderscoreParamName": "unit",
+        "dataType": "CHAR16"
+      }, {
+        "paramName": "shorts",
+        "lowerUnderscoreParamName": "shorts",
+        "dataType": "INT16_POINTER"
+      }, {
+        "paramName": "longs",
+        "lowerUnderscoreParamName": "longs",
+        "dataType": "INT64_POINTER"
+      }, {
+        "paramName": "context",
+        "lowerUnderscoreParamName": "context",
+        "dataType": "VOID_POINTER"
+      }],
+      "documentation": "Fills the out parameter from the arguments. Pins the field types StatusInfo\nleaves out: the char code unit crosses as uint16, the pointers pass through\nuntouched so the caller can verify them against what it handed in.\n",
+      "flags": ["Noexcept"]
+    }, {
       "name": "totalPower",
       "lowerUnderscoreName": "total_power",
       "isStatic": true,
@@ -1752,6 +1800,27 @@
       "dataType": "SIZE_T"
     }],
     "comment": "A (pointer, length) view of a contiguous double buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
+  }, {
+    "name": "FieldTypes",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_FieldTypes",
+    "fields": [{
+      "name": "unit",
+      "lowerUnderscoreName": "unit",
+      "dataType": "CHAR16"
+    }, {
+      "name": "shorts",
+      "lowerUnderscoreName": "shorts",
+      "dataType": "INT16_POINTER"
+    }, {
+      "name": "longs",
+      "lowerUnderscoreName": "longs",
+      "dataType": "INT64_POINTER"
+    }, {
+      "name": "context",
+      "lowerUnderscoreName": "context",
+      "dataType": "VOID_POINTER"
+    }]
   }, {
     "name": "FloatSpan",
     "cPrefix": "bindings_tests_",

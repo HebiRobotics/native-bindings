@@ -235,6 +235,11 @@ static void testSpans() {
   CHECK(floatOffset[0] == 11.5f);
   CHECK(floatOffset[2] == 13.5f);
 
+  // Raw uint8 buffer with an explicit count, the shape an image row uses.
+  // The sum is unsigned, 250 counts as 250 and not -6.
+  uint8_t raw[3] = {250, 10, 5};
+  CHECK(bt::arrays::sumUint8(raw, 3) == 265);
+
   // Byte spans carry binary data, so an embedded zero must survive the
   // roundtrip. 246 + 10 wraps to 0 in uint8.
   std::vector<uint8_t> byteValues = {1, 246, 3};
@@ -287,6 +292,16 @@ static void testStructs() {
     CHECK(std::string(e.id()) == "bindings_tests:IllegalArgumentException");
   }
   CHECK(threwWithId);
+
+  // The remaining field types: a char code unit crossing as uint16, and typed
+  // pointers passing through untouched.
+  short shorts[2] = {1, 2};
+  long long int longs[2] = {3, 4};
+  bt::FieldTypes ft = bt::structs::fillFieldTypes(65, shorts, longs, shorts);
+  CHECK(ft.unit == 65);
+  CHECK(ft.shorts == reinterpret_cast<const int16_t*>(shorts));
+  CHECK(ft.longs == reinterpret_cast<const int64_t*>(longs));
+  CHECK(ft.context == static_cast<void*>(shorts));
 
   // getStatus/getCheckedStatus present the same struct the other way round, as a
   // by-value return keyed by index rather than an input struct the caller assembles.

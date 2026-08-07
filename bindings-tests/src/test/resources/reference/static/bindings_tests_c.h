@@ -52,6 +52,13 @@ typedef struct {
     size_t length;
 } bindings_tests_DoubleSpan;
 
+typedef struct {
+    uint16_t unit;
+    const int16_t* shorts;
+    const int64_t* longs;
+    void* context;
+} bindings_tests_FieldTypes;
+
 // A (pointer, length) view of a contiguous float buffer, passed and returned
 // by value. Inputs are caller-owned and only read during the call. Returned
 // spans are library-owned and stay valid until the calling thread's next
@@ -164,6 +171,7 @@ DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_ErrorInfo* _er
 DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleSpan values, double offset);
 DLL_PUBLIC bindings_tests_IntSpan bindings_tests_Arrays_addOffsetInt32(bindings_tests_IntSpan values, int offset);
 DLL_PUBLIC bindings_tests_FloatSpan bindings_tests_Arrays_addOffsetFloat32(bindings_tests_FloatSpan values, float offset);
+DLL_PUBLIC int bindings_tests_Arrays_sumUint8(uint8_t* values, size_t count);
 DLL_PUBLIC bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings_tests_ByteSpan values, char offset);
 DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
@@ -235,6 +243,7 @@ DLL_PUBLIC const char* bindings_tests_Strings_join(const char** values, size_t c
 DLL_PUBLIC const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 // ==== Structs ====
+DLL_PUBLIC bindings_tests_FieldTypes bindings_tests_Structs_fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context);
 DLL_PUBLIC double bindings_tests_Structs_totalPower(bindings_tests_StatusInfo status, double currentAmps);
 DLL_PUBLIC double bindings_tests_Structs_checkedVoltage(bindings_tests_ErrorInfo* _error, bindings_tests_StatusInfo status);
 DLL_PUBLIC bindings_tests_StatusInfo bindings_tests_Structs_getStatus(int index);

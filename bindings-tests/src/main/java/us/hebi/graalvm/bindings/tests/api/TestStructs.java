@@ -5,6 +5,9 @@ import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
 import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CLongPointer;
+import org.graalvm.nativeimage.c.type.CShortPointer;
+import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
@@ -77,6 +80,57 @@ public class TestStructs {
         @AllowWideningCast
         void setEnabled(boolean enabled);
 
+    }
+
+    /**
+     * The field types StatusInfo leaves out: a char code unit and the typed pointers.
+     * Pointer fields only exist in the C, C++ and layout mirrors, the MATLAB struct
+     * and the Python dataclass skip them because they carry no lifetime story there.
+     */
+    @CLibStruct
+    @CContext(us.hebi.graalvm.bindings.tests.api.generated.TestStructs_FieldTypes$$Directives.class)
+    @CStruct("FieldTypes")
+    public interface FieldTypes extends PointerBase {
+
+        @CField("unit")
+        char unit();
+
+        @CField("unit")
+        void setUnit(char unit);
+
+        @CField("shorts")
+        CShortPointer shorts();
+
+        @CField("shorts")
+        void setShorts(CShortPointer shorts);
+
+        @CField("longs")
+        CLongPointer longs();
+
+        @CField("longs")
+        void setLongs(CLongPointer longs);
+
+        // Arbitrary caller data, the shape a callback context uses
+        @CField("context")
+        VoidPointer context();
+
+        @CField("context")
+        void setContext(VoidPointer context);
+
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("""
+            Fills the out parameter from the arguments. Pins the field types StatusInfo
+            leaves out: the char code unit crosses as uint16, the pointers pass through
+            untouched so the caller can verify them against what it handed in.
+            """)
+    public static void fillFieldTypes(char unit, CShortPointer shorts, CLongPointer longs, VoidPointer context,
+                                      @CLibOut FieldTypes out) {
+        out.setUnit(unit);
+        out.setShorts(shorts);
+        out.setLongs(longs);
+        out.setContext(context);
     }
 
     @CLibMethod(flags = Noexcept)

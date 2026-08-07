@@ -211,6 +211,12 @@ class SpansTest(unittest.TestCase):
         result = bindings_tests.Arrays.add_offset_float32([1.5, 2.5, 3.5], 10.0)
         self.assertEqual([11.5, 12.5, 13.5], list(result))
 
+    def test_sum_uint8(self):
+        # Raw uint8 buffer with an explicit count, the shape an image row uses.
+        # The sum is unsigned, 250 counts as 250 and not -6.
+        values = np.array([250, 10, 5], dtype=np.uint8)
+        self.assertEqual(265, bindings_tests.Arrays.sum_uint8(values, 3))
+
     def test_add_offset_uint8(self):
         # Byte spans carry binary data, so an embedded zero must survive the
         # roundtrip. 246 + 10 wraps to 0 in uint8.
@@ -262,6 +268,15 @@ class StructsTest(unittest.TestCase):
             bindings_tests.Structs.checked_voltage(status)
         self.assertIn("disabled", str(caught.exception))
         self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+
+    def test_fill_field_types(self):
+        # The dataclass skips the pointer fields, only the code unit comes back
+        result = bindings_tests.Structs.fill_field_types(
+            ord("A"),
+            np.array([1, 2], dtype=np.int16),
+            np.array([3, 4], dtype=np.int64),
+            None)
+        self.assertEqual(ord("A"), result.unit)
 
     def test_get_status_returns_a_status_info(self):
         # get_status/get_checked_status present the same struct the other way round, as

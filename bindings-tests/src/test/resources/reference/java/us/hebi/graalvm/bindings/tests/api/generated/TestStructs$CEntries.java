@@ -2,11 +2,32 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CLongPointer;
+import org.graalvm.nativeimage.c.type.CShortPointer;
+import org.graalvm.nativeimage.c.type.VoidPointer;
+import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestStructs;
 
 public final class TestStructs$CEntries {
+    @CEntryPoint(
+            name = "__bindings_tests_Structs_fillFieldTypes"
+    )
+    public static void bindings_tests_Structs_fillFieldTypes(IsolateThread _isolate, char unit,
+            CShortPointer shorts, CLongPointer longs, VoidPointer context,
+            TestStructs.FieldTypes out) {
+        try {
+            TestStructs.fillFieldTypes(unit, shorts, longs, context, out);
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            out.setUnit((char) 0);
+            out.setShorts(WordFactory.nullPointer());
+            out.setLongs(WordFactory.nullPointer());
+            out.setContext(WordFactory.nullPointer());
+        }
+    }
+
     @CEntryPoint(
             name = "__bindings_tests_Structs_totalPower"
     )

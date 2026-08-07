@@ -230,6 +230,10 @@ bindings_tests_FloatSpan bindings_tests_Arrays_addOffsetFloat32(bindings_tests_F
     __bindings_tests_Arrays_addOffsetFloat32(isolate::global(), &values, offset, &result_);
     return result_;
 }
+int __bindings_tests_Arrays_sumUint8(bindings_tests_IsolateThread* isolate, char* values, long long count);
+int bindings_tests_Arrays_sumUint8(uint8_t* values, size_t count) {
+    return __bindings_tests_Arrays_sumUint8(isolate::global(), reinterpret_cast<char*>(values), static_cast<long long>(count));
+}
 void __bindings_tests_Arrays_addOffsetUint8(bindings_tests_IsolateThread* isolate, const bindings_tests_ByteSpan* values, char offset, bindings_tests_ByteSpan* structOut);
 bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings_tests_ByteSpan values, char offset) {
     bindings_tests_ByteSpan result_;
@@ -464,6 +468,12 @@ const char* bindings_tests_Strings_repeat(const char* value, size_t times) {
 }
 
 // ==== Structs ====
+void __bindings_tests_Structs_fillFieldTypes(bindings_tests_IsolateThread* isolate, unsigned short unit, short* shorts, long long int* longs, void* context, bindings_tests_FieldTypes* structOut);
+bindings_tests_FieldTypes bindings_tests_Structs_fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context) {
+    bindings_tests_FieldTypes result_;
+    __bindings_tests_Structs_fillFieldTypes(isolate::global(), unit, shorts, longs, context, &result_);
+    return result_;
+}
 double __bindings_tests_Structs_totalPower(bindings_tests_IsolateThread* isolate, const bindings_tests_StatusInfo* status, double currentAmps);
 double bindings_tests_Structs_totalPower(bindings_tests_StatusInfo status, double currentAmps) {
     return __bindings_tests_Structs_totalPower(isolate::global(), &status, currentAmps);

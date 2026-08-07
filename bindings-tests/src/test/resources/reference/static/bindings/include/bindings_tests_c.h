@@ -36,6 +36,13 @@ typedef struct {
     size_t length;
 } bindings_tests_DoubleSpan;
 
+typedef struct {
+    uint16_t unit;
+    const int16_t* shorts;
+    const int64_t* longs;
+    void* context;
+} bindings_tests_FieldTypes;
+
 // A (pointer, length) view of a contiguous float buffer, passed and returned
 // by value. Inputs are caller-owned and only read during the call. Returned
 // spans are library-owned and stay valid until the calling thread's next
@@ -148,6 +155,7 @@ double bindings_tests_Arrays_dotProduct(bindings_tests_ErrorInfo* _error, bindin
 bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleSpan values, double offset);
 bindings_tests_IntSpan bindings_tests_Arrays_addOffsetInt32(bindings_tests_IntSpan values, int offset);
 bindings_tests_FloatSpan bindings_tests_Arrays_addOffsetFloat32(bindings_tests_FloatSpan values, float offset);
+int bindings_tests_Arrays_sumUint8(uint8_t* values, size_t count);
 bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings_tests_ByteSpan values, char offset);
 bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
@@ -219,6 +227,7 @@ const char* bindings_tests_Strings_join(const char** values, size_t count, const
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 // ==== Structs ====
+bindings_tests_FieldTypes bindings_tests_Structs_fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context);
 double bindings_tests_Structs_totalPower(bindings_tests_StatusInfo status, double currentAmps);
 double bindings_tests_Structs_checkedVoltage(bindings_tests_ErrorInfo* _error, bindings_tests_StatusInfo status);
 bindings_tests_StatusInfo bindings_tests_Structs_getStatus(int index);

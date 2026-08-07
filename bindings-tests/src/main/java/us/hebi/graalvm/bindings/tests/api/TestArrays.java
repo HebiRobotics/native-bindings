@@ -7,6 +7,7 @@ import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointer;
 import us.hebi.graalvm.bindings.runtime.structs.ByteSpan;
 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
 import us.hebi.graalvm.bindings.runtime.structs.FloatSpan;
@@ -130,6 +131,17 @@ public class TestArrays {
             result[i] = Spans.read(values, i) + offset;
         }
         return result;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Sum of the unsigned byte values. Checks the raw uint8 pointer with an explicit count, " +
+            "the shape an image row uses.")
+    public static int sumUint8(CBytePointer values, @CSizeType int count) {
+        int sum = 0;
+        for (int i = 0; i < count; i++) {
+            sum += values.read(i) & 0xFF;
+        }
+        return sum;
     }
 
     @CLibMethod(flags = Noexcept)

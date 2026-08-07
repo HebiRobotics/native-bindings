@@ -210,6 +210,27 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     return array;
 }
 
+// Layout-compatible with the by-value FieldTypes struct in the C ABI
+struct FieldTypes {
+    uint16_t unit;
+    const int16_t* shorts;
+    const int64_t* longs;
+    void* context;
+};
+
+inline FieldTypes getFieldTypes(const mxArray* arg) {
+    // mxIsStruct is not part of the clean-room SDK subset, and is documented as this check
+    if (mxGetClassID(arg) != mxSTRUCT_CLASS) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument must be a 'FieldTypes' struct.");
+    }
+    return FieldTypes{
+        getStructField<uint16_t>(arg, "FieldTypes", "unit"),
+        nullptr,
+        nullptr,
+        nullptr
+    };
+}
+
 // Layout-compatible with the by-value FloatSpan struct in the C ABI
 struct FloatSpan {
     const float* data;
@@ -355,6 +376,15 @@ inline mxArray* createMexSize(size_t value) {
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
 }
+
+// The 1x1 MATLAB struct a returned FieldTypes maps to
+inline mxArray* createMexFieldTypes(const FieldTypes& value) {
+    const char* fields[] = {"unit"};
+    mxArray* result = mxCreateStructMatrix(1, 1, 1, fields);
+    mxSetField(result, 0, "unit", createMexScalar(value.unit));
+    return result;
+}
+
 
 // The 1x1 MATLAB struct a returned StatusInfo maps to
 inline mxArray* createMexStatusInfo(const StatusInfo& value) {
@@ -760,6 +790,15 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             float offset = getScalar<float>(prhs[2], "offset");
             FloatSpan _value = bindings_tests_Arrays_addOffsetFloat32(values, offset);
             if (nlhs > 0) plhs[0] = createMexFloatArray(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_sumUint8") */ 4236390872: {
+            static auto bindings_tests_Arrays_sumUint8 = libLoader.getFunc<int(*)(uint8_t*, size_t)>("bindings_tests_Arrays_sumUint8");
+            checkArgCount(nrhs, 2, "bindings_tests_Arrays_sumUint8");
+            MatlabArray<uint8_t, mxUINT8_CLASS> values(prhs[1]);
+            size_t count = getScalar<size_t>(prhs[2], "count");
+            int _value = bindings_tests_Arrays_sumUint8(values, count);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Arrays_addOffsetUint8") */ 1126113101: {
@@ -1224,6 +1263,17 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         }
 
         // Structs
+        case /* hash32_fnv1a("bindings_tests_Structs_fillFieldTypes") */ 467930633: {
+            static auto bindings_tests_Structs_fillFieldTypes = libLoader.getFunc<FieldTypes(*)(unsigned short, short*, long long int*, void*)>("bindings_tests_Structs_fillFieldTypes");
+            checkArgCount(nrhs, 4, "bindings_tests_Structs_fillFieldTypes");
+            unsigned short unit = getScalar<unsigned short>(prhs[1], "unit");
+            MatlabArray<int16_t, mxINT16_CLASS> shorts(prhs[2]);
+            MatlabArray<int64_t, mxINT64_CLASS> longs(prhs[3]);
+            void* context = getPtr<void*>(prhs[4]);
+            FieldTypes _value = bindings_tests_Structs_fillFieldTypes(unit, shorts, longs, context);
+            if (nlhs > 0) plhs[0] = createMexFieldTypes(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Structs_totalPower") */ 3391500522: {
             static auto bindings_tests_Structs_totalPower = libLoader.getFunc<double(*)(StatusInfo, double)>("bindings_tests_Structs_totalPower");
             checkArgCount(nrhs, 2, "bindings_tests_Structs_totalPower");

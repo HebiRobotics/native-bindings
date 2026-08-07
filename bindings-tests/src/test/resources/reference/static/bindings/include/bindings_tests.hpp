@@ -27,6 +27,14 @@ enum class Marker : int32_t {
 };
 
 // Plain data struct, passed by value. Layout changes are not ABI backwards compatible
+struct FieldTypes {
+  uint16_t unit;
+  const int16_t* shorts;
+  const int64_t* longs;
+  void* context;
+};
+
+// Plain data struct, passed by value. Layout changes are not ABI backwards compatible
 struct StatusInfo {
   double voltage;
   int32_t state;
@@ -340,6 +348,14 @@ std::vector<int32_t> addOffsetInt32(const std::vector<int32_t>& values, int offs
  */
 std::vector<float> addOffsetFloat32(internal::FloatSpan values, float offset) noexcept;
 std::vector<float> addOffsetFloat32(const std::vector<float>& values, float offset) noexcept;
+
+/**
+ * @brief Sum of the unsigned byte values. Checks the raw uint8 pointer with an explicit count, the shape an image row uses.
+ *
+ * @param values 
+ * @param count 
+ */
+int sumUint8(uint8_t* values, size_t count) noexcept;
 
 /**
  * @brief Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.
@@ -744,6 +760,19 @@ namespace structs {
 
 /**
  * @details 
+ * Fills the out parameter from the arguments. Pins the field types StatusInfo
+ * leaves out: the char code unit crosses as uint16, the pointers pass through
+ * untouched so the caller can verify them against what it handed in.
+ *
+ * @param unit 
+ * @param shorts 
+ * @param longs 
+ * @param context 
+ */
+FieldTypes fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context) noexcept;
+
+/**
+ * @details 
  * Power draw in watts for the given current. Returns zero unless the actuator is
  * enabled and in the running state (2), so all three fields decide the result.
  *
@@ -819,6 +848,7 @@ extern "C" {
   internal::DoubleSpan bindings_tests_Arrays_addOffset(internal::DoubleSpan, double);
   internal::IntSpan bindings_tests_Arrays_addOffsetInt32(internal::IntSpan, int);
   internal::FloatSpan bindings_tests_Arrays_addOffsetFloat32(internal::FloatSpan, float);
+  int bindings_tests_Arrays_sumUint8(uint8_t*, size_t);
   internal::ByteSpan bindings_tests_Arrays_addOffsetUint8(internal::ByteSpan, char);
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
@@ -872,6 +902,7 @@ extern "C" {
   const char* bindings_tests_Strings_nullString();
   const char* bindings_tests_Strings_join(const char**, size_t, const char*);
   const char* bindings_tests_Strings_repeat(const char*, size_t);
+  FieldTypes bindings_tests_Structs_fillFieldTypes(unsigned short, short*, long long int*, void*);
   double bindings_tests_Structs_totalPower(StatusInfo, double);
   double bindings_tests_Structs_checkedVoltage(internal::ErrorInfo*, StatusInfo);
   StatusInfo bindings_tests_Structs_getStatus(int);
@@ -1117,6 +1148,9 @@ inline std::vector<float> arrays::addOffsetFloat32(internal::FloatSpan values, f
 inline std::vector<float> arrays::addOffsetFloat32(const std::vector<float>& values, float offset) noexcept {
   return addOffsetFloat32({values.data(), values.size()}, offset);
 }
+inline int arrays::sumUint8(uint8_t* values, size_t count) noexcept {
+  return bindings_tests_Arrays_sumUint8(values, count);
+}
 inline std::vector<uint8_t> arrays::addOffsetUint8(internal::ByteSpan values, char offset) noexcept {
   auto struct_ = bindings_tests_Arrays_addOffsetUint8(values, offset);
   return std::vector<uint8_t>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
@@ -1352,6 +1386,9 @@ inline std::string strings::repeat(const std::string& value, size_t times) noexc
 }
 
 // Structs
+inline FieldTypes structs::fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context) noexcept {
+  return bindings_tests_Structs_fillFieldTypes(unit, shorts, longs, context);
+}
 inline double structs::totalPower(StatusInfo status, double currentAmps) noexcept {
   return bindings_tests_Structs_totalPower(status, currentAmps);
 }

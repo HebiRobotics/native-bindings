@@ -133,6 +133,10 @@ class _DoubleSpan(Structure):
     # Layout of the by-value struct in the C ABI, mirroring DoubleSpan
     _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
 
+class _FieldTypes(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring FieldTypes
+    _fields_ = [("unit", c_uint16), ("shorts", POINTER(c_int16)), ("longs", POINTER(c_int64)), ("context", c_void_p)]
+
 class _FloatSpan(Structure):
     # Layout of the by-value struct in the C ABI, mirroring FloatSpan
     _fields_ = [("data", POINTER(c_float)), ("length", c_size_t)]
@@ -294,6 +298,8 @@ libbindings_tests.bindings_tests_Arrays_addOffsetInt32.argtypes = [_IntSpan, c_i
 libbindings_tests.bindings_tests_Arrays_addOffsetInt32.restype = _IntSpan
 libbindings_tests.bindings_tests_Arrays_addOffsetFloat32.argtypes = [_FloatSpan, c_float]
 libbindings_tests.bindings_tests_Arrays_addOffsetFloat32.restype = _FloatSpan
+libbindings_tests.bindings_tests_Arrays_sumUint8.argtypes = [POINTER(c_uint8), c_size_t]
+libbindings_tests.bindings_tests_Arrays_sumUint8.restype = c_int
 libbindings_tests.bindings_tests_Arrays_addOffsetUint8.argtypes = [_ByteSpan, c_byte]
 libbindings_tests.bindings_tests_Arrays_addOffsetUint8.restype = _ByteSpan
 libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
@@ -418,6 +424,8 @@ libbindings_tests.bindings_tests_Strings_repeat.argtypes = [c_char_p, c_size_t]
 libbindings_tests.bindings_tests_Strings_repeat.restype = c_char_p
 
 # ==== Structs ====
+libbindings_tests.bindings_tests_Structs_fillFieldTypes.argtypes = [c_short, POINTER(c_short), POINTER(c_longlong), c_void_p]
+libbindings_tests.bindings_tests_Structs_fillFieldTypes.restype = _FieldTypes
 libbindings_tests.bindings_tests_Structs_totalPower.argtypes = [_StatusInfo, c_double]
 libbindings_tests.bindings_tests_Structs_totalPower.restype = c_double
 libbindings_tests.bindings_tests_Structs_checkedVoltage.argtypes = [POINTER(_ErrorInfo), _StatusInfo]
@@ -428,6 +436,10 @@ libbindings_tests.bindings_tests_Structs_getCheckedStatus.argtypes = [POINTER(_E
 libbindings_tests.bindings_tests_Structs_getCheckedStatus.restype = _StatusInfo
 
 # ==== Structs ====
+
+@dataclass
+class FieldTypes:
+    unit: int
 
 @dataclass
 class StatusInfo:
@@ -833,6 +845,19 @@ class Arrays:
         if struct_.length == 0 or not struct_.data:
             return np.empty(0, dtype=np.float32)
         return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
+
+    @classmethod
+    def sum_uint8(cls, values: Sequence[int], count: int) -> int:
+        """Sum of the unsigned byte values. Checks the raw uint8 pointer with an explicit count, the shape an image row uses.
+
+        Args:
+            values:
+            count:
+        """
+        np = _require_numpy()
+        if values is not None and not isinstance(values, POINTER(c_uint8)):
+            values = np.ascontiguousarray(values, dtype=np.uint8).ctypes.data_as(POINTER(c_uint8))
+        return libbindings_tests.bindings_tests_Arrays_sumUint8(values, count)
 
     @classmethod
     def add_offset_uint8(cls, values: Sequence[int], offset: int) -> Sequence[int]:
@@ -1392,6 +1417,26 @@ class Structs:
 
     def __new__(cls, *args, **kwargs):
         raise TypeError('Class is not instantiable')
+
+    @classmethod
+    def fill_field_types(cls, unit: Any, shorts: Any, longs: Sequence[int], context: Any | bytes | None) -> FieldTypes:
+        """Fills the out parameter from the arguments. Pins the field types StatusInfo
+        leaves out: the char code unit crosses as uint16, the pointers pass through
+        untouched so the caller can verify them against what it handed in.
+
+        Args:
+            unit:
+            shorts:
+            longs:
+            context:
+        """
+        np = _require_numpy()
+        if shorts is not None and not isinstance(shorts, POINTER(c_short)):
+            shorts = np.ascontiguousarray(shorts, dtype=np.int16).ctypes.data_as(POINTER(c_short))
+        if longs is not None and not isinstance(longs, POINTER(c_longlong)):
+            longs = np.ascontiguousarray(longs, dtype=np.int64).ctypes.data_as(POINTER(c_longlong))
+        struct_ = libbindings_tests.bindings_tests_Structs_fillFieldTypes(unit, shorts, longs, context)
+        return FieldTypes(struct_.unit)
 
     @classmethod
     def total_power(cls, status: StatusInfo, current_amps: float) -> float:

@@ -5,6 +5,7 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.WordFactory;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointer;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.runtime.structs.ByteSpan;
 import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
@@ -136,6 +137,19 @@ public final class TestArrays$CEntries {
             // Declared noexcept, so there is no error struct to report through
             _structOut.setData(WordFactory.nullPointer());
             _structOut.setLength(0);
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Arrays_sumUint8"
+    )
+    public static int bindings_tests_Arrays_sumUint8(IsolateThread _isolate, CBytePointer values,
+            long count) {
+        try {
+            return TestArrays.sumUint8(values, CPointers.capSizeToInt(count));
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return 0;
         }
     }
 

@@ -3,6 +3,19 @@ classdef (Sealed) Structs
 
     methods(Static)
 
+        function result = fillFieldTypes(unit, shorts, longs, context)
+            % Fills the out parameter from the arguments. Pins the field types StatusInfo
+            %   leaves out: the char code unit crosses as uint16, the pointers pass through
+            %   untouched so the caller can verify them against what it handed in.
+            %
+            %   Inputs:
+            %       unit
+            %       shorts
+            %       longs
+            %       context
+            result = bindings_tests_native('bindings_tests_Structs_fillFieldTypes', unit, shorts, longs, context);
+        end
+
         function result = totalPower(status, currentAmps)
             % Power draw in watts for the given current. Returns zero unless the actuator is
             %   enabled and in the running state (2), so all three fields decide the result.

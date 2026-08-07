@@ -125,6 +125,17 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Arrays.sumUint8": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "count",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Callbacks.invokeOnce": {
     "inputs": [{
         "kind": "required",
@@ -741,6 +752,29 @@
     "inputs": [{
         "kind": "required",
         "name": "status",
+        "type": ["struct"]
+      }]
+  },
+  "bindings_tests.Structs.fillFieldTypes": {
+    "inputs": [{
+        "kind": "required",
+        "name": "unit",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "shorts",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "longs",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "context",
+        "type": ["any"]
+      }],
+    "outputs": [{
+        "name": "obj",
         "type": ["struct"]
       }]
   },

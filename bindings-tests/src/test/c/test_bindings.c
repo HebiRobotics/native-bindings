@@ -277,6 +277,14 @@ static void test_spans(void) {
         assert(fresult.data[0] == 11.5f && fresult.data[1] == 12.5f && fresult.data[2] == 13.5f);
     }
 
+    /* Raw uint8 buffer with an explicit count, the shape an image row uses.
+       The sum is unsigned, 250 counts as 250 and not -6. */
+    {
+        uint8_t raw[3];
+        raw[0] = 250; raw[1] = 10; raw[2] = 5;
+        assert(bindings_tests_Arrays_sumUint8(raw, 3) == 265);
+    }
+
     /* Byte spans carry binary data, so an embedded zero must survive the
        roundtrip. 246 + 10 wraps to 0 in uint8. */
     {
@@ -336,6 +344,21 @@ static void test_structs(void) {
     assert(error.code != 0);
     assert(error.message != NULL && strstr(error.message, "disabled") != NULL);
     assert(error.id != NULL && strcmp(error.id, "bindings_tests:IllegalArgumentException") == 0);
+
+    /* The remaining field types: a char code unit crossing as uint16, and typed
+       pointers passing through untouched. */
+    {
+        short shorts[2];
+        long long int longs[2];
+        bindings_tests_FieldTypes ft;
+        shorts[0] = 1; shorts[1] = 2;
+        longs[0] = 3; longs[1] = 4;
+        ft = bindings_tests_Structs_fillFieldTypes(65, shorts, longs, shorts);
+        assert(ft.unit == 65);
+        assert(ft.shorts == (const int16_t*) shorts);
+        assert(ft.longs == (const int64_t*) longs);
+        assert(ft.context == (void*) shorts);
+    }
 
     /* getStatus/getCheckedStatus present the same struct the other way round, as a
        by-value return keyed by index rather than an input struct the caller assembles. */

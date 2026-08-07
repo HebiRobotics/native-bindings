@@ -196,6 +196,10 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Arrays.addOffsetInt32([1 2 3], 10), int32([11 12 13]));
             testCase.verifyEqual(bindings_tests.Arrays.addOffsetFloat32([1.5 2.5 3.5], 10), single([11.5 12.5 13.5]));
 
+            % Raw uint8 buffer with an explicit count, the shape an image row
+            % uses. The sum is unsigned, 250 counts as 250 and not -6.
+            testCase.verifyEqual(bindings_tests.Arrays.sumUint8(uint8([250 10 5]), 3), 265);
+
             % Byte spans carry binary data, so an embedded zero must survive
             % the roundtrip. 246 + 10 wraps to 0 in uint8.
             testCase.verifyEqual(bindings_tests.Arrays.addOffsetUint8([1 246 3], 10), uint8([11 0 13]));
@@ -236,6 +240,11 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyError(@() bindings_tests.Structs.checkedVoltage(48.0), 'bindings_tests:TypeError');
             testCase.verifyError(@() bindings_tests.Structs.checkedVoltage(rmfield(s, 'enabled')), ...
                 'bindings_tests:InvalidInput');
+
+            % The remaining field types. The pointer fields carry no lifetime story
+            % here, so only the code unit comes back.
+            ft = bindings_tests.Structs.fillFieldTypes(65, int16([1 2]), int64([3 4]), []);
+            testCase.verifyEqual(ft.unit, 65);
 
             % getStatus/getCheckedStatus present the same struct the other way round, as
             % a 1x1 struct return keyed by index rather than an input the caller builds.

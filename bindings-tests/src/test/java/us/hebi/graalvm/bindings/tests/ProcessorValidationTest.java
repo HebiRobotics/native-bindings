@@ -362,7 +362,7 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct fields may only be double, float, long, int, short, byte, boolean");
+                """))).hadErrorContaining("@CLibStruct fields may only be primitives, @CSizeType long, or typed GraalVM pointers");
     }
 
     @Test
