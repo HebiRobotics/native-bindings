@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CConst;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibEnum;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -27,10 +26,6 @@ public class AnnotatedCLibElement<T extends Element> implements EnvProcessor {
 
     protected boolean isGeneratedCEnumType(TypeMirror type) {
         return hasTypeAnnotation(type, CLibEnum.class);
-    }
-
-    protected boolean isDefinedType(TypeMirror type) {
-        return hasTypeAnnotation(type, CLibTypeDef.class);
     }
 
     protected boolean isCallbackType(TypeMirror type) {

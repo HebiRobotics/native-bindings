@@ -169,7 +169,6 @@ the archive is built that way and linking it into your own `.so` works out of th
 | `@CLibClass` | class | Marks a class for export and names it in the generated API |
 | `@CLibMethod` | method | Marks a method for export. Controls naming, constructors, properties, flags, and per-language overloads |
 | `@CLibEnum` | enum | Exports an enum as a 4 byte C int keyed on ordinal |
-| `@CLibTypeDef` | interface | Declares a C type alias, used for function pointer callbacks |
 | `@CLibComment` | type, method, parameter | Documentation, propagated to doxygen, Python docstrings, and MATLAB help |
 | `@CDefault` | parameter | Default value, surfaced by the C++, Python and MATLAB wrappers |
 | `@CSizeType` | int or long type use | Maps to `size_t` in C while staying an int or long in Java |

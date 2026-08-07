@@ -66,7 +66,7 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private static String getInternalQualifiedCType(TypeDescription type) {
         var name = switch (type.getDataType()) {
-            case ENUM, TYPEDEF, CALLBACK, OBJECT_HANDLE -> TypeMap.toExternalC(type, true); // a bit of extra type safety
+            case ENUM, CALLBACK, OBJECT_HANDLE -> TypeMap.toExternalC(type, true); // a bit of extra type safety
             default -> TypeMap.toInternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + name : name;
@@ -192,10 +192,6 @@ public class CBindingsGenerator extends BindingGenerator {
         StringWriter writer = new StringWriter();
 
         // Typedefs
-        for (var typedef : lib.getTypedefs()) {
-            writer.write(typedef.getCDefinition());
-            writer.write("\n");
-        }
         for (var callback : lib.getCallbacks()) {
             writer.write(getCCallbackTypedef(callback));
             writer.write("\n");

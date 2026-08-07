@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.generator.generators;
 
 import com.google.common.base.CaseFormat;
 import org.graalvm.nativeimage.c.CContext;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.generator.annotations.*;
 import us.hebi.graalvm.bindings.generator.bindings.BindingGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
@@ -111,14 +110,6 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
         for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
             registerStruct(nestedStruct);
-        }
-
-        for (CLibTypeDef typeDef : apiClass.getTypeDefs()) {
-            description.getMutableTypedefs().next()
-                    .setName(typeDef.name())
-                    .setCDefinition(typeDef.cDefinition())
-                    .setCppDefinition(typeDef.cppDefinition())
-                    .setPythonDefinition(typeDef.pythonDefinition());
         }
 
     }

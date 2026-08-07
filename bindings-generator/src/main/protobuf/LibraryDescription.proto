@@ -20,9 +20,9 @@ message LibraryDescription {
 
   repeated ClassDescription classes = 10;
   repeated EnumDescription enums = 11;
-  repeated TypeDef typedefs = 15;
   repeated StructDescription structs = 16;
   repeated CallbackDescription callbacks = 17;
+  reserved 15;                // was TypeDef typedefs, replaced by derived callbacks
 
   optional bool enable_graphics = 14 [default = false];
 
@@ -39,13 +39,6 @@ message EnumValueDescription {
   optional string name = 1; // simple name
   optional string c_name = 2; // fully qualified C name
   optional int32 c_value = 4; // mapped integer value
-}
-
-message TypeDef {
-  optional string name = 1;
-  optional string c_definition = 2;
-  optional string cpp_definition = 3;
-  optional string python_definition = 4;
 }
 
 // A function pointer that crosses the public C ABI. Derived from the single
@@ -106,7 +99,7 @@ enum DataType {
   FLOAT64_POINTER = 18;       // GraalVM CDoublePointer -> double*
 
   // Meta / High-Level Types
-  TYPEDEF = 40;               // C type alias (e.g. 'my_type_t')
+  reserved 40;                // was TYPEDEF, replaced by CALLBACK derived from CFunctionPointer
   ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
   reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct

@@ -240,9 +240,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendTypedefs(StringBuilder content) {
-        for (var type : lib.getTypedefs()) {
-            content.append(type.getPythonDefinition()).append("\n");
-        }
         for (var callback : lib.getCallbacks()) {
             content.append(getPythonCallbackType(callback)).append("\n");
         }
@@ -685,7 +682,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private static String getCPythonType(TypeDescription typeDescription) {
         return switch (typeDescription.getDataType()) {
             case OBJECT_HANDLE -> typeDescription.getTypeName() + "Ptr";
-            case TYPEDEF -> typeDescription.getTypeName();
             default -> TypeMap.toCPython(typeDescription);
         };
     }

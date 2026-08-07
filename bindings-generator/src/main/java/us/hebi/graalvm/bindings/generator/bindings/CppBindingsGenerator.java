@@ -202,10 +202,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             String cppClassName = apiClass.getType().getTypeName();
             out.write(String.format("class %s;\n", cppClassName));
         }
-        for (var typedef : lib.getTypedefs()) {
-            out.write(typedef.getCppDefinition());
-            out.write("\n");
-        }
         for (var callback : lib.getCallbacks()) {
             out.write(getCppCallbackAlias(callback));
             out.write("\n");
@@ -755,7 +751,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
-            case TYPEDEF, CALLBACK, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
+            case CALLBACK, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
             default -> TypeMap.toExternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -766,7 +762,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             case OBJECT_HANDLE -> internalPtr
                     ? INTERNAL_POINTER_NAMESPACE + "::" + type.getTypeName() + C_PTR_SUFFIX
                     : type.getTypeName();
-            case ENUM, TYPEDEF, CALLBACK -> type.getTypeName();
+            case ENUM, CALLBACK -> type.getTypeName();
             // A marshalled struct only exists as the internal layout mirror
             case STRUCT -> StructMarshallers.resolve(type).flatMap(StructMarshaller::cpp).isPresent()
                     ? INTERNAL_POINTER_NAMESPACE + "::" + getInternalStructName(type.getTypeName())

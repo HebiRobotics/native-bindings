@@ -13,7 +13,6 @@ import us.hebi.graalvm.bindings.annotations.CLibEnum;
 import us.hebi.graalvm.bindings.annotations.CLibIndex;
 import us.hebi.graalvm.bindings.annotations.CLibOut;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
 import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
@@ -128,7 +127,6 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (getStructElement().isPresent()) return DataType.STRUCT;
         if (isGeneratedCEnumType()) return DataType.ENUM;
         if (isCallbackType(mirror)) return DataType.CALLBACK;
-        if (isDefinedType(mirror)) return DataType.TYPEDEF;
         if (isNativeApiType()) return DataType.OBJECT_HANDLE;
 
         throw new IllegalArgumentException("Unsupported data type: " + type);
@@ -254,8 +252,6 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibClass.class, CLibClass::value);
             case ENUM ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
-            case TYPEDEF ->
-                    AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibTypeDef.class, CLibTypeDef::name);
             case CALLBACK -> Optional.of(String.valueOf(env.getTypeUtils().asElement(mirror).getSimpleName()));
             case STRUCT -> getStructElement()
                     .map(AnnotatedCLibStruct::getName)

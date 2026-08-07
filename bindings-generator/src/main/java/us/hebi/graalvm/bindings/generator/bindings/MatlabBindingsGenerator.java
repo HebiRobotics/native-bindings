@@ -148,9 +148,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         if (param.getDataType() == DataType.CALLBACK) {
             return param.getTypeName(); // the gateway declares the callback typedefs itself
         }
-        if (param.getDataType() == DataType.TYPEDEF) {
-            return "void*"; // callbacks are not supported at this time
-        }
         if (param.getDataType() == DataType.STRUCT) {
             return param.getTypeName(); // layout-compatible local struct generated into the MEX gateway
         }
@@ -159,7 +156,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexToC(TypeDescription param, int index) {
         return switch (param.getDataType()) {
-            case OBJECT_HANDLE, VOID_POINTER, TYPEDEF, CALLBACK ->
+            case OBJECT_HANDLE, VOID_POINTER, CALLBACK ->
                     (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
                     "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
 
