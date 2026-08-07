@@ -62,7 +62,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         from enum import IntEnum
                         import os
                         import platform
-                        from typing import Sequence, Tuple, Any
+                        from typing import Sequence, Tuple, Any, Callable
 
                         # Load the shared library relative to this file
                         def load_library():
@@ -123,7 +123,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                                 except ImportError:
                                     raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
                             return _numpy
-
+                        %%CALLBACK_SUPPORT%%
                         # API definitions
                         """)
                 .set("LIB_NAME", lib.getName())
@@ -131,6 +131,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .set("LIB_BUILD_NUMBER", lib.getBuild())
                 .set("LIB_FIELD", libField)
                 .set("DOWNLOAD_BLOCK", createDownloadBlock())
+                .set("CALLBACK_SUPPORT", createCallbackSupportBlock())
                 .set("STRUCT_IMPORT", hasDataclassStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
                 .render());
     }
@@ -184,6 +185,31 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         """)
                 .set("DOWNLOAD_URL", lib.getDownloadUrl())
                 .render();
+    }
+
+    /**
+     * The cache is what makes a callable usable as a callback at all. ctypes keeps no
+     * reference to the trampoline it builds, so an inline prototype call can be collected
+     * while the library still holds its address, and a callback is asynchronous unless the
+     * API says otherwise. Keying on the callable also means a build-once-call-many loop
+     * pays for the wrapper once.
+     */
+    private String createCallbackSupportBlock() {
+        if (lib.getCallbacks().length() == 0) {
+            return "";
+        }
+        return """
+
+                # Callbacks are held for the process lifetime. ctypes does not keep the trampoline
+                # alive by itself, and a callback may fire long after the call that passed it in.
+                _callback_wrappers = {}
+                def _wrap_callback(prototype, func):
+                    wrapper = _callback_wrappers.get((prototype, func))
+                    if wrapper is None:
+                        wrapper = prototype(func)
+                        _callback_wrappers[(prototype, func)] = wrapper
+                    return wrapper
+                """;
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
@@ -679,6 +705,27 @@ public class PythonBindingsGenerator extends BindingGenerator {
         throw new IllegalArgumentException("No struct found for type " + type.getTypeName());
     }
 
+    /**
+     * A callback parameter is described by the signature the library calls back with rather
+     * than by the CFUNCTYPE name, because the wrapper accepts any callable. ctypes hands a
+     * void* argument to the callable as a plain address or None, so it shows up as Any.
+     */
+    private static String getPythonTypeHint(LibraryDescription lib, TypeDescription type) {
+        if (type.getDataType() != DataType.CALLBACK) {
+            return TypeMap.toPythonTypeHint(type);
+        }
+        for (var callback : lib.getCallbacks()) {
+            if (!callback.getName().equals(type.getTypeName())) continue;
+            var args = new StringJoiner(", ", "[", "]");
+            for (var parameter : callback.getParameters()) {
+                args.add(parameter.getDataType() == DataType.VOID_POINTER
+                        ? "Any" : TypeMap.toPythonTypeHint(parameter));
+            }
+            return "Callable[%s, %s]".formatted(args, TypeMap.toPythonTypeHint(callback.getReturnType()));
+        }
+        return TypeMap.toPythonTypeHint(type);
+    }
+
     private static String getCPythonType(TypeDescription typeDescription) {
         return switch (typeDescription.getDataType()) {
             case OBJECT_HANDLE -> typeDescription.getTypeName() + "Ptr";
@@ -799,7 +846,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             } else {
                 // Standard parameters -> one for each
                 for (var parameter : desc.getParameters()) {
-                    String input = parameter.getLowerUnderscoreParamName() + ": " + TypeMap.toPythonTypeHint(parameter);
+                    String input = parameter.getLowerUnderscoreParamName() + ": " + getPythonTypeHint(lib, parameter);
                     if (parameter.hasDefaultValue()) {
                         input += " = " + convertCDefaultParamString(parameter);
                     }
@@ -858,6 +905,13 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("CTYPE", pyType)
                         .set("ARGS", joiner.join(args))
                         .render());
+
+            } else if (desc.getDataType() == DataType.CALLBACK) {
+                // Anything callable is accepted, a prebuilt prototype passes straight through
+                out.append(IndentingTextRenderer.of("""
+                        if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
+                            %%NAME%% = _wrap_callback(%%CTYPE%%, %%NAME%%)
+                        """).set("NAME", name).set("CTYPE", pyType).render());
 
             } else if (pyType.equals("c_char_p")) {
                 out.append(IndentingTextRenderer.of("""

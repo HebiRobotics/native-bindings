@@ -95,6 +95,10 @@ public class CppBindingsGenerator extends BindingGenerator {
             headers.add("cassert");
             headers.add("iostream");
         }
+        if (!getCallbacksWithOverloads().isEmpty()) {
+            headers.add("functional");
+            headers.add("type_traits");
+        }
         headers.addAll(getMarshallerIncludes());
         for (String header : headers) {
             out.write("#include <" + header + ">\n");
@@ -227,6 +231,9 @@ public class CppBindingsGenerator extends BindingGenerator {
             }
             out.write("};\n");
         }
+
+        // Trampolines that let the ergonomic overloads carry a closure through the void* channel
+        writeCallbackTrampolines(out);
 
         // Error struct
         out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
@@ -749,6 +756,131 @@ public class CppBindingsGenerator extends BindingGenerator {
                 callback.getName(), getCType(callback.getReturnType()), parameters);
     }
 
+    /**
+     * The parameter pair the ergonomic overloads need. Callback and userData are ordinary
+     * parameters with no positional rule, so the generator can only tell which void* belongs
+     * to the callback when the signature holds exactly one of each. The callback in turn has
+     * to hand the closure back through exactly one void* parameter of its own.
+     */
+    private static final class CallbackOverload {
+
+        CallbackOverload(CallbackDescription callback, TypeDescription callbackParam, TypeDescription userDataParam) {
+            this.callback = callback;
+            this.callbackParam = callbackParam;
+            this.userDataParam = userDataParam;
+        }
+
+        final CallbackDescription callback;
+        final TypeDescription callbackParam;
+        final TypeDescription userDataParam;
+
+    }
+
+    private Optional<CallbackOverload> tryGetCallbackOverload(MethodDescription method) {
+        TypeDescription callbackParam = null;
+        TypeDescription userDataParam = null;
+        int callbackCount = 0;
+        int userDataCount = 0;
+        for (TypeDescription parameter : method.getParameters()) {
+            if (parameter.getDataType() == DataType.CALLBACK) {
+                callbackCount++;
+                callbackParam = parameter;
+            } else if (parameter.getDataType() == DataType.VOID_POINTER) {
+                userDataCount++;
+                userDataParam = parameter;
+            }
+        }
+        if (callbackCount != 1 || userDataCount != 1) {
+            return Optional.empty();
+        }
+        for (CallbackDescription callback : lib.getCallbacks()) {
+            if (!callback.getName().equals(callbackParam.getTypeName())) continue;
+            if (countClosureParams(callback) != 1) break;
+            return Optional.of(new CallbackOverload(callback, callbackParam, userDataParam));
+        }
+        return Optional.empty();
+    }
+
+    private static int countClosureParams(CallbackDescription callback) {
+        int count = 0;
+        for (TypeDescription parameter : callback.getParameters()) {
+            if (parameter.getDataType() == DataType.VOID_POINTER) count++;
+        }
+        return count;
+    }
+
+    /** Callback typedefs that at least one method exposes ergonomic overloads for, in declaration order */
+    private Set<String> getCallbacksWithOverloads() {
+        var names = new LinkedHashSet<String>();
+        for (ClassDescription apiClass : getApiClasses()) {
+            for (MethodDescription method : apiClass.getMethods()) {
+                if (method.getCppOverloads().length() > 0) continue;
+                tryGetCallbackOverload(method).ifPresent(overload -> names.add(overload.callback.getName()));
+            }
+        }
+        return names;
+    }
+
+    private void writeCallbackTrampolines(Writer out) throws IOException {
+        var names = getCallbacksWithOverloads();
+        if (names.isEmpty()) {
+            return;
+        }
+        out.write("""
+                // The ABI channel is a non-const void*, so a const callable still has to lose its
+                // constness on the way in. The trampoline below puts it back.
+                template <typename F>
+                void* toUserData(F& fn) {
+                  return const_cast<void*>(static_cast<const void*>(&fn));
+                }
+                """);
+        for (CallbackDescription callback : lib.getCallbacks()) {
+            if (!names.contains(callback.getName())) continue;
+            var params = new StringJoiner(", ");
+            var args = new StringJoiner(", ");
+            String closure = "";
+            for (TypeDescription parameter : callback.getParameters()) {
+                params.add(getCType(parameter) + " " + parameter.getParamName());
+                if (parameter.getDataType() == DataType.VOID_POINTER) {
+                    closure = parameter.getParamName();
+                } else {
+                    args.add(parameter.getParamName());
+                }
+            }
+            out.write(IndentingTextRenderer.of("""
+                            // Calls the closure that arrived through %%CALLBACK%%'s userData channel. It lives on
+                            // the caller's stack and stays valid because the callback runs before the call returns.
+                            template <typename F>
+                            %%RETURN_TYPE%% %%NAME%%(%%PARAMS%%) {
+                              %%RETURN%%(*static_cast<F*>(%%CLOSURE%%))(%%ARGS%%);
+                            }
+                            """)
+                    .set("CALLBACK", callback.getName())
+                    .set("RETURN_TYPE", getCType(callback.getReturnType()))
+                    .set("NAME", getCallbackTrampolineName(callback))
+                    .set("PARAMS", params.toString())
+                    .set("RETURN", TypeMap.isVoid(callback.getReturnType().getDataType()) ? "" : "return ")
+                    .set("CLOSURE", closure)
+                    .set("ARGS", args.toString())
+                    .render());
+        }
+    }
+
+    private static String getCallbackTrampolineName(CallbackDescription callback) {
+        return "invoke" + callback.getName();
+    }
+
+    /** The callable signature a user writes, which is the callback minus its userData argument */
+    private static String getCallbackFunctorType(CallbackDescription callback) {
+        var args = new StringJoiner(", ");
+        for (TypeDescription parameter : callback.getParameters()) {
+            if (parameter.getDataType() != DataType.VOID_POINTER) {
+                args.add(getCType(parameter));
+            }
+        }
+        return "%s(%s)".formatted(getCType(callback.getReturnType()), args);
+    }
+
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
             case CALLBACK, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
@@ -897,6 +1029,75 @@ public class CppBindingsGenerator extends BindingGenerator {
             overloadWriter.write(joiner.join(parameters), "", joiner.join(call));
         }
 
+        var callbackOverload = tryGetCallbackOverload(method);
+        if (callbackOverload.isPresent()) {
+            writeCallbackOverloads(apiClass, method, callbackOverload.get(), out, overloadWriter);
+        }
+
+    }
+
+    /**
+     * Two overloads that let the callable carry its own state, so the userData parameter
+     * disappears from the signature. Both take the closure's address through the void*
+     * channel and neither allocates, which is what the raw form could not offer.
+     * <p>
+     * The template is the hot path. Its constraint keeps a raw function pointer, and a null
+     * one, on the C ABI overload, which would otherwise lose to the exact match a forwarding
+     * reference is.
+     */
+    private void writeCallbackOverloads(ClassDescription apiClass, MethodDescription method, CallbackOverload overload,
+                                        Writer out, OverloadWriter overloadWriter) throws IOException {
+        String closureName = overload.callbackParam.getParamName();
+        String trampoline = "%s::%s<typename std::remove_reference<F>::type>".formatted(
+                INTERNAL_POINTER_NAMESPACE, getCallbackTrampolineName(overload.callback));
+
+        var templateParams = new StringJoiner(", ");
+        var functionParams = new StringJoiner(", ");
+        var templateCall = new StringJoiner(", ");
+        var functionCall = new StringJoiner(", ");
+        String functorType = "std::function<%s>".formatted(getCallbackFunctorType(overload.callback));
+        for (TypeDescription parameter : method.getParameters()) {
+            if (parameter.getParamName().equals(overload.userDataParam.getParamName())) {
+                templateCall.add("%s::toUserData(%s)".formatted(INTERNAL_POINTER_NAMESPACE, closureName));
+                functionCall.add("%s::toUserData(%s)".formatted(INTERNAL_POINTER_NAMESPACE, closureName));
+            } else if (parameter.getParamName().equals(overload.callbackParam.getParamName())) {
+                templateParams.add("F&& " + closureName);
+                functionParams.add("const %s& %s".formatted(functorType, closureName));
+                templateCall.add("&" + trampoline);
+                functionCall.add("&%s::%s<const %s>".formatted(
+                        INTERNAL_POINTER_NAMESPACE, getCallbackTrampolineName(overload.callback), functorType));
+            } else {
+                templateParams.add(getCppType(parameter) + " " + parameter.getParamName() + getDefaultParamInit(parameter));
+                functionParams.add(getCppType(parameter) + " " + parameter.getParamName() + getDefaultParamInit(parameter));
+                templateCall.add(parameter.getParamName());
+                functionCall.add(parameter.getParamName());
+            }
+        }
+
+        String indent = apiClass.getInstantiable() ? "  " : "";
+        String template = IndentingTextRenderer.of("""
+                        template <typename F, typename = typename std::enable_if<!std::is_convertible<F, %%CALLBACK%%>::value>::type>
+                        %%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {
+                          %%RETURN%%%%NAME%%(%%CALL%%);
+                        }
+                        """)
+                .set("CALLBACK", overload.callback.getName())
+                .set("STATIC", apiClass.getInstantiable() && method.getIsStatic() ? "static " : "")
+                .set("RETURN_TYPE", getCppReturnType(method))
+                .set("NAME", method.getName())
+                .set("PARAMS", templateParams.toString())
+                .set("CONST", hasFlag(method, MethodFlag.Const) ? " const" : "")
+                .set("NOEXCEPT", hasFlag(method, MethodFlag.Noexcept) ? " noexcept" : "")
+                .set("RETURN", TypeMap.isVoid(method.getReturnType().getDataType()) ? "" : "return ")
+                .set("CALL", templateCall.toString())
+                .render();
+
+        out.write(GeneratorUtil.indent("""
+                // The callable holds the state, so these two need no userData argument. The closure
+                // stays on the caller's stack for the duration of the call and neither one allocates.
+                """ + template, indent).stripTrailing());
+        out.write("\n");
+        overloadWriter.write(functionParams.toString(), "", functionCall.toString());
     }
 
     private String getDynamicFunctionLookup(ClassDescription apiClass, MethodDescription method) {
