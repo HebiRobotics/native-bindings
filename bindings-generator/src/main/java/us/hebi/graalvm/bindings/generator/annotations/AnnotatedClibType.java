@@ -16,7 +16,7 @@ import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
-import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
 import us.hebi.graalvm.bindings.model.DataType;

@@ -1,11 +1,14 @@
-package us.hebi.graalvm.bindings.generator.bindings;
+package us.hebi.graalvm.bindings.generator.bindings.marshallers;
 
 import com.squareup.javapoet.ArrayTypeName;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.word.WordFactory;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
+import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
+import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
 
 import java.util.Optional;
 
@@ -18,8 +21,6 @@ import java.util.Optional;
  * @since 6 Aug 2026
  */
 class DoubleSpanMarshaller implements StructMarshaller {
-
-    static final String VIEW_TYPE = "us.hebi.graalvm.bindings.runtime.types.DoubleSpan";
 
     @Override
     public Optional<AllocatingReturn> allocatingReturn() {
@@ -55,7 +56,7 @@ class DoubleSpanMarshaller implements StructMarshaller {
         @Override
         public CodeBlock fillOut(String outName, String resultVar) {
             return CodeBlock.builder()
-                    .addStatement("$N.setData($T.toTempDoublePointer($N))", outName, CTYPES, resultVar)
+                    .addStatement("$N.setData($T.toTempDoublePointer($N))", outName, CPOINTERS, resultVar)
                     .addStatement("$N.setLength($N == null ? 0 : $N.length)", outName, resultVar, resultVar)
                     .build();
         }
@@ -175,9 +176,10 @@ class DoubleSpanMarshaller implements StructMarshaller {
 
     }
 
+    static final String VIEW_TYPE = DoubleSpan.class.getCanonicalName();
     private static final String STRUCT_NAME = StructMarshallers.toStructName(VIEW_TYPE);
 
-    private static final ClassName CTYPES = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CTypes");
+    private static final ClassName CPOINTERS = ClassName.get(us.hebi.graalvm.bindings.runtime.pointers.CPointers.class);
 
     private static final AllocatingReturn ALLOCATING_RETURN = new SpanReturn();
     private static final CppStructMarshaller CPP = new SpanCpp();

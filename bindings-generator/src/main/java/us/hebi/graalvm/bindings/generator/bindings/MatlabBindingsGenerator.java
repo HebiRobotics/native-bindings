@@ -2,6 +2,7 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
 import com.google.common.base.Joiner;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
 import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;

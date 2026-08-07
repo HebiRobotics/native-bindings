@@ -12,7 +12,7 @@ import us.hebi.graalvm.bindings.generator.bindings.CBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.CppBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.MatlabBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.PythonBindingsGenerator;
-import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;

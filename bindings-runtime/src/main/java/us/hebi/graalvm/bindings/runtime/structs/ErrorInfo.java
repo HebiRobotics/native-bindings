@@ -1,10 +1,11 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.structs;
 
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.PointerBase;
+import us.hebi.graalvm.bindings.runtime.include.StructDirectives;
 
 /**
  * View of the error out-struct that every throwing entry point fills. A word type, so
@@ -38,5 +39,8 @@ public interface ErrorInfo extends PointerBase {
 
     @CField("code")
     void setCode(int code);
+
+    // No convenience methods here on purpose: native-image rejects any method on a
+    // @CStruct interface that is not an annotated accessor. Helpers live in CStructs.
 
 }

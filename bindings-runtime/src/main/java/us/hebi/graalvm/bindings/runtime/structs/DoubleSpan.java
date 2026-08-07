@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.structs;
 
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.struct.CField;
@@ -8,6 +8,7 @@ import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.runtime.include.StructDirectives;
 
 /**
  * View of a C {@code (const double*, size_t)} pair, i.e. a pointer to the by-value
@@ -27,7 +28,7 @@ import us.hebi.graalvm.bindings.annotations.CSizeType;
         spans are library-owned and stay valid until the calling thread's next
         library call, so they have to be copied immediately.
         """)
-@CContext(StructDirectives.class)
+@CContext(StructDirectives.class) // TODO: remove as it's auto-generated?
 @CStruct("DoubleSpan")
 public interface DoubleSpan extends PointerBase {
 
@@ -43,8 +44,5 @@ public interface DoubleSpan extends PointerBase {
 
     @CField("length")
     void setLength(@CSizeType long length);
-
-    // No convenience methods here on purpose: native-image rejects any method on a
-    // @CStruct interface that is not an annotated accessor. Helpers live in Spans.
 
 }

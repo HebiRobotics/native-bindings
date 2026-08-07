@@ -7,8 +7,8 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 import us.hebi.glue.Buffer6;
 import us.hebi.glue.DirectBuffer6;
-import us.hebi.graalvm.bindings.runtime.types.CCharPointerMock;
-import us.hebi.graalvm.bindings.runtime.types.CDoublePointerMock;
+import us.hebi.graalvm.bindings.runtime.pointers.CCharPointerMock;
+import us.hebi.graalvm.bindings.runtime.pointers.CDoublePointerMock;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

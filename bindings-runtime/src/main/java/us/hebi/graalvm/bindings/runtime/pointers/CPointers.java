@@ -1,10 +1,11 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.pointers;
 
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import us.hebi.graalvm.bindings.runtime.Configuration;
+import us.hebi.graalvm.bindings.runtime.structs.DoubleSpanMock;
 import us.hebi.graalvm.bindings.runtime.views.DoubleBufferView;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
@@ -19,7 +20,7 @@ import java.util.Arrays;
  * @author Florian Enner
  * @since 02 Aug 2024
  */
-public class CTypes {
+public class CPointers {
 
     public static CCharPointer toTempCharPointer(String string) {
         return tempReturnString.get().setContent(string).getPointer();

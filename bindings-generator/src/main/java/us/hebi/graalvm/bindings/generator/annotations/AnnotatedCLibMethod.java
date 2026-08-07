@@ -4,7 +4,7 @@ import com.google.common.base.Strings;
 import com.squareup.javapoet.ClassName;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.model.MethodFlag;
 import us.hebi.graalvm.bindings.model.MethodOverload;
 import us.hebi.graalvm.bindings.model.TypeDescription;

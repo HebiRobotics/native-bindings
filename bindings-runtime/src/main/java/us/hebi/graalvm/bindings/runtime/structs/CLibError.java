@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.structs;
 
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.word.WordFactory;

@@ -1,7 +1,7 @@
 package us.hebi.graalvm.bindings.runtime.views;
 
 import org.junit.Test;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 
 import static org.junit.Assert.*;
 
@@ -51,7 +51,7 @@ public class DoubleBufferViewTest {
     }
 
     private static double[] readBack(DoubleBufferView view, int length) {
-        return CTypes.getDoubles(view.getPointer(), length);
+        return CPointers.getDoubles(view.getPointer(), length);
     }
 
     private static final double delta = 1e-9;

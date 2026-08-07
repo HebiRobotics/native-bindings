@@ -1,9 +1,7 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.pointers;
 
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.SignedWord;
-import org.graalvm.word.WordFactory;
 
 import java.util.Arrays;
 

@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.pointers;
 
 import org.junit.Test;
 

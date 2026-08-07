@@ -121,7 +121,7 @@ public class CEntryPointGenerator extends AbstractGenerator {
                     invocationClose.add(")");
                 });
                 if (returnType.isString()) {
-                    invocation.add("$T.toTempCharPointer(", CTypes);
+                    invocation.add("$T.toTempCharPointer(", CPointers);
                     invocationClose.add(")");
                 }
 
@@ -156,12 +156,12 @@ public class CEntryPointGenerator extends AbstractGenerator {
                         invocation.add("$T.$N($N)", generatedCEnum.get(), CEnumGenerator.toJavaMethod, param.getName());
                     } else if (param.isString()) {
                         // convert from char*
-                        invocation.add("$T.utf8ToJavaString($N)", RuntimeClasses.CTypes, param.getName());
+                        invocation.add("$T.utf8ToJavaString($N)", RuntimeClasses.CPointers, param.getName());
                     } else if (param.isSizeType()) {
                         if (param.getJavaType() == TypeName.LONG) {
-                            invocation.add("$T.capSizeToLong($N)", RuntimeClasses.CTypes, param.getName());
+                            invocation.add("$T.capSizeToLong($N)", RuntimeClasses.CPointers, param.getName());
                         } else {
-                            invocation.add("$T.capSizeToInt($N)", RuntimeClasses.CTypes, param.getName());
+                            invocation.add("$T.capSizeToInt($N)", RuntimeClasses.CPointers, param.getName());
                         }
                     } else {
                         // forward as is

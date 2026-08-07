@@ -4,6 +4,7 @@ import com.google.common.base.CaseFormat;
 import com.google.common.base.Joiner;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
 import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
 import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;

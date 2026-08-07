@@ -13,15 +13,15 @@ import us.hebi.graalvm.bindings.model.DataType;
  */
 class RuntimeClasses {
 
-    static final ClassName HandlesUtil = ClassName.get("us.hebi.graalvm.bindings.runtime.handles", "Handles");
+    static final ClassName HandlesUtil = ClassName.get(us.hebi.graalvm.bindings.runtime.pointers.Handles.class);
 
-    public static final ClassName CTypes = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CTypes");
+    public static final ClassName CPointers = ClassName.get(us.hebi.graalvm.bindings.runtime.pointers.CPointers.class);
 
-    public static final ClassName CLibError = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "CLibError");
+    public static final ClassName CLibError = ClassName.get(us.hebi.graalvm.bindings.runtime.structs.CLibError.class);
 
-    public static final ClassName ErrorInfo = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "ErrorInfo");
+    public static final ClassName ErrorInfo = ClassName.get(us.hebi.graalvm.bindings.runtime.structs.ErrorInfo.class);
 
-    public static final ClassName MockPointerBase = ClassName.get("us.hebi.graalvm.bindings.runtime.types", "MockPointerBase");
+    public static final ClassName MockPointerBase = ClassName.get(us.hebi.graalvm.bindings.runtime.pointers.MockPointerBase.class);
 
     /**
      * Name of the trailing out-struct param on entry points that return a marshalled struct

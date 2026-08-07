@@ -5,6 +5,7 @@ import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.type.*;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.TypeDescription;
 

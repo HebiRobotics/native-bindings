@@ -12,7 +12,7 @@ import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
-import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.DataType;

@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.handles;
+package us.hebi.graalvm.bindings.runtime.pointers;
 
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;

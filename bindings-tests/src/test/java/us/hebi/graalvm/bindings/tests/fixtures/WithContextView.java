@@ -5,7 +5,7 @@ import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
-import us.hebi.graalvm.bindings.runtime.types.StructDirectives;
+import us.hebi.graalvm.bindings.runtime.include.StructDirectives;
 
 /**
  * A precompiled struct view that ships its own {@code @CContext}, used by

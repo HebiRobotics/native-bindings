@@ -1,6 +1,8 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.structs;
 
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import us.hebi.graalvm.bindings.runtime.pointers.CDoublePointerMock;
+import us.hebi.graalvm.bindings.runtime.pointers.MockPointerBase;
 
 /**
  * Array-backed {@link DoubleSpan} so that annotated classes can be exercised

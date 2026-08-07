@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.include;
 
 import org.graalvm.nativeimage.c.CContext;
 
@@ -16,6 +16,8 @@ import java.util.Objects;
  * compiles against. The header ships as a classpath resource so that consuming
  * projects need no build wiring: it gets extracted to a temporary directory at
  * image build time and referenced by absolute path.
+ *
+ * TODO: can we get rid of this and just auto-generate ErrorInfo with the others?
  *
  * @author Florian Enner
  * @since 01 Aug 2026
@@ -40,6 +42,6 @@ public class StructDirectives implements CContext.Directives {
         }
     }
 
-    private static final String HEADER_NAME = "hebi_structs.h";
+    private static final String HEADER_NAME = "bindings_structs.h";
 
 }

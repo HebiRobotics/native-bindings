@@ -1,5 +1,6 @@
-package us.hebi.graalvm.bindings.generator.bindings;
+package us.hebi.graalvm.bindings.generator.bindings.marshallers;
 
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
 import us.hebi.graalvm.bindings.model.StructDescription;
 import us.hebi.graalvm.bindings.model.TypeDescription;
 
@@ -108,7 +109,7 @@ public final class StructMarshallers {
         }
     }
 
-    static String toStructName(String viewType) {
+    public static String toStructName(String viewType) {
         return viewType.substring(viewType.lastIndexOf('.') + 1);
     }
 

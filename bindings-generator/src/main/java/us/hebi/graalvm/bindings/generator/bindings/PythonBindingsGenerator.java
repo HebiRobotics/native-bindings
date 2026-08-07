@@ -2,6 +2,7 @@ package us.hebi.graalvm.bindings.generator.bindings;
 
 import com.google.common.base.CaseFormat;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;

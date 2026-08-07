@@ -1,7 +1,7 @@
 package us.hebi.graalvm.bindings.runtime.views;
 
 import org.junit.Test;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 
 import static org.junit.Assert.*;
 
@@ -45,7 +45,7 @@ public class Utf8StringViewTest {
     }
 
     private static String readBack(Utf8StringView view) {
-        return CTypes.utf8ToJavaString(view.getPointer());
+        return CPointers.utf8ToJavaString(view.getPointer());
     }
 
 }

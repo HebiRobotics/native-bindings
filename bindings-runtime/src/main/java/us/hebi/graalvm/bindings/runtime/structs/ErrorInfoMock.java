@@ -1,6 +1,7 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.structs;
 
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import us.hebi.graalvm.bindings.runtime.pointers.MockPointerBase;
 
 /**
  * Field-backed {@link ErrorInfo} so that annotated classes can be exercised

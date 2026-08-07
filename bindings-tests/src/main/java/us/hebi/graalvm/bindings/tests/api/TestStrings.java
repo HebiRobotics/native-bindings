@@ -6,7 +6,7 @@ import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 
 import java.nio.charset.StandardCharsets;
 
@@ -68,7 +68,7 @@ public class TestStrings {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < count; i++) {
             if (i > 0) sb.append(separator);
-            sb.append(CTypes.utf8ToJavaString(values.read(i)));
+            sb.append(CPointers.utf8ToJavaString(values.read(i)));
         }
         return sb.toString();
     }

@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.types;
+package us.hebi.graalvm.bindings.runtime.pointers;
 
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.word.SignedWord;
