@@ -1779,7 +1779,8 @@
     "fields": [{
       "name": "data",
       "lowerUnderscoreName": "data",
-      "dataType": "UINT8_POINTER"
+      "dataType": "UINT8_POINTER",
+      "isConst": true
     }, {
       "name": "length",
       "lowerUnderscoreName": "length",
@@ -1793,7 +1794,8 @@
     "fields": [{
       "name": "data",
       "lowerUnderscoreName": "data",
-      "dataType": "FLOAT64_POINTER"
+      "dataType": "FLOAT64_POINTER",
+      "isConst": true
     }, {
       "name": "length",
       "lowerUnderscoreName": "length",
@@ -1811,7 +1813,8 @@
     }, {
       "name": "shorts",
       "lowerUnderscoreName": "shorts",
-      "dataType": "INT16_POINTER"
+      "dataType": "INT16_POINTER",
+      "isConst": true
     }, {
       "name": "longs",
       "lowerUnderscoreName": "longs",
@@ -1828,7 +1831,8 @@
     "fields": [{
       "name": "data",
       "lowerUnderscoreName": "data",
-      "dataType": "FLOAT32_POINTER"
+      "dataType": "FLOAT32_POINTER",
+      "isConst": true
     }, {
       "name": "length",
       "lowerUnderscoreName": "length",
@@ -1842,7 +1846,8 @@
     "fields": [{
       "name": "data",
       "lowerUnderscoreName": "data",
-      "dataType": "INT32_POINTER"
+      "dataType": "INT32_POINTER",
+      "isConst": true
     }, {
       "name": "length",
       "lowerUnderscoreName": "length",

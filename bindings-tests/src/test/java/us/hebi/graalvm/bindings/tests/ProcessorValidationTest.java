@@ -441,6 +441,44 @@ public class ProcessorValidationTest {
     }
 
     @Test
+    public void rejectsStructFieldWithDisagreeingConstness() {
+        assertThat(compile(source("MixedConst", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.nativeimage.c.type.CConst;
+                import org.graalvm.nativeimage.c.type.CDoublePointer;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("MixedConst")
+                public class MixedConst {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("data") @CConst CDoublePointer data();
+                        @CField("data") void setData(CDoublePointer data);
+                    }
+                }
+                """))).hadErrorContaining("is declared @CConst on one accessor and not the other");
+    }
+
+    @Test
+    public void rejectsConstOnANonPointerStructField() {
+        assertThat(compile(source("ConstValue", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.nativeimage.c.type.CConst;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("ConstValue")
+                public class ConstValue {
+                    @CLibStruct
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") @CConst double x();
+                    }
+                }
+                """))).hadErrorContaining("@CConst field 'x' must be a pointer");
+    }
+
+    @Test
     public void acceptsAStructViewParameter() {
         assertThat(compile(source("StructParam", """
                 import org.graalvm.nativeimage.c.struct.CField;

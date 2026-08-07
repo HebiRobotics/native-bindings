@@ -39,7 +39,7 @@ typedef struct {
 typedef struct {
     uint16_t unit;
     const int16_t* shorts;
-    const int64_t* longs;
+    int64_t* longs;
     void* context;
 } bindings_tests_FieldTypes;
 

@@ -214,7 +214,7 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
 struct FieldTypes {
     uint16_t unit;
     const int16_t* shorts;
-    const int64_t* longs;
+    int64_t* longs;
     void* context;
 };
 

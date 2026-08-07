@@ -5,6 +5,7 @@ import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
 import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.CShortPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
@@ -86,6 +87,10 @@ public class TestStructs {
      * The field types StatusInfo leaves out: a char code unit and the typed pointers.
      * Pointer fields only exist in the C, C++ and layout mirrors, the MATLAB struct
      * and the Python dataclass skip them because they carry no lifetime story there.
+     * <p>
+     * The pointers also pin both constness cases: {@code shorts} is declared
+     * {@code @CConst} and reaches the public header as {@code const int16_t*}, while
+     * {@code longs} and {@code context} are declared without it and stay writable.
      */
     @CLibStruct
     @CContext(us.hebi.graalvm.bindings.tests.api.generated.TestStructs_FieldTypes$$Directives.class)
@@ -99,10 +104,11 @@ public class TestStructs {
         void setUnit(char unit);
 
         @CField("shorts")
+        @CConst
         CShortPointer shorts();
 
         @CField("shorts")
-        void setShorts(CShortPointer shorts);
+        void setShorts(@CConst CShortPointer shorts);
 
         @CField("longs")
         CLongPointer longs();
