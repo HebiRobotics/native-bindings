@@ -1,11 +1,10 @@
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 

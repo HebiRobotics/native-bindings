@@ -9,8 +9,11 @@ import org.junit.rules.TemporaryFolder;
 import us.hebi.graalvm.bindings.generator.generators.NativeAnnotationProcessor;
 
 import javax.tools.JavaFileObject;
+import java.io.IOException;
+import java.nio.file.Files;
 
 import static com.google.testing.compile.CompilationSubject.*;
+import static org.junit.Assert.*;
 
 /**
  * Drives the annotation processor directly over small snippets to check that misuse
@@ -634,6 +637,80 @@ public class ProcessorValidationTest {
                     public static double x(WithContextView point) { return 0; }
                 }
                 """))).succeeded();
+    }
+
+    @Test
+    public void registersTheAnnotationMarshaller() throws IOException {
+        assertThat(compile(source("Marshalled", """
+                import us.hebi.graalvm.bindings.tests.fixtures.MarshalledView;
+                @CLibClass("Marshalled")
+                public class Marshalled {
+                    @CLibMethod(flags = Noexcept)
+                    public static double x(MarshalledView point) { return 0; }
+                }
+                """))).succeeded();
+
+        // The custom face and its include contribution reach the generated C++ wrapper
+        String hpp = readGeneratedFile("validation.hpp");
+        assertTrue(hpp.contains("#include <array>"));
+        assertTrue(hpp.contains("const std::array<double, 1>&"));
+    }
+
+    @Test
+    public void rejectsAClassThatIsNotAMarshaller() {
+        assertThat(compile(source("NotAMarshaller", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("NotAMarshaller")
+                public class NotAMarshaller {
+                    @CLibStruct(marshaller = String.class)
+                    @CStruct("BadView")
+                    public interface BadView extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static double x(BadView view) { return 0; }
+                }
+                """))).hadErrorContaining("Struct marshaller does not implement");
+    }
+
+    @Test
+    public void acceptsOneMarshallerOnTwoViews() {
+        // The annotated view is the only naming direction, so a marshaller class is
+        // reusable across views rather than being tied to a single one.
+        assertThat(compile(source("SharedMarshaller", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                import us.hebi.graalvm.bindings.tests.fixtures.MarshalledViewMarshaller;
+                @CLibClass("SharedMarshaller")
+                public class SharedMarshaller {
+                    @CLibStruct(marshaller = MarshalledViewMarshaller.class)
+                    @CStruct("FirstView")
+                    public interface FirstView extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibStruct(marshaller = MarshalledViewMarshaller.class)
+                    @CStruct("SecondView")
+                    public interface SecondView extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static double x(FirstView first, SecondView second) { return 0; }
+                }
+                """))).succeeded();
+    }
+
+    private String readGeneratedFile(String fileName) throws IOException {
+        try (var files = Files.walk(outputDir.getRoot().toPath())) {
+            var file = files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst();
+            assertTrue("Missing generated file: " + fileName, file.isPresent());
+            return Files.readString(file.get());
+        }
     }
 
     private Compilation compile(JavaFileObject... sources) {
