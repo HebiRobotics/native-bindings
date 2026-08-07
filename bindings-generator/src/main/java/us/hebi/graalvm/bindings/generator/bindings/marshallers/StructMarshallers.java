@@ -121,7 +121,10 @@ public final class StructMarshallers {
 
     // Initialization order matters: indexByStructName() reads the two maps above it
     private static final Map<String, StructMarshaller> BUILT_INS = Map.of(
-            DoubleSpanMarshaller.VIEW_TYPE, new DoubleSpanMarshaller()
+            SpanMarshaller.DOUBLE.viewType, SpanMarshaller.DOUBLE,
+            SpanMarshaller.INT.viewType, SpanMarshaller.INT,
+            SpanMarshaller.FLOAT.viewType, SpanMarshaller.FLOAT,
+            SpanMarshaller.BYTE.viewType, SpanMarshaller.BYTE
     );
 
     private static volatile Map<String, StructMarshaller> userByViewType = Map.of();

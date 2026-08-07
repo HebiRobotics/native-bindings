@@ -178,6 +178,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     "MatlabArray<int32_t, mxINT32_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
             case INT16_POINTER ->
                     "MatlabArray<int16_t, mxINT16_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
+            case UINT8_POINTER ->
+                    "MatlabArray<uint8_t, mxUINT8_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
 
             case STRUCT -> getMexMarshaller(param)
                     .map(marshaller -> marshaller.read("prhs[%d]".formatted(index), param.getParamName()))
@@ -1173,7 +1175,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return switch (type.getDataType()) {
             case BOOL -> List.of("logical");
             case INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T,
-                 INT16_POINTER, INT32_POINTER, INT64_POINTER, FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
+                 UINT8_POINTER, INT16_POINTER, INT32_POINTER, INT64_POINTER,
+                 FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");
             case STRUCT -> List.of(getMexMarshaller(type)

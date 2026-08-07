@@ -84,6 +84,7 @@ enum DataType {
   VOID_POINTER = 10;          // GraalVM VoidPointer -> void*
   CHAR_POINTER = 11;          // GraalVM CCharPointer -> char* (C-String / UTF-8)
   CHAR_POINTER_POINTER = 12;  // GraalVM CCharPointerPointer -> char** (String Array)
+  UINT8_POINTER = 13;         // runtime CBytePointer -> uint8_t* (binary data, not a string)
   INT16_POINTER = 14;         // GraalVM CShortPointer -> short*
   INT32_POINTER = 15;         // GraalVM CIntPointer -> int*
   INT64_POINTER = 16;         // GraalVM CLongPointer -> long long int*

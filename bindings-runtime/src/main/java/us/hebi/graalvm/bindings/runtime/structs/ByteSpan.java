@@ -1,0 +1,50 @@
+package us.hebi.graalvm.bindings.runtime.structs;
+
+import org.graalvm.nativeimage.c.CContext;
+import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.word.PointerBase;
+import us.hebi.graalvm.bindings.annotations.CLibComment;
+import us.hebi.graalvm.bindings.annotations.CLibStruct;
+import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointer;
+import us.hebi.graalvm.bindings.runtime.structs.include.StructDirectives;
+
+/**
+ * View of a C {@code (const uint8_t*, size_t)} pair, i.e. a pointer to the by-value
+ * span struct in the public ABI. A word type, so parameters cross the boundary with
+ * zero allocation. Binary data, not a string: the length is explicit and embedded
+ * zeros are data.
+ * <p>
+ * Spans passed as parameters are caller-owned and only valid for the duration of
+ * the call. The buffer is never owned or freed through this type.
+ *
+ * @author Florian Enner
+ * @since 07 Aug 2026
+ */
+@CLibStruct
+@CLibComment("""
+        A (pointer, length) view of a contiguous byte buffer, passed and returned
+        by value. Binary data rather than a string: embedded zeros are data.
+        Inputs are caller-owned and only read during the call. Returned spans are
+        library-owned and stay valid until the calling thread's next library call,
+        so they have to be copied immediately.
+        """)
+@CContext(StructDirectives.class)
+@CStruct("ByteSpan")
+public interface ByteSpan extends PointerBase {
+
+    @CField("data")
+    CBytePointer data();
+
+    @CField("data")
+    void setData(CBytePointer data);
+
+    @CField("length")
+    @CSizeType
+    long length();
+
+    @CField("length")
+    void setLength(@CSizeType long length);
+
+}

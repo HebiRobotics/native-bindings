@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
-import com.google.common.base.CaseFormat;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import org.graalvm.nativeimage.ObjectHandle;
@@ -8,6 +7,7 @@ import org.graalvm.nativeimage.c.type.*;
 import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.TypeDescription;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +31,7 @@ public final class TypeMap {
                  VOID_POINTER,
                  CHAR_POINTER,
                  CHAR_POINTER_POINTER,
+                 UINT8_POINTER,
                  INT16_POINTER,
                  INT32_POINTER,
                  INT64_POINTER,
@@ -82,6 +83,9 @@ public final class TypeMap {
             // Const is a statement to the external consumer only. The Java setter keeps
             // working, because the entry point writes the field through the view.
             case FLOAT64_POINTER -> "const double*";
+            case FLOAT32_POINTER -> "const float*";
+            case INT32_POINTER -> "const int32_t*";
+            case UINT8_POINTER -> "const uint8_t*";
             case CHAR_POINTER -> "const char*";
 
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
@@ -102,6 +106,9 @@ public final class TypeMap {
             case INT8 -> "c_int8";
             case SIZE_T -> "c_size_t";
             case FLOAT64_POINTER -> "POINTER(c_double)";
+            case FLOAT32_POINTER -> "POINTER(c_float)";
+            case INT32_POINTER -> "POINTER(c_int32)";
+            case UINT8_POINTER -> "POINTER(c_uint8)"; // binary data must not auto-convert like c_char_p
             case CHAR_POINTER -> "c_char_p";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
@@ -154,6 +161,7 @@ public final class TypeMap {
             case VOID_POINTER -> "void*";
             case CHAR_POINTER -> "char*";
             case CHAR_POINTER_POINTER -> "char**";
+            case UINT8_POINTER -> "char*";      // binary data, distinct from CHAR_POINTER only in the model
             case INT16_POINTER -> "short*";
             case INT32_POINTER -> "int*";
             case INT64_POINTER -> "long long int*";
@@ -191,6 +199,7 @@ public final class TypeMap {
             case VOID_POINTER -> "c_void_p";
             case CHAR_POINTER -> "c_char_p";
             case CHAR_POINTER_POINTER -> "POINTER(c_char_p)";
+            case UINT8_POINTER -> "POINTER(c_uint8)";
             case INT16_POINTER -> "POINTER(c_short)";
             case INT32_POINTER -> "POINTER(c_int)";
             case INT64_POINTER -> "POINTER(c_longlong)";
@@ -240,7 +249,7 @@ public final class TypeMap {
 
             // Note: we could use numpy.typing's ArrayLike, but we want to be compatible without numpy
             case FLOAT32_POINTER, FLOAT64_POINTER -> "Sequence[float]";
-            case INT32_POINTER, INT64_POINTER -> "Sequence[int]";
+            case UINT8_POINTER, INT32_POINTER, INT64_POINTER -> "Sequence[int]";
 
             // Map string arrays to List of strings
             case CHAR_POINTER_POINTER -> "Sequence[str]";
@@ -280,8 +289,10 @@ public final class TypeMap {
             // Convenience shortcut for Strings
             addMapping(String.class, DataType.CHAR_POINTER);
 
-            // GraalVM C-API Pointers
+            // GraalVM C-API Pointers. The lookup is exact on the declared type, so
+            // CBytePointer never collides with its CCharPointer super interface.
             addMapping(VoidPointer.class, DataType.VOID_POINTER);
+            addMapping(CBytePointer.class, DataType.UINT8_POINTER); // custom marker since GraalVM uses char*
             addMapping(CCharPointer.class, DataType.CHAR_POINTER);
             addMapping(CCharPointerPointer.class, DataType.CHAR_POINTER_POINTER);
             addMapping(CShortPointer.class, DataType.INT16_POINTER);

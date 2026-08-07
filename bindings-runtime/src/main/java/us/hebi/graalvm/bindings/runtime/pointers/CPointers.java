@@ -3,9 +3,14 @@ package us.hebi.graalvm.bindings.runtime.pointers;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import org.graalvm.nativeimage.c.type.CFloatPointer;
+import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import us.hebi.graalvm.bindings.runtime.Configuration;
+import us.hebi.graalvm.bindings.runtime.views.ByteBufferView;
 import us.hebi.graalvm.bindings.runtime.views.DoubleBufferView;
+import us.hebi.graalvm.bindings.runtime.views.FloatBufferView;
+import us.hebi.graalvm.bindings.runtime.views.IntBufferView;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
 import java.nio.charset.StandardCharsets;
@@ -46,6 +51,24 @@ public class CPointers {
     }
 
     private static final ThreadLocal<DoubleBufferView> tempReturnDoubleBuffer = ThreadLocal.withInitial(DoubleBufferView::new);
+
+    public static CIntPointer toTempIntPointer(int[] values) {
+        return tempReturnIntBuffer.get().setContent(values).getPointer();
+    }
+
+    private static final ThreadLocal<IntBufferView> tempReturnIntBuffer = ThreadLocal.withInitial(IntBufferView::new);
+
+    public static CFloatPointer toTempFloatPointer(float[] values) {
+        return tempReturnFloatBuffer.get().setContent(values).getPointer();
+    }
+
+    private static final ThreadLocal<FloatBufferView> tempReturnFloatBuffer = ThreadLocal.withInitial(FloatBufferView::new);
+
+    public static CBytePointer toTempBytePointer(byte[] values) {
+        return tempReturnByteBuffer.get().setContent(values).getPointer();
+    }
+
+    private static final ThreadLocal<ByteBufferView> tempReturnByteBuffer = ThreadLocal.withInitial(ByteBufferView::new);
 
     public static int capSizeToInt(long size_t) {
         // Anything over 31 bits gets capped to the max
@@ -135,6 +158,22 @@ public class CPointers {
 
     public static double[] getDoubles(CDoublePointer src, int size) {
         double[] result = new double[size];
+        for (int i = 0; i < size; i++) {
+            result[i] = src.read(i);
+        }
+        return result;
+    }
+
+    public static int[] getInts(CIntPointer src, int size) {
+        int[] result = new int[size];
+        for (int i = 0; i < size; i++) {
+            result[i] = src.read(i);
+        }
+        return result;
+    }
+
+    public static float[] getFloats(CFloatPointer src, int size) {
+        float[] result = new float[size];
         for (int i = 0; i < size; i++) {
             result[i] = src.read(i);
         }

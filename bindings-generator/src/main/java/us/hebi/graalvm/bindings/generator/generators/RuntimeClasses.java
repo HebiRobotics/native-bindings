@@ -89,7 +89,7 @@ class RuntimeClasses {
             case BOOL -> code.addStatement("return false");
             case CHAR16, INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, ENUM -> code.addStatement("return 0");
             case VOID_POINTER, CHAR_POINTER, CHAR_POINTER_POINTER,
-                 INT16_POINTER, INT32_POINTER, INT64_POINTER,
+                 UINT8_POINTER, INT16_POINTER, INT32_POINTER, INT64_POINTER,
                  FLOAT32_POINTER, FLOAT64_POINTER,
                  OBJECT_HANDLE -> code.addStatement("return $T.nullPointer()", WordFactory.class);
             case VOID -> {

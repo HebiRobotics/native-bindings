@@ -3,16 +3,24 @@ package us.hebi.graalvm.bindings.runtime.views;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
+import org.graalvm.nativeimage.c.type.CFloatPointer;
+import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 import us.hebi.glue.Buffer6;
 import us.hebi.glue.DirectBuffer6;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointer;
+import us.hebi.graalvm.bindings.runtime.pointers.CBytePointerMock;
 import us.hebi.graalvm.bindings.runtime.pointers.CCharPointerMock;
 import us.hebi.graalvm.bindings.runtime.pointers.CDoublePointerMock;
+import us.hebi.graalvm.bindings.runtime.pointers.CFloatPointerMock;
+import us.hebi.graalvm.bindings.runtime.pointers.CIntPointerMock;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.DoubleBuffer;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 
 /**
  * Base for buffers that are exposed via the C ABI. They typically
@@ -77,6 +85,76 @@ public abstract class BufferView<Ptr extends PointerBase> {
             bytes.get(array);
             return array;
         }
+
+    }
+
+    public static class CByte extends BufferView<CBytePointer> {
+
+        @Override
+        final protected CBytePointer getJvmPointer() {
+            return new CBytePointerMock(isNull() ? null : toArray(), 0);
+        }
+
+        private byte[] toArray() {
+            byte[] array = new byte[bytes.position()];
+            Buffer6.rewind(bytes);
+            bytes.get(array);
+            return array;
+        }
+
+    }
+
+    public static class CInt extends BufferView<CIntPointer> {
+
+        @Override
+        final protected CIntPointer getJvmPointer() {
+            return new CIntPointerMock(isNull() ? null : toArray(), 0);
+        }
+
+        private int[] toArray() {
+            int[] array = new int[ints.position()];
+            Buffer6.rewind(ints);
+            ints.get(array);
+            return array;
+        }
+
+        @Override
+        protected boolean ensureSpace(int numBytes) {
+            if (super.ensureSpace(numBytes)) {
+                ints = bytes.asIntBuffer();
+                return true;
+            }
+            return false;
+        }
+
+        protected IntBuffer ints;
+
+    }
+
+    public static class CFloat extends BufferView<CFloatPointer> {
+
+        @Override
+        final protected CFloatPointer getJvmPointer() {
+            return new CFloatPointerMock(isNull() ? null : toArray(), 0);
+        }
+
+        private float[] toArray() {
+            float[] array = new float[floats.position()];
+            Buffer6.rewind(floats);
+            floats.get(array);
+            return array;
+        }
+
+        @Override
+        protected boolean ensureSpace(int numBytes) {
+            if (super.ensureSpace(numBytes)) {
+                floats = bytes.asFloatBuffer();
+                return true;
+            }
+            return false;
+        }
+
+        protected FloatBuffer floats;
 
     }
 

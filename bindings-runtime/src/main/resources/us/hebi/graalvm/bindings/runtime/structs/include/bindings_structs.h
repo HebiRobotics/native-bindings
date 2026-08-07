@@ -16,6 +16,21 @@ typedef struct {
     size_t length;
 } DoubleSpan;
 
+typedef struct {
+    const int32_t* data;
+    size_t length;
+} IntSpan;
+
+typedef struct {
+    const float* data;
+    size_t length;
+} FloatSpan;
+
+typedef struct {
+    const uint8_t* data;
+    size_t length;
+} ByteSpan;
+
 /*
  * Filled by every entry point that can throw. The message and id point into the
  * calling thread's scratch buffer and stay valid only until its next call. There
