@@ -158,7 +158,7 @@ struct MatlabStringArray {
     operator char**() const { return ptrs; }
     operator const char**() const { return (const char**)ptrs; }
     MatlabStringArray(const MatlabStringArray&) = delete;
-};
+};%%CALLBACK_SUPPORT%%
 
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
@@ -256,7 +256,7 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
-}%%STRUCT_RETURN_HELPERS%%
+}%%STRUCT_RETURN_HELPERS%%%%CALLBACK_TRAMPOLINES%%
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {

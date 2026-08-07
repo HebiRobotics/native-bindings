@@ -15,7 +15,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static java.util.function.Predicate.*;
 import static us.hebi.quickbuf.ProtoUtil.*;
 
 /**
@@ -156,7 +155,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexToC(TypeDescription param, int index) {
         return switch (param.getDataType()) {
-            case OBJECT_HANDLE, VOID_POINTER, CALLBACK ->
+            case CALLBACK -> "MatlabCallback %s(prhs[%d])".formatted(param.getParamName(), index);
+
+            case OBJECT_HANDLE, VOID_POINTER ->
                     (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
                     "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
 
@@ -255,6 +256,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         for (ClassDescription clazz : lib.getClasses()) {
             cases.addLine("\n// " + getMatlabClassName(clazz));
             for (MethodDescription method : clazz.getMethods()) {
+                if (!isMatlabVisible(method)) continue;
                 int index = FIRST_INDEX;
                 pre.setLength(0);
                 post.setLength(0);
@@ -271,10 +273,20 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     types.add(getMexCType(clazz.getType()));
                     args.add(getMexToC(clazz.getType(), index++));
                 }
+                var callbackPair = tryGetCallbackPair(method);
                 for (var param : method.getParameters()) {
                     types.add(getMexCType(param));
-                    pre.append(getMexToC(param, index++)).append(";\n");
-                    args.add(param.getParamName());
+                    if (param.getDataType() == DataType.CALLBACK) {
+                        pre.append(getMexToC(param, index++)).append(";\n");
+                        args.add(getCallbackTrampolineName(param.getTypeName()));
+                        post.append("\ncheckCallbackError(").append(param.getParamName()).append(");");
+                    } else if (callbackPair.isPresent() && callbackPair.get().isUserData(param)) {
+                        // MatlabCallback converts to the address of its slot, which the handle needs
+                        args.add(callbackPair.get().callbackParam.getParamName());
+                    } else {
+                        pre.append(getMexToC(param, index++)).append(";\n");
+                        args.add(param.getParamName());
+                    }
                 }
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
@@ -319,6 +331,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("HASH_SEED", String.format("0x%08X", seed))
                 .set("HASH_PRIME", String.format("0x%08X", prime))
                 .set("CALLBACK_TYPEDEFS", createCallbackTypedefs())
+                .set("CALLBACK_SUPPORT", createCallbackSupport())
+                .set("CALLBACK_TRAMPOLINES", createCallbackTrampolines())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
@@ -340,6 +354,217 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback));
         }
         return out.render();
+    }
+
+    /**
+     * The handle stack and its RAII registration, emitted only for a library that exposes a
+     * callback to MATLAB. The token it fills sits at the end of an existing line.
+     */
+    private String createCallbackSupport() {
+        if (getExposedCallbacks().isEmpty()) {
+            return "";
+        }
+        return """
+
+
+                // A synchronous callback may re-enter the library and trigger another callback, so the
+                // handles live on a stack rather than in a single slot, which a nested registration would
+                // clobber. The gateway passes the slot address through the method's void* userData
+                // parameter, so a trampoline finds its own handle without relying on top of stack.
+                struct CallbackSlot {
+                    const mxArray* handle; // the function handle to invoke, owned by the caller's prhs
+                    mxArray* error;        // what a failed invocation trapped, raised after the call
+                };
+
+                static const int MAX_CALLBACK_DEPTH = 32;
+                static CallbackSlot callbackStack[MAX_CALLBACK_DEPTH];
+                static int callbackDepth = 0;     // slots in use
+                static int activeTrampolines = 0; // nonzero while a callback is running MATLAB code
+
+                inline int pushCallbackHandle(const mxArray* arg) {
+                    if (!mxIsClass(arg, "function_handle")) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Expected a function handle.");
+                    }
+                    // mexErrMsgIdAndTxt longjmps to MATLAB's prompt, so a pop can be skipped and its slot
+                    // left behind. A trampoline traps its own errors and therefore always balances
+                    // activeTrampolines, so a zero count means nothing is running and the stack is stale.
+                    if (activeTrampolines == 0) {
+                        callbackDepth = 0;
+                    }
+                    if (callbackDepth == MAX_CALLBACK_DEPTH) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "Callbacks are nested more than %d deep.", MAX_CALLBACK_DEPTH);
+                    }
+                    callbackStack[callbackDepth] = CallbackSlot{arg, nullptr};
+                    return callbackDepth++;
+                }
+
+                // RAII registration of the function handle one call passes
+                struct MatlabCallback {
+                    const int index;
+                    explicit MatlabCallback(const mxArray* arg) : index(pushCallbackHandle(arg)) {}
+                    ~MatlabCallback() { callbackDepth = index; }
+                    operator void*() const { return &callbackStack[index]; }
+                    MatlabCallback(const MatlabCallback&) = delete;
+                };
+
+                // Raises what a trampoline trapped, once the library has unwound its own frames. Throwing
+                // the MException keeps the original identifier and message, and it longjmps like any
+                // other error. rethrow is the wrong verb here, it rejects an exception that was never
+                // caught in MATLAB code.
+                inline void checkCallbackError(const MatlabCallback& callback) {
+                    mxArray* error = callbackStack[callback.index].error;
+                    if (error != nullptr) {
+                        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+                    }
+                }""";
+    }
+
+    /**
+     * One trampoline per callback typedef that a MATLAB-visible method takes. The token they fill
+     * sits at the end of an existing line, and they come after the createMex helpers they call.
+     */
+    private String createCallbackTrampolines() {
+        var exposed = getExposedCallbacks();
+        if (exposed.isEmpty()) {
+            return "";
+        }
+        var out = new IndentingTextRenderer();
+        for (var callback : lib.getCallbacks()) {
+            if (!exposed.contains(callback.getName())) continue;
+            if (!TypeMap.isVoid(callback.getReturnType().getDataType())) {
+                throw new IllegalStateException("Callback '" + callback.getName()
+                                                + "' returns a value, which the MEX trampoline cannot hand back to the library");
+            }
+            var params = new ArrayList<String>();
+            var mexArgs = new ArrayList<String>();
+            String userData = null;
+            for (var parameter : callback.getParameters()) {
+                params.add(CBindingsGenerator.getQualifiedCType(parameter) + " " + parameter.getParamName());
+                if (parameter.getDataType() == DataType.VOID_POINTER) {
+                    userData = parameter.getParamName();
+                } else {
+                    mexArgs.add(getCToMex(parameter).replace("%%RETURN_VALUE%%", parameter.getParamName()));
+                }
+            }
+            if (userData == null) {
+                throw new IllegalStateException("Callback '" + callback.getName()
+                                                + "' has no void* parameter to carry the MATLAB function handle");
+            }
+
+            // feval takes the handle as its first argument, so the trapped error is the only output
+            var content = out.snapshot()
+                    .set("NAME", getCallbackTrampolineName(callback.getName()))
+                    .set("CALLBACK", callback.getName())
+                    .set("PARAMS", joiner.join(params))
+                    .set("USER_DATA", userData)
+                    .set("ARG_COUNT", String.valueOf(mexArgs.size() + 1))
+                    .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + joiner.join(mexArgs));
+            content.add("""
+
+
+                    // Invokes the function handle a MATLAB caller registered for %%CALLBACK%%. An error
+                    // is trapped rather than raised, because a longjmp from here would tear down the
+                    // library's own frames. One mxArray per argument per call is inherent to MATLAB.
+                    static void %%NAME%%(%%PARAMS%%) {
+                        auto* slot = static_cast<CallbackSlot*>(%%USER_DATA%%);
+                        if (slot->error != nullptr) {
+                            return; // an earlier invocation already failed, and that error is the one raised
+                        }
+                        mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(slot->handle)%%MEX_ARGS%%};
+                        activeTrampolines++;
+                        slot->error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
+                        activeTrampolines--;
+                    """).indent();
+            for (int i = 0; i < mexArgs.size(); i++) {
+                content.addLine("mxDestroyArray(args[" + (i + 1) + "]);");
+            }
+            content.unindent().add("}");
+        }
+        return out.render();
+    }
+
+    /** Names of the callback typedefs that reach MATLAB, which are the synchronous ones a method takes */
+    private Set<String> getExposedCallbacks() {
+        var names = new LinkedHashSet<String>();
+        for (var apiClass : lib.getClasses()) {
+            for (var method : apiClass.getMethods()) {
+                if (!isMatlabVisible(method)) continue;
+                for (var param : method.getParameters()) {
+                    if (param.getDataType() == DataType.CALLBACK) names.add(param.getTypeName());
+                }
+            }
+        }
+        return names;
+    }
+
+    private static String getCallbackTrampolineName(String callbackName) {
+        return "invoke" + callbackName;
+    }
+
+    /**
+     * A callback that does not promise to fire before the method returns cannot run through
+     * mexCallMATLAB, so the whole method is omitted from the MATLAB face rather than exposed
+     * in a form nobody can call.
+     */
+    private boolean isMatlabVisible(MethodDescription method) {
+        for (var param : method.getParameters()) {
+            if (param.getDataType() == DataType.CALLBACK && !getCallback(param).getIsSynchronous()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private CallbackDescription getCallback(TypeDescription param) {
+        for (var callback : lib.getCallbacks()) {
+            if (callback.getName().equals(param.getTypeName())) return callback;
+        }
+        throw new IllegalArgumentException("No callback found for type " + param.getTypeName());
+    }
+
+    /**
+     * The callback parameter and the void* the gateway hands its slot address through. Neither has
+     * a positional rule, so the pairing is only unambiguous when the signature holds exactly one
+     * of each, and a callback without a userData partner has no channel at all.
+     */
+    static Optional<CallbackPair> tryGetCallbackPair(MethodDescription method) {
+        TypeDescription callbackParam = null;
+        TypeDescription userDataParam = null;
+        int callbacks = 0;
+        int userDataParams = 0;
+        for (var param : method.getParameters()) {
+            if (param.getDataType() == DataType.CALLBACK) {
+                callbacks++;
+                callbackParam = param;
+            } else if (param.getDataType() == DataType.VOID_POINTER) {
+                userDataParams++;
+                userDataParam = param;
+            }
+        }
+        if (callbacks == 0) {
+            return Optional.empty();
+        }
+        if (callbacks != 1 || userDataParams != 1) {
+            throw new IllegalStateException("'" + method.getCName() + "' has to pair its callback with exactly"
+                                            + " one void* userData parameter to be callable from MATLAB");
+        }
+        return Optional.of(new CallbackPair(callbackParam, userDataParam));
+    }
+
+    static final class CallbackPair {
+
+        CallbackPair(TypeDescription callbackParam, TypeDescription userDataParam) {
+            this.callbackParam = callbackParam;
+            this.userDataParam = userDataParam;
+        }
+
+        boolean isUserData(TypeDescription param) {
+            return userDataParam.getParamName().equals(param.getParamName());
+        }
+
+        final TypeDescription callbackParam;
+        final TypeDescription userDataParam;
+
     }
 
     /**
@@ -598,7 +823,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         content.indent();
 
         // Static methods
-        var staticMethods = getMethods(apiClass, m -> m.getIsStatic() && !m.getIsConstructor());
+        var staticMethods = getMethods(apiClass, m -> m.getIsStatic() && !m.getIsConstructor() && isMatlabVisible(m));
         if (!staticMethods.isEmpty()) {
             content.beginControlFlow("\nmethods(Static)\n");
             staticMethods.forEach(m -> addWrapperMethod(apiClass, m, content.snapshot()));
@@ -616,7 +841,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
 
         // Instance methods
-        var instanceMethods = getMethods(apiClass, not(MethodDescription::getIsStatic));
+        var instanceMethods = getMethods(apiClass, m -> !m.getIsStatic() && isMatlabVisible(m));
         if (!instanceMethods.isEmpty()) {
             content.beginControlFlow("\nmethods\n");
             instanceMethods.forEach(m -> addWrapperMethod(apiClass, m, content.snapshot()));
@@ -784,7 +1009,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         // Build the internal function
         content.add("function ").add(wrapOutputAssignment(params.externalOutput)).addLine("%%FUNC_NAME%%(%%EXTERNAL_ARGS%%)").indent();
         if (method.hasDocumentation()) {
-            content.addLine(DocumentationUtil.generateMatlabdoc("", method));
+            content.addLine(DocumentationUtil.generateMatlabdoc("", method, params::isVisible));
         }
 
         // Anything that has to happen before the call
@@ -870,11 +1095,28 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         final List<String> internalOutput = new ArrayList<>();
         final StringBuilder preCallActions = new StringBuilder();
         final StringBuilder postCallActions = new StringBuilder();
+        final Optional<CallbackPair> callbackPair;
+
+        /** The userData channel carries the handle the gateway registered, so MATLAB never sees it */
+        boolean isVisible(TypeDescription param) {
+            return callbackPair.isEmpty() || !callbackPair.get().isUserData(param);
+        }
 
         ParameterLists(LibraryDescription lib, MethodDescription method) {
+            this.callbackPair = tryGetCallbackPair(method);
             final boolean needsSelfRef = !method.getIsStatic() && !method.getIsConstructor();
             final boolean needsVarargin = method.getReturnType().getDataType() == DataType.OBJECT_HANDLE
                                           && !GeneratorUtil.getSetters(lib, method.getReturnType()).isEmpty();
+
+            // A function handle is the only thing the gateway can register, and MATLAB's own check
+            // reads better than the type error the MEX call would raise. Concatenated rather than
+            // formatted, because String::formatted would eat the %% around the tokens.
+            callbackPair.ifPresent(pair -> {
+                var name = pair.callbackParam.getParamName();
+                preCallActions.append("validateattributes(").append(name)
+                        .append(", {'function_handle'}, {'scalar'}, '%%CLASS_NAME%%.%%FUNC_NAME%%', '")
+                        .append(name).append("');\n");
+            });
 
             // native dispatch always needs the library ref and function name
             internalInput.add(getDispatchIdentifier(method.getCName()));
@@ -978,7 +1220,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     if (param.hasDefaultValue()) {
                         break;
                     }
-                    externalInput.add(param.getParamName());
+                    if (isVisible(param)) {
+                        externalInput.add(param.getParamName());
+                    }
                     handledArgsIx++;
                 }
 
@@ -1033,6 +1277,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 internalInput.add(overload.getCall());
             } else {
                 for (var param : method.getParameters()) {
+                    if (!isVisible(param)) continue;
                     internalInput.add(switch (param.getDataType()) {
                         case OBJECT_HANDLE -> param.getParamName() + ".%%GET_REF_METHOD%%()"; // pass C pointer
                         case ENUM -> getFullyQualifiedType(lib, param) + ".toNativeValue(" + param.getParamName() + ")";
@@ -1123,6 +1368,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             String classPrefix = getFullyQualifiedType(lib, apiClass.getType());
             for (var method : apiClass.getMethods()) {
                 if (GeneratorUtil.isAccessor(method)) continue;
+                if (!isMatlabVisible(method)) continue;
+                var params = new ParameterLists(lib, method);
 
                 Map<String, Object> methodData = new LinkedHashMap<>();
                 List<Map<String, Object>> inputs = new ArrayList<>();
@@ -1155,6 +1402,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
                     // Normally defined parameters
                     for (var param : method.getParameters()) {
+                        if (!params.isVisible(param)) continue;
                         inputs.add(Map.of(
                                 "name", param.getParamName(),
                                 "type", mapToMatlabType(param),
@@ -1196,6 +1444,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                  FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");
+            case CALLBACK -> List.of("function_handle");
             case STRUCT -> List.of(getMexMarshaller(type)
                     .map(StructMarshaller.MexStructMarshaller::typeHint)
                     .orElse("struct"));
