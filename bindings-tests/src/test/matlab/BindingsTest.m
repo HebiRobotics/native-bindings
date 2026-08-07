@@ -12,10 +12,6 @@ classdef BindingsTest < matlab.unittest.TestCase
 %   <bindings>/lib/<platform>/, so the built library has to be copied there
 %   first (see .github/workflows/native.yml).
 %
-%   Callbacks are deliberately not covered: MATLAB cannot pass a C function
-%   pointer, so the typedef degrades to void* and TestCallbacks is not
-%   callable from here. That feature area is covered by C, C++ and Python.
-%
 %   Note on types: the MEX dispatch returns every scalar as a MATLAB double,
 %   including booleans and enums, so the expected values below are plain
 %   numbers rather than logicals or enum instances.
@@ -427,6 +423,68 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Indices.fromRow(6), 5);
 
             testCase.verifyEqual(bindings_tests.Indices.echoSize(4), 4);
+        end
+
+        function testCallbacks(testCase)
+            % The MATLAB face takes a function handle and hides the void* the C ABI
+            % carries the handle through, so the argument lists are one shorter here.
+            collected = [];
+            outer = [];
+            inner = [];
+
+            bindings_tests.Callbacks.invokeTimes(@collect, 4);
+            testCase.verifyEqual(collected, [0 1 2 3]);
+
+            collected = [];
+            bindings_tests.Callbacks.invokeOnce(@collect, 7);
+            testCase.verifyEqual(collected, 7);
+
+            % A non-positive count never reaches the callback
+            collected = [];
+            bindings_tests.Callbacks.invokeTimes(@collect, 0);
+            testCase.verifyTrue(isempty(collected));
+
+            % The null function pointer the other suites pass is not representable
+            % here, the wrapper only accepts a function handle.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes([], 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(42, 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
+
+            % An asynchronous callback cannot run through mexCallMATLAB, so notifyOnce
+            % has no MATLAB face at all.
+            testCase.verifyFalse(ismember('notifyOnce', methods('bindings_tests.Callbacks')));
+
+            % The callback calls back into a method that takes a callback, which is what
+            % the handle stack in the gateway exists for. Nesting level n collects
+            % 0..n-1, so the inner indices are 0, 0 1, 0 1 2.
+            bindings_tests.Callbacks.invokeTimes(@nest, 3);
+            testCase.verifyEqual(outer, [0 1 2]);
+            testCase.verifyEqual(inner, [0 0 1 0 1 2]);
+
+            % An error raised inside the callback is trapped by the trampoline and
+            % rethrown at the call site once the library call has returned.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnce(@fail, 1), 'bindings_tests:CallbackFailed');
+
+            % The stack recovers from that error, so the next call still works
+            collected = [];
+            bindings_tests.Callbacks.invokeTimes(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function nest(index)
+                outer(end + 1) = index;
+                bindings_tests.Callbacks.invokeTimes(@collectInner, index + 1);
+            end
+
+            function collectInner(index)
+                inner(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
         end
 
         function testIsolated(testCase)

@@ -140,11 +140,7 @@
     "inputs": [{
         "kind": "required",
         "name": "func",
-        "type": ["any"]
-      }, {
-        "kind": "required",
-        "name": "userData",
-        "type": ["any"]
+        "type": ["function_handle"]
       }, {
         "kind": "required",
         "name": "index",
@@ -155,26 +151,11 @@
     "inputs": [{
         "kind": "required",
         "name": "func",
-        "type": ["any"]
-      }, {
-        "kind": "required",
-        "name": "userData",
-        "type": ["any"]
+        "type": ["function_handle"]
       }, {
         "kind": "required",
         "name": "times",
         "type": ["numeric"]
-      }]
-  },
-  "bindings_tests.Callbacks.notifyOnce": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["any"]
-      }, {
-        "kind": "required",
-        "name": "userData",
-        "type": ["any"]
       }]
   },
   "bindings_tests.Circle": {

@@ -163,6 +163,57 @@ struct MatlabStringArray {
     MatlabStringArray(const MatlabStringArray&) = delete;
 };
 
+// A synchronous callback may re-enter the library and trigger another callback, so the
+// handles live on a stack rather than in a single slot, which a nested registration would
+// clobber. The gateway passes the slot address through the method's void* userData
+// parameter, so a trampoline finds its own handle without relying on top of stack.
+struct CallbackSlot {
+    const mxArray* handle; // the function handle to invoke, owned by the caller's prhs
+    mxArray* error;        // what a failed invocation trapped, raised after the call
+};
+
+static const int MAX_CALLBACK_DEPTH = 32;
+static CallbackSlot callbackStack[MAX_CALLBACK_DEPTH];
+static int callbackDepth = 0;     // slots in use
+static int activeTrampolines = 0; // nonzero while a callback is running MATLAB code
+
+inline int pushCallbackHandle(const mxArray* arg) {
+    if (!mxIsClass(arg, "function_handle")) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Expected a function handle.");
+    }
+    // mexErrMsgIdAndTxt longjmps to MATLAB's prompt, so a pop can be skipped and its slot
+    // left behind. A trampoline traps its own errors and therefore always balances
+    // activeTrampolines, so a zero count means nothing is running and the stack is stale.
+    if (activeTrampolines == 0) {
+        callbackDepth = 0;
+    }
+    if (callbackDepth == MAX_CALLBACK_DEPTH) {
+        mexErrMsgIdAndTxt("bindings_tests:InvalidInput", "Callbacks are nested more than %d deep.", MAX_CALLBACK_DEPTH);
+    }
+    callbackStack[callbackDepth] = CallbackSlot{arg, nullptr};
+    return callbackDepth++;
+}
+
+// RAII registration of the function handle one call passes
+struct MatlabCallback {
+    const int index;
+    explicit MatlabCallback(const mxArray* arg) : index(pushCallbackHandle(arg)) {}
+    ~MatlabCallback() { callbackDepth = index; }
+    operator void*() const { return &callbackStack[index]; }
+    MatlabCallback(const MatlabCallback&) = delete;
+};
+
+// Raises what a trampoline trapped, once the library has unwound its own frames. Throwing
+// the MException keeps the original identifier and message, and it longjmps like any
+// other error. rethrow is the wrong verb here, it rejects an exception that was never
+// caught in MATLAB code.
+inline void checkCallbackError(const MatlabCallback& callback) {
+    mxArray* error = callbackStack[callback.index].error;
+    if (error != nullptr) {
+        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+    }
+}
+
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
     return mxCreateDoubleMatrix(0, 0, mxREAL);
@@ -397,6 +448,21 @@ inline mxArray* createMexStatusInfo(const StatusInfo& value) {
     mxSetField(result, 0, "state", createMexScalar(value.state));
     mxSetField(result, 0, "enabled", mxCreateLogicalScalar(value.enabled != 0));
     return result;
+}
+
+// Invokes the function handle a MATLAB caller registered for IndexCallbackFunction. An error
+// is trapped rather than raised, because a longjmp from here would tear down the
+// library's own frames. One mxArray per argument per call is inherent to MATLAB.
+static void invokeIndexCallbackFunction(void* userData, int index) {
+    auto* slot = static_cast<CallbackSlot*>(userData);
+    if (slot->error != nullptr) {
+        return; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[2] = {const_cast<mxArray*>(slot->handle), createMexScalar(index)};
+    activeTrampolines++;
+    slot->error = mexCallMATLABWithTrap(0, nullptr, 2, args, "feval");
+    activeTrampolines--;
+    mxDestroyArray(args[1]);
 }
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
@@ -826,28 +892,20 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         // Callbacks
         case /* hash32_fnv1a("bindings_tests_Callbacks_invokeTimes") */ 3311763887: {
             static auto bindings_tests_Callbacks_invokeTimes = libLoader.getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
-            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeTimes");
-            IndexCallbackFunction func = getPtr<IndexCallbackFunction>(prhs[1]);
-            void* userData = getPtr<void*>(prhs[2]);
-            size_t times = getScalar<size_t>(prhs[3], "times");
-            bindings_tests_Callbacks_invokeTimes(func, userData, times);
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokeTimes");
+            MatlabCallback func(prhs[1]);
+            size_t times = getScalar<size_t>(prhs[2], "times");
+            bindings_tests_Callbacks_invokeTimes(invokeIndexCallbackFunction, func, times);
+            checkCallbackError(func);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Callbacks_invokeOnce") */ 3234909522: {
             static auto bindings_tests_Callbacks_invokeOnce = libLoader.getFunc<void(*)(IndexCallbackFunction, void*, int)>("bindings_tests_Callbacks_invokeOnce");
-            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeOnce");
-            IndexCallbackFunction func = getPtr<IndexCallbackFunction>(prhs[1]);
-            void* userData = getPtr<void*>(prhs[2]);
-            int index = getScalar<int>(prhs[3], "index");
-            bindings_tests_Callbacks_invokeOnce(func, userData, index);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_Callbacks_notifyOnce") */ 4271263447: {
-            static auto bindings_tests_Callbacks_notifyOnce = libLoader.getFunc<void(*)(NotifyCallbackFunction, void*)>("bindings_tests_Callbacks_notifyOnce");
-            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_notifyOnce");
-            NotifyCallbackFunction func = getPtr<NotifyCallbackFunction>(prhs[1]);
-            void* userData = getPtr<void*>(prhs[2]);
-            bindings_tests_Callbacks_notifyOnce(func, userData);
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokeOnce");
+            MatlabCallback func(prhs[1]);
+            int index = getScalar<int>(prhs[2], "index");
+            bindings_tests_Callbacks_invokeOnce(invokeIndexCallbackFunction, func, index);
+            checkCallbackError(func);
             break;
         }
 

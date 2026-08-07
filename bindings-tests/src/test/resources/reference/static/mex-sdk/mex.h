@@ -89,6 +89,7 @@ void mxSetField_800(mxArray* pa, mwIndex index, const char* fieldname, mxArray* 
 
 // MEX API (libmex)
 int mexCallMATLAB_800(int nlhs, mxArray* plhs[], int nrhs, mxArray* prhs[], const char* functionName);
+mxArray* mexCallMATLABWithTrap_800(int nlhs, mxArray* plhs[], int nrhs, mxArray* prhs[], const char* functionName);
 void mexErrMsgIdAndTxt_800(const char* errorid, const char* errormsg, ...);
 void mexErrMsgTxt_800(const char* errormsg);
 
@@ -122,6 +123,7 @@ void mexErrMsgTxt_800(const char* errormsg);
 #define mxIsUint64 mxIsUint64_800
 #define mxSetField mxSetField_800
 #define mexCallMATLAB mexCallMATLAB_800
+#define mexCallMATLABWithTrap mexCallMATLABWithTrap_800
 #define mexErrMsgIdAndTxt mexErrMsgIdAndTxt_800
 #define mexErrMsgTxt mexErrMsgTxt_800
 
