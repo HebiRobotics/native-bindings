@@ -61,6 +61,7 @@ message StructFieldDescription {
   optional string name = 1; // camelCase as authored, used for MATLAB struct fields
   optional string lower_underscore_name = 2; // name for the C, C++ and Python faces
   optional DataType data_type = 3;
+  optional bool is_const = 4 [default = false]; // pointer field the consumer may only read
 }
 
 enum DataType {

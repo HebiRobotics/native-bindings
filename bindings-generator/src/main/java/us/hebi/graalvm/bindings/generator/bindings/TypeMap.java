@@ -68,8 +68,14 @@ public final class TypeMap {
     /**
      * @return C type of a struct field. Fixed width on purpose: the public header and the
      * native-image probe header declare the same layout and must not disagree on a 32 bit target.
+     * Constness comes from the declaration, i.e. a GraalVM {@code @CConst} on the accessor. It is
+     * a statement to the external consumer only.
      */
-    public static String toStructFieldC(DataType type) {
+    public static String toStructFieldC(DataType type, boolean isConst) {
+        return (isConst ? "const " : "") + toStructFieldC(type);
+    }
+
+    private static String toStructFieldC(DataType type) {
         return switch (type) {
             case FLOAT64 -> "double";
             case FLOAT32 -> "float";
@@ -81,17 +87,13 @@ public final class TypeMap {
             case BOOL -> "int32_t"; // native-image maps a Java boolean to a 4 byte int
             case SIZE_T -> "size_t"; // the exception to the fixed width rule, both headers say size_t
 
-            // Const is a statement to the external consumer only. The Java setter keeps
-            // working, because the entry point writes the field through the view.
-            case FLOAT64_POINTER -> "const double*";
-            case FLOAT32_POINTER -> "const float*";
-            case INT64_POINTER -> "const int64_t*";
-            case INT32_POINTER -> "const int32_t*";
-            case INT16_POINTER -> "const int16_t*";
-            case UINT8_POINTER -> "const uint8_t*";
-            case CHAR_POINTER -> "const char*";
-
-            // Not const: arbitrary caller data, e.g. a context that comes back in a callback
+            case FLOAT64_POINTER -> "double*";
+            case FLOAT32_POINTER -> "float*";
+            case INT64_POINTER -> "int64_t*";
+            case INT32_POINTER -> "int32_t*";
+            case INT16_POINTER -> "int16_t*";
+            case UINT8_POINTER -> "uint8_t*";
+            case CHAR_POINTER -> "char*";
             case VOID_POINTER -> "void*";
 
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);

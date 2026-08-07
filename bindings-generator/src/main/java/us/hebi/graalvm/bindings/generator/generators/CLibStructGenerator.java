@@ -139,7 +139,7 @@ public class CLibStructGenerator extends AbstractGenerator {
                 """);
 
         for (var field : struct.getFields()) {
-            out.append("    ").append(TypeMap.toStructFieldC(field.getDataType())).append(" ").append(field.getName()).append(";\n");
+            out.append("    ").append(TypeMap.toStructFieldC(field.getDataType(), field.isConst())).append(" ").append(field.getName()).append(";\n");
         }
 
         out.append("} ").append(struct.getCStructName()).append(";\n");

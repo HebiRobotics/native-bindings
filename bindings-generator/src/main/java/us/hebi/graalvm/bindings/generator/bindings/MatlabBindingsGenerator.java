@@ -360,7 +360,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     struct %%STRUCT_NAME%% {
                     """).indent();
             for (var field : struct.getFields()) {
-                content.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
+                content.addLine(TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";");
             }
             content.unindent().add("};\n");
 
@@ -386,7 +386,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 // A pointer field is not read from MATLAB, but the initializer is positional
                 String value = TypeMap.isPointerType(field.getDataType())
                         ? "nullptr"
-                        : "getStructField<" + TypeMap.toStructFieldC(field.getDataType())
+                        : "getStructField<" + TypeMap.toStructFieldC(field.getDataType(), false)
                           + ">(arg, \"%%STRUCT_NAME%%\", \"" + field.getName() + "\")";
                 content.addLine(value + (i == fields.length() - 1 ? "" : ","));
             }

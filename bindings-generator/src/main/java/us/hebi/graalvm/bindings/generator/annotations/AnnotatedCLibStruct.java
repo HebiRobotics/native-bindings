@@ -8,6 +8,7 @@ import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
 import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
@@ -155,10 +156,15 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
                 }
             }
 
-            var field = byName.computeIfAbsent(fieldName, name -> new StructField(name, dataType));
+            var isConst = isConstType(fieldName, type, dataType);
+            var field = byName.computeIfAbsent(fieldName, name -> new StructField(name, dataType, isConst));
             if (field.dataType != dataType) {
                 throw error("@CField '%s' is declared as both %s and %s: %s",
                         fieldName, field.dataType, dataType, getQualifiedName());
+            }
+            if (field.isConst != isConst) {
+                throw error("@CField '%s' is declared @CConst on one accessor and not the other: %s",
+                        fieldName, getQualifiedName());
             }
             if (isGetter) {
                 field.hasGetter = true;
@@ -187,6 +193,20 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
                     type, fieldName, getQualifiedName());
         }
         return dataType;
+    }
+
+    /**
+     * GraalVM's {@code @CConst} is a type-use annotation, so it sits on the getter's return
+     * type and on the setter's parameter type rather than on the method. It says the public
+     * C face may only read through the pointer, which is meaningless on a value field.
+     */
+    private boolean isConstType(String fieldName, TypeMirror type, DataType dataType) {
+        var isConst = type.getAnnotationMirrors().stream().anyMatch(mirror -> CConst.class.getCanonicalName()
+                .contentEquals(((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName()));
+        if (isConst && !TypeMap.isPointerType(dataType)) {
+            throw error("@CConst field '%s' must be a pointer, got '%s': %s", fieldName, type, getQualifiedName());
+        }
+        return isConst;
     }
 
     /**
@@ -261,10 +281,13 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         getComment().ifPresent(desc::setComment);
 
         for (var field : fields) {
-            desc.getMutableFields().next()
+            var fieldDesc = desc.getMutableFields().next()
                     .setName(field.getName())
                     .setLowerUnderscoreName(CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, field.getName()))
                     .setDataType(field.getDataType());
+            if (field.isConst()) { // only set when it differs from the proto default
+                fieldDesc.setIsConst(true);
+            }
         }
         return desc;
     }
@@ -339,9 +362,10 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
 
     public static class StructField {
 
-        StructField(String name, DataType dataType) {
+        StructField(String name, DataType dataType, boolean isConst) {
             this.name = name;
             this.dataType = dataType;
+            this.isConst = isConst;
         }
 
         public String getName() {
@@ -352,8 +376,16 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
             return dataType;
         }
 
+        /**
+         * @return true if the public C face declares the pointer as {@code const}
+         */
+        public boolean isConst() {
+            return isConst;
+        }
+
         final String name;
         final DataType dataType;
+        final boolean isConst;
         boolean hasGetter = false;
         boolean hasSetter = false;
 

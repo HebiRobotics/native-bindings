@@ -3,6 +3,7 @@ package us.hebi.graalvm.bindings.runtime.structs;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
@@ -35,10 +36,11 @@ import us.hebi.graalvm.bindings.runtime.structs.include.StructDirectives;
 public interface ByteSpan extends PointerBase {
 
     @CField("data")
+    @CConst
     CBytePointer data();
 
     @CField("data")
-    void setData(CBytePointer data);
+    void setData(@CConst CBytePointer data);
 
     @CField("length")
     @CSizeType

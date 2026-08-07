@@ -3,6 +3,7 @@ package us.hebi.graalvm.bindings.runtime.structs;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
@@ -33,10 +34,11 @@ import us.hebi.graalvm.bindings.runtime.structs.include.StructDirectives;
 public interface DoubleSpan extends PointerBase {
 
     @CField("data")
+    @CConst
     CDoublePointer data();
 
     @CField("data")
-    void setData(CDoublePointer data);
+    void setData(@CConst CDoublePointer data);
 
     @CField("length")
     @CSizeType

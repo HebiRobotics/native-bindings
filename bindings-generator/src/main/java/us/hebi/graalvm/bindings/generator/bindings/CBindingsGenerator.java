@@ -152,7 +152,7 @@ public class CBindingsGenerator extends BindingGenerator {
         struct.tryGetComment().ifPresent(comment -> out.add(DocumentationUtil.generateLineComments("", comment)));
         out.addLine("typedef struct {").indent();
         for (var field : struct.getFields()) {
-            out.addLine(TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";");
+            out.addLine(TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";");
         }
         return out.unindent().addLine("} " + struct.getCName() + ";").render();
     }

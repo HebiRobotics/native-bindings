@@ -188,7 +188,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             }
             out.write("struct " + struct.getName() + " {\n");
             for (var field : struct.getFields()) {
-                out.write("  " + TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";\n");
+                out.write("  " + TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";\n");
             }
             out.write("};\n\n");
         }
@@ -223,7 +223,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isEmpty()) continue;
             out.write("struct %s {\n".formatted(getInternalStructName(struct.getName())));
             for (var field : struct.getFields()) {
-                out.write("  " + TypeMap.toStructFieldC(field.getDataType()) + " " + field.getLowerUnderscoreName() + ";\n");
+                out.write("  " + TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";\n");
             }
             out.write("};\n");
         }
