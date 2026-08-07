@@ -182,8 +182,8 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         var javaType = TypeName.get(type);
         var dataType = isSizeType(fieldName, type, javaType) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
         if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
-            throw error("@CLibStruct fields may only be double, float, long, int, short, byte, boolean, "
-                            + "@CSizeType long, CDoublePointer, CFloatPointer, CIntPointer or CCharPointer, got '%s %s': %s",
+            throw error("@CLibStruct fields may only be primitives, @CSizeType long, "
+                            + "or typed GraalVM pointers, got '%s %s': %s",
                     type, fieldName, getQualifiedName());
         }
         return dataType;
@@ -210,8 +210,9 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
      */
     private static boolean isSupportedFieldType(TypeName javaType, DataType dataType) {
         return switch (dataType) {
-            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, BOOL, SIZE_T -> true;
-            case FLOAT64_POINTER, FLOAT32_POINTER, INT32_POINTER, UINT8_POINTER, CHAR_POINTER -> !STRING_TYPE.equals(javaType);
+            case FLOAT64, FLOAT32, INT64, INT32, INT16, INT8, CHAR16, BOOL, SIZE_T -> true;
+            case FLOAT64_POINTER, FLOAT32_POINTER, INT64_POINTER, INT32_POINTER, INT16_POINTER,
+                 UINT8_POINTER, CHAR_POINTER, VOID_POINTER -> !STRING_TYPE.equals(javaType);
             default -> false;
         };
     }

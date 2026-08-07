@@ -77,6 +77,7 @@ public final class TypeMap {
             case INT32 -> "int32_t";
             case INT16 -> "int16_t";
             case INT8 -> "int8_t";
+            case CHAR16 -> "uint16_t"; // a UTF-16 code unit, same as the scalar parameter face
             case BOOL -> "int32_t"; // native-image maps a Java boolean to a 4 byte int
             case SIZE_T -> "size_t"; // the exception to the fixed width rule, both headers say size_t
 
@@ -84,9 +85,14 @@ public final class TypeMap {
             // working, because the entry point writes the field through the view.
             case FLOAT64_POINTER -> "const double*";
             case FLOAT32_POINTER -> "const float*";
+            case INT64_POINTER -> "const int64_t*";
             case INT32_POINTER -> "const int32_t*";
+            case INT16_POINTER -> "const int16_t*";
             case UINT8_POINTER -> "const uint8_t*";
             case CHAR_POINTER -> "const char*";
+
+            // Not const: arbitrary caller data, e.g. a context that comes back in a callback
+            case VOID_POINTER -> "void*";
 
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
@@ -104,12 +110,16 @@ public final class TypeMap {
             case INT32, BOOL -> "c_int32";
             case INT16 -> "c_int16";
             case INT8 -> "c_int8";
+            case CHAR16 -> "c_uint16";
             case SIZE_T -> "c_size_t";
             case FLOAT64_POINTER -> "POINTER(c_double)";
             case FLOAT32_POINTER -> "POINTER(c_float)";
+            case INT64_POINTER -> "POINTER(c_int64)";
             case INT32_POINTER -> "POINTER(c_int32)";
+            case INT16_POINTER -> "POINTER(c_int16)";
             case UINT8_POINTER -> "POINTER(c_uint8)"; // binary data must not auto-convert like c_char_p
             case CHAR_POINTER -> "c_char_p";
+            case VOID_POINTER -> "c_void_p";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
     }
@@ -121,7 +131,7 @@ public final class TypeMap {
     public static String toStructFieldPythonHint(DataType type) {
         return switch (type) {
             case FLOAT64, FLOAT32 -> "float";
-            case INT64, INT32, INT16, INT8, SIZE_T -> "int";
+            case INT64, INT32, INT16, INT8, CHAR16, SIZE_T -> "int";
             case BOOL -> "bool";
             default -> throw new IllegalArgumentException("Unsupported struct field type: " + type);
         };
@@ -135,6 +145,7 @@ public final class TypeMap {
     public static String toExternalC(DataType type) {
         return switch (type) {
             case SIZE_T -> "size_t";
+            case UINT8_POINTER -> "uint8_t*"; // internally char*, the shim casts
             default -> toInternalC(type);
         };
     }

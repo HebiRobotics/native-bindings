@@ -210,8 +210,10 @@ public class CEntryPointGenerator extends AbstractGenerator {
             if (TypeMap.isPointerType(TypeMap.getGraalDataType(accessor.getJavaType()))) {
                 code.addStatement("$N.$N($T.nullPointer())", outName, accessor.getMethodName(), WordFactory.class);
             } else {
-                code.addStatement("$N.$N($L)", outName, accessor.getMethodName(),
-                        TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false" : "0");
+                // A char setter rejects the int literal without the cast
+                String zero = TypeName.BOOLEAN.equals(accessor.getJavaType()) ? "false"
+                        : TypeName.CHAR.equals(accessor.getJavaType()) ? "(char) 0" : "0";
+                code.addStatement("$N.$N($L)", outName, accessor.getMethodName(), zero);
             }
         }
         return code.build();

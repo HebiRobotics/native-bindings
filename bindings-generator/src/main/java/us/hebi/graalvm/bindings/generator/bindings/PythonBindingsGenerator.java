@@ -886,7 +886,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 case "c_uint" -> "uint32";
                 case "c_ulong" -> "uint64";
                 case "c_ushort" -> "uint16";
-                case "c_ubyte" -> "uint8";
+                case "c_ubyte", "c_uint8" -> "uint8";
                 default -> throw new IllegalStateException("Unknown numpy type for base: " + baseType);
             };
         }

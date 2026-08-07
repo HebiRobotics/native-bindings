@@ -431,6 +431,8 @@ public class CBindingsGenerator extends BindingGenerator {
                 String name = param.getValue();
                 String value = switch (param.getKey().getDataType()) {
                     case SIZE_T -> "static_cast<long long>(" + name + ")";
+                    // the public face says uint8_t*, the GraalVM entry point char*
+                    case UINT8_POINTER -> "reinterpret_cast<char*>(" + name + ")";
                     // structs cross the entry point as a pointer to the by-value parameter
                     case STRUCT -> "&" + name;
                     default -> name;
