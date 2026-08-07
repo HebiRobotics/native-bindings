@@ -252,7 +252,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibClass.class, CLibClass::value);
             case ENUM ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
-            case CALLBACK -> Optional.of(String.valueOf(env.getTypeUtils().asElement(mirror).getSimpleName()));
+            case CALLBACK -> Optional.of(AnnotatedCLibCallback.getName((TypeElement) env.getTypeUtils().asElement(mirror)));
             case STRUCT -> getStructElement()
                     .map(AnnotatedCLibStruct::getName)
                     .filter(name -> !name.isEmpty());

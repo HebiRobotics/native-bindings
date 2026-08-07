@@ -5,7 +5,9 @@ import com.google.auto.service.AutoService;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
+import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibCallback;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.EnvProcessor;
 import us.hebi.graalvm.bindings.generator.bindings.CBindingsGenerator;
@@ -71,23 +73,40 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         return List.of(new Step() {
             @Override
             public Set<String> annotations() {
-                return ImmutableSet.of(CLibClass.class.getCanonicalName());
+                return ImmutableSet.of(CLibClass.class.getCanonicalName(), CLibCallback.class.getCanonicalName());
             }
 
             @Override
             public Set<? extends Element> process(ImmutableSetMultimap<String, Element> elementsByAnnotation) {
+                for (Element element : elementsByAnnotation.get(CLibCallback.class.getCanonicalName())) {
+                    reportErrors(() -> checkIsCallbackType(element));
+                }
                 for (Element element : elementsByAnnotation.get(CLibClass.class.getCanonicalName())) {
-                    try {
-                        processElement(castToTypeElement(element), processingEnv);
-                    } catch (Throwable t) {
-                        StringWriter sw = new StringWriter();
-                        t.printStackTrace(new PrintWriter(sw));
-                        processingEnv.getMessager().printMessage(ERROR, sw.toString());
-                    }
+                    reportErrors(() -> processElement(castToTypeElement(element), processingEnv));
                 }
                 return Collections.emptySet();
             }
         });
+    }
+
+    private void reportErrors(Runnable task) {
+        try {
+            task.run();
+        } catch (Throwable t) {
+            StringWriter sw = new StringWriter();
+            t.printStackTrace(new PrintWriter(sw));
+            processingEnv.getMessager().printMessage(ERROR, sw.toString());
+        }
+    }
+
+    /**
+     * The annotation only carries metadata for a callback that discovery finds on its own,
+     * so putting it anywhere else silently does nothing.
+     */
+    private static void checkIsCallbackType(Element element) {
+        if (!(element instanceof TypeElement type) || !AnnotatedCLibCallback.isCallbackType(type)) {
+            throw new ProcessingException(element, "@CLibCallback requires an interface extending CFunctionPointer: %s", element);
+        }
     }
 
     private static TypeElement castToTypeElement(Element element) {

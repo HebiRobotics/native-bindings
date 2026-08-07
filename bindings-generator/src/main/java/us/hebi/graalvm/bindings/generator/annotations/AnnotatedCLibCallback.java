@@ -1,6 +1,7 @@
 package us.hebi.graalvm.bindings.generator.annotations;
 
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.CallbackDescription;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -39,6 +40,11 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
             description.getMutableParameters().next()
                     .copyFrom(toCallbackType(type, false))
                     .setParamName(type.getName());
+        }
+
+        var annotation = element.getAnnotation(CLibCallback.class);
+        if (annotation != null && annotation.synchronous()) {
+            description.setIsSynchronous(true);
         }
     }
 
@@ -93,10 +99,19 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * @return the typedef name, which is the interface's simple name
+     * @return the typedef name, which is the interface's simple name unless
+     * {@code @CLibCallback} overrides it
      */
-    public String getName() {
+    public static String getName(TypeElement element) {
+        var annotation = element.getAnnotation(CLibCallback.class);
+        if (annotation != null && !annotation.name().isEmpty()) {
+            return annotation.name();
+        }
         return String.valueOf(element.getSimpleName());
+    }
+
+    public String getName() {
+        return getName(element);
     }
 
     public String getQualifiedName() {

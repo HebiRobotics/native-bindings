@@ -188,20 +188,20 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The cache is what makes a callable usable as a callback at all. ctypes keeps no
-     * reference to the trampoline it builds, so an inline prototype call can be collected
-     * while the library still holds its address, and a callback is asynchronous unless the
-     * API says otherwise. Keying on the callable also means a build-once-call-many loop
-     * pays for the wrapper once.
+     * The cache is what makes an asynchronous callable usable as a callback at all. ctypes
+     * keeps no reference to the trampoline it builds, so an inline prototype call can be
+     * collected while the library still holds its address. Keying on the callable also means
+     * a build-once-call-many loop pays for the wrapper once. A synchronous callback never
+     * enters the cache, it keeps its trampoline in a call-scoped local instead.
      */
     private String createCallbackSupportBlock() {
-        if (lib.getCallbacks().length() == 0) {
+        if (!hasAsynchronousCallback()) {
             return "";
         }
         return """
 
-                # Callbacks are held for the process lifetime. ctypes does not keep the trampoline
-                # alive by itself, and a callback may fire long after the call that passed it in.
+                # Asynchronous callbacks are held for the process lifetime. ctypes does not keep the
+                # trampoline alive by itself, and such a callback may fire long after the call returns.
                 _callback_wrappers = {}
                 def _wrap_callback(prototype, func):
                     wrapper = _callback_wrappers.get((prototype, func))
@@ -210,6 +210,20 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         _callback_wrappers[(prototype, func)] = wrapper
                     return wrapper
                 """;
+    }
+
+    private boolean hasAsynchronousCallback() {
+        for (var callback : lib.getCallbacks()) {
+            if (!callback.getIsSynchronous()) return true;
+        }
+        return false;
+    }
+
+    private static boolean isSynchronousCallback(LibraryDescription lib, TypeDescription type) {
+        for (var callback : lib.getCallbacks()) {
+            if (callback.getName().equals(type.getTypeName())) return callback.getIsSynchronous();
+        }
+        return false;
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
@@ -907,11 +921,17 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .render());
 
             } else if (desc.getDataType() == DataType.CALLBACK) {
-                // Anything callable is accepted, a prebuilt prototype passes straight through
+                // Anything callable is accepted, a prebuilt prototype passes straight through.
+                // A synchronous callback is done by the time the call returns, so its trampoline
+                // stays a local and a fresh lambda per call gets collected like any other object.
                 out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
-                            %%NAME%% = _wrap_callback(%%CTYPE%%, %%NAME%%)
-                        """).set("NAME", name).set("CTYPE", pyType).render());
+                            %%NAME%% = %%WRAP%%
+                        """).set("NAME", name).set("CTYPE", pyType)
+                        .set("WRAP", isSynchronousCallback(lib, desc)
+                                ? "%s(%s)".formatted(pyType, name)
+                                : "_wrap_callback(%s, %s)".formatted(pyType, name))
+                        .render());
 
             } else if (pyType.equals("c_char_p")) {
                 out.append(IndentingTextRenderer.of("""
