@@ -55,7 +55,7 @@ using NamingPtr = struct Naming_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
-struct double_span {
+struct DoubleSpan {
   const double* data;
   size_t length;
 };
@@ -307,7 +307,7 @@ void reverseFloat64(double* values, size_t count) noexcept;
  * @param y 
  * @throw mismatched lengths
  */
-double dotProduct(internal::double_span x, internal::double_span y);
+double dotProduct(internal::DoubleSpan x, internal::DoubleSpan y);
 double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
 
 /**
@@ -316,7 +316,7 @@ double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
  * @param values 
  * @param offset 
  */
-std::vector<double> addOffset(internal::double_span values, double offset) noexcept;
+std::vector<double> addOffset(internal::DoubleSpan values, double offset) noexcept;
 std::vector<double> addOffset(const std::vector<double>& values, double offset) noexcept;
 
 /**
@@ -1018,8 +1018,8 @@ inline void arrays::reverseFloat64(double* values, size_t count) noexcept {
   static auto bindings_tests_Arrays_reverseFloat64 = DynamicLookup::instance().getFunc<void(*)(double*, size_t)>("bindings_tests_Arrays_reverseFloat64");
   bindings_tests_Arrays_reverseFloat64(values, count);
 }
-inline double arrays::dotProduct(internal::double_span x, internal::double_span y) {
-  static auto bindings_tests_Arrays_dotProduct = DynamicLookup::instance().getFunc<double(*)(internal::ErrorInfo*, internal::double_span, internal::double_span)>("bindings_tests_Arrays_dotProduct");
+inline double arrays::dotProduct(internal::DoubleSpan x, internal::DoubleSpan y) {
+  static auto bindings_tests_Arrays_dotProduct = DynamicLookup::instance().getFunc<double(*)(internal::ErrorInfo*, internal::DoubleSpan, internal::DoubleSpan)>("bindings_tests_Arrays_dotProduct");
   internal::ErrorInfo error_ = {};
   auto result_ = bindings_tests_Arrays_dotProduct(&error_, x, y);
   checkError(error_);
@@ -1028,8 +1028,8 @@ inline double arrays::dotProduct(internal::double_span x, internal::double_span 
 inline double arrays::dotProduct(const std::vector<double>& x, const std::vector<double>& y) {
   return dotProduct({x.data(), x.size()}, {y.data(), y.size()});
 }
-inline std::vector<double> arrays::addOffset(internal::double_span values, double offset) noexcept {
-  static auto bindings_tests_Arrays_addOffset = DynamicLookup::instance().getFunc<internal::double_span(*)(internal::double_span, double)>("bindings_tests_Arrays_addOffset");
+inline std::vector<double> arrays::addOffset(internal::DoubleSpan values, double offset) noexcept {
+  static auto bindings_tests_Arrays_addOffset = DynamicLookup::instance().getFunc<internal::DoubleSpan(*)(internal::DoubleSpan, double)>("bindings_tests_Arrays_addOffset");
   auto struct_ = bindings_tests_Arrays_addOffset(values, offset);
   return std::vector<double>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
 }
@@ -1037,7 +1037,7 @@ inline std::vector<double> arrays::addOffset(const std::vector<double>& values, 
   return addOffset({values.data(), values.size()}, offset);
 }
 inline std::vector<double> arrays::getSequence(size_t count) noexcept {
-  static auto bindings_tests_Arrays_getSequence = DynamicLookup::instance().getFunc<internal::double_span(*)(size_t)>("bindings_tests_Arrays_getSequence");
+  static auto bindings_tests_Arrays_getSequence = DynamicLookup::instance().getFunc<internal::DoubleSpan(*)(size_t)>("bindings_tests_Arrays_getSequence");
   auto struct_ = bindings_tests_Arrays_getSequence(count);
   return std::vector<double>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
 }

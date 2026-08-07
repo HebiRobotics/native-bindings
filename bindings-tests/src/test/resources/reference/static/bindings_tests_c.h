@@ -31,7 +31,7 @@ typedef struct {
     const char* message;
     const char* id;
     int32_t code;
-} bindings_tests_error_info_t;
+} bindings_tests_ErrorInfo;
 
 // A (pointer, length) view of a contiguous double buffer, passed and returned
 // by value. Inputs are caller-owned and only read during the call. Returned
@@ -40,13 +40,13 @@ typedef struct {
 typedef struct {
     const double* data;
     size_t length;
-} bindings_tests_double_span;
+} bindings_tests_DoubleSpan;
 
 typedef struct {
     double voltage;
     int32_t state;
     int32_t enabled;
-} bindings_tests_status_info;
+} bindings_tests_StatusInfo;
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
@@ -88,7 +88,7 @@ _Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for b
 
 
 // ==== Counter ====
-DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_error_info_t* _error, int start);
+DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start);
 DLL_PUBLIC int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj);
 DLL_PUBLIC void bindings_tests_Counter_setValue(bindings_tests_CounterPtr obj, int value);
 DLL_PUBLIC void bindings_tests_Counter_increment(bindings_tests_CounterPtr obj);
@@ -99,7 +99,7 @@ DLL_PUBLIC void bindings_tests_Counter_resetClosedCount();
 DLL_PUBLIC void bindings_tests_Counter_release(bindings_tests_CounterPtr obj);
 
 // ==== Naming ====
-DLL_PUBLIC custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_error_info_t* _error, int startValue);
+DLL_PUBLIC custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_ErrorInfo* _error, int startValue);
 DLL_PUBLIC int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
 DLL_PUBLIC int custom_prefix_Naming_add_two_numbers(int first, int second);
 DLL_PUBLIC void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
@@ -112,7 +112,7 @@ DLL_PUBLIC int bindings_tests_Shape_sideCount(bindings_tests_ShapePtr obj);
 DLL_PUBLIC void bindings_tests_Shape_release(bindings_tests_ShapePtr obj);
 
 // ==== Circle ====
-DLL_PUBLIC bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_error_info_t* _error, double radius);
+DLL_PUBLIC bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_ErrorInfo* _error, double radius);
 DLL_PUBLIC double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj);
 DLL_PUBLIC bindings_tests_CircleColor bindings_tests_Circle_getColor(bindings_tests_CirclePtr obj);
 DLL_PUBLIC double bindings_tests_Circle_area(bindings_tests_CirclePtr obj);
@@ -120,7 +120,7 @@ DLL_PUBLIC int bindings_tests_Circle_sideCount(bindings_tests_CirclePtr obj);
 DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr ptr);
 
 // ==== Square ====
-DLL_PUBLIC bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_error_info_t* _error, double side);
+DLL_PUBLIC bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_ErrorInfo* _error, double side);
 DLL_PUBLIC double bindings_tests_Square_getSide(bindings_tests_SquarePtr obj);
 DLL_PUBLIC double bindings_tests_Square_area(bindings_tests_SquarePtr obj);
 DLL_PUBLIC int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
@@ -132,21 +132,21 @@ DLL_PUBLIC int bindings_tests_Arrays_sumInt32(const int* values, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
 DLL_PUBLIC void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count);
 DLL_PUBLIC void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
-DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_error_info_t* _error, bindings_tests_double_span x, bindings_tests_double_span y);
-DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
-DLL_PUBLIC bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count);
+DLL_PUBLIC double bindings_tests_Arrays_dotProduct(bindings_tests_ErrorInfo* _error, bindings_tests_DoubleSpan x, bindings_tests_DoubleSpan y);
+DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleSpan values, double offset);
+DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
 DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
 
 // ==== Errors ====
-DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
-DLL_PUBLIC int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b);
-DLL_PUBLIC double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail);
-DLL_PUBLIC int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail);
-DLL_PUBLIC const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail);
-DLL_PUBLIC int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error);
+DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);
+DLL_PUBLIC int bindings_tests_Errors_divideInt32(bindings_tests_ErrorInfo* _error, int a, int b);
+DLL_PUBLIC double bindings_tests_Errors_failingFloat64(bindings_tests_ErrorInfo* _error, int shouldFail);
+DLL_PUBLIC int bindings_tests_Errors_failingBool(bindings_tests_ErrorInfo* _error, int shouldFail);
+DLL_PUBLIC const char* bindings_tests_Errors_failingString(bindings_tests_ErrorInfo* _error, int shouldFail);
+DLL_PUBLIC int bindings_tests_Errors_failWithoutMessage(bindings_tests_ErrorInfo* _error);
 DLL_PUBLIC void bindings_tests_Errors_neverThrows();
 
 // ==== Indices ====
@@ -161,7 +161,7 @@ DLL_PUBLIC size_t bindings_tests_Indices_echoSize(size_t index);
 DLL_PUBLIC void bindings_tests_Isolated_increment();
 DLL_PUBLIC int bindings_tests_Isolated_getCounter();
 DLL_PUBLIC void bindings_tests_Isolated_reset();
-DLL_PUBLIC void bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
+DLL_PUBLIC void bindings_tests_Isolated_alwaysFails(bindings_tests_ErrorInfo* _error);
 
 // ==== Math ====
 DLL_PUBLIC int bindings_tests_Math_negate(int value);
@@ -204,10 +204,10 @@ DLL_PUBLIC const char* bindings_tests_Strings_join(const char** values, size_t c
 DLL_PUBLIC const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 // ==== Structs ====
-DLL_PUBLIC double bindings_tests_Structs_totalPower(bindings_tests_status_info status, double currentAmps);
-DLL_PUBLIC double bindings_tests_Structs_checkedVoltage(bindings_tests_error_info_t* _error, bindings_tests_status_info status);
-DLL_PUBLIC bindings_tests_status_info bindings_tests_Structs_getStatus(int index);
-DLL_PUBLIC bindings_tests_status_info bindings_tests_Structs_getCheckedStatus(bindings_tests_error_info_t* _error, int index);
+DLL_PUBLIC double bindings_tests_Structs_totalPower(bindings_tests_StatusInfo status, double currentAmps);
+DLL_PUBLIC double bindings_tests_Structs_checkedVoltage(bindings_tests_ErrorInfo* _error, bindings_tests_StatusInfo status);
+DLL_PUBLIC bindings_tests_StatusInfo bindings_tests_Structs_getStatus(int index);
+DLL_PUBLIC bindings_tests_StatusInfo bindings_tests_Structs_getCheckedStatus(bindings_tests_ErrorInfo* _error, int index);
 
 DLL_PUBLIC void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {

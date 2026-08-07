@@ -1658,7 +1658,7 @@
   "structs": [{
     "name": "DoubleSpan",
     "cPrefix": "bindings_tests_",
-    "cName": "bindings_tests_double_span",
+    "cName": "bindings_tests_DoubleSpan",
     "fields": [{
       "name": "data",
       "lowerUnderscoreName": "data",
@@ -1672,7 +1672,7 @@
   }, {
     "name": "StatusInfo",
     "cPrefix": "bindings_tests_",
-    "cName": "bindings_tests_status_info",
+    "cName": "bindings_tests_StatusInfo",
     "fields": [{
       "name": "voltage",
       "lowerUnderscoreName": "voltage",

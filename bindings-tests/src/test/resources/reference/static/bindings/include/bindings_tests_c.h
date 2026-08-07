@@ -15,7 +15,7 @@ typedef struct {
     const char* message;
     const char* id;
     int32_t code;
-} bindings_tests_error_info_t;
+} bindings_tests_ErrorInfo;
 
 // A (pointer, length) view of a contiguous double buffer, passed and returned
 // by value. Inputs are caller-owned and only read during the call. Returned
@@ -24,13 +24,13 @@ typedef struct {
 typedef struct {
     const double* data;
     size_t length;
-} bindings_tests_double_span;
+} bindings_tests_DoubleSpan;
 
 typedef struct {
     double voltage;
     int32_t state;
     int32_t enabled;
-} bindings_tests_status_info;
+} bindings_tests_StatusInfo;
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
@@ -72,7 +72,7 @@ _Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for b
 
 
 // ==== Counter ====
-bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_error_info_t* _error, int start);
+bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start);
 int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj);
 void bindings_tests_Counter_setValue(bindings_tests_CounterPtr obj, int value);
 void bindings_tests_Counter_increment(bindings_tests_CounterPtr obj);
@@ -83,7 +83,7 @@ void bindings_tests_Counter_resetClosedCount();
 void bindings_tests_Counter_release(bindings_tests_CounterPtr obj);
 
 // ==== Naming ====
-custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_error_info_t* _error, int startValue);
+custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_ErrorInfo* _error, int startValue);
 int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
 int custom_prefix_Naming_add_two_numbers(int first, int second);
 void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
@@ -96,7 +96,7 @@ int bindings_tests_Shape_sideCount(bindings_tests_ShapePtr obj);
 void bindings_tests_Shape_release(bindings_tests_ShapePtr obj);
 
 // ==== Circle ====
-bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_error_info_t* _error, double radius);
+bindings_tests_CirclePtr bindings_tests_Circle_create(bindings_tests_ErrorInfo* _error, double radius);
 double bindings_tests_Circle_getRadius(bindings_tests_CirclePtr obj);
 bindings_tests_CircleColor bindings_tests_Circle_getColor(bindings_tests_CirclePtr obj);
 double bindings_tests_Circle_area(bindings_tests_CirclePtr obj);
@@ -104,7 +104,7 @@ int bindings_tests_Circle_sideCount(bindings_tests_CirclePtr obj);
 bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr ptr);
 
 // ==== Square ====
-bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_error_info_t* _error, double side);
+bindings_tests_SquarePtr bindings_tests_Square_create(bindings_tests_ErrorInfo* _error, double side);
 double bindings_tests_Square_getSide(bindings_tests_SquarePtr obj);
 double bindings_tests_Square_area(bindings_tests_SquarePtr obj);
 int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
@@ -116,21 +116,21 @@ int bindings_tests_Arrays_sumInt32(const int* values, size_t count);
 void bindings_tests_Arrays_fillFloat64(double* target, size_t count, double value);
 void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, size_t count);
 void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
-double bindings_tests_Arrays_dotProduct(bindings_tests_error_info_t* _error, bindings_tests_double_span x, bindings_tests_double_span y);
-bindings_tests_double_span bindings_tests_Arrays_addOffset(bindings_tests_double_span values, double offset);
-bindings_tests_double_span bindings_tests_Arrays_getSequence(size_t count);
+double bindings_tests_Arrays_dotProduct(bindings_tests_ErrorInfo* _error, bindings_tests_DoubleSpan x, bindings_tests_DoubleSpan y);
+bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleSpan values, double offset);
+bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
 void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
 void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
 
 // ==== Errors ====
-void bindings_tests_Errors_requireNonNegative(bindings_tests_error_info_t* _error, int value);
-int bindings_tests_Errors_divideInt32(bindings_tests_error_info_t* _error, int a, int b);
-double bindings_tests_Errors_failingFloat64(bindings_tests_error_info_t* _error, int shouldFail);
-int bindings_tests_Errors_failingBool(bindings_tests_error_info_t* _error, int shouldFail);
-const char* bindings_tests_Errors_failingString(bindings_tests_error_info_t* _error, int shouldFail);
-int bindings_tests_Errors_failWithoutMessage(bindings_tests_error_info_t* _error);
+void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);
+int bindings_tests_Errors_divideInt32(bindings_tests_ErrorInfo* _error, int a, int b);
+double bindings_tests_Errors_failingFloat64(bindings_tests_ErrorInfo* _error, int shouldFail);
+int bindings_tests_Errors_failingBool(bindings_tests_ErrorInfo* _error, int shouldFail);
+const char* bindings_tests_Errors_failingString(bindings_tests_ErrorInfo* _error, int shouldFail);
+int bindings_tests_Errors_failWithoutMessage(bindings_tests_ErrorInfo* _error);
 void bindings_tests_Errors_neverThrows();
 
 // ==== Indices ====
@@ -145,7 +145,7 @@ size_t bindings_tests_Indices_echoSize(size_t index);
 void bindings_tests_Isolated_increment();
 int bindings_tests_Isolated_getCounter();
 void bindings_tests_Isolated_reset();
-void bindings_tests_Isolated_alwaysFails(bindings_tests_error_info_t* _error);
+void bindings_tests_Isolated_alwaysFails(bindings_tests_ErrorInfo* _error);
 
 // ==== Math ====
 int bindings_tests_Math_negate(int value);
@@ -188,10 +188,10 @@ const char* bindings_tests_Strings_join(const char** values, size_t count, const
 const char* bindings_tests_Strings_repeat(const char* value, size_t times);
 
 // ==== Structs ====
-double bindings_tests_Structs_totalPower(bindings_tests_status_info status, double currentAmps);
-double bindings_tests_Structs_checkedVoltage(bindings_tests_error_info_t* _error, bindings_tests_status_info status);
-bindings_tests_status_info bindings_tests_Structs_getStatus(int index);
-bindings_tests_status_info bindings_tests_Structs_getCheckedStatus(bindings_tests_error_info_t* _error, int index);
+double bindings_tests_Structs_totalPower(bindings_tests_StatusInfo status, double currentAmps);
+double bindings_tests_Structs_checkedVoltage(bindings_tests_ErrorInfo* _error, bindings_tests_StatusInfo status);
+bindings_tests_StatusInfo bindings_tests_Structs_getStatus(int index);
+bindings_tests_StatusInfo bindings_tests_Structs_getCheckedStatus(bindings_tests_ErrorInfo* _error, int index);
 
 void bindings_tests_getLibraryVersion(int* major, int* minor, int* patch, int* build);
 static __inline void bindings_tests_getHeaderVersion(int* major, int* minor, int* patch, int* build) {
