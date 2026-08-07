@@ -6,7 +6,7 @@ import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.Handles;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestCounter;
 
@@ -34,11 +34,11 @@ public final class TestCounter$CEntries {
     )
     public static ObjectHandle bindings_tests_Counter_create(IsolateThread _isolate,
             ErrorInfo _error, int start) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestCounter$CEntries._registerInstance(TestCounter.create(start));
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }

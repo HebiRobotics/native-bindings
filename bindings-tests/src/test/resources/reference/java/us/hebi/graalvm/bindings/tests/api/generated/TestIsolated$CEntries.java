@@ -2,7 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestIsolated;
 
@@ -46,11 +46,11 @@ public final class TestIsolated$CEntries {
     )
     public static void bindings_tests_Isolated_alwaysFails(IsolateThread _isolate,
             ErrorInfo _error) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             TestIsolated.alwaysFails();
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
         }
     }
 }

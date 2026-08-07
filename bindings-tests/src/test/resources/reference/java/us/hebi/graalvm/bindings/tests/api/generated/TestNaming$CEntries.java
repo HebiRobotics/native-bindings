@@ -6,7 +6,7 @@ import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.Handles;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestNaming;
 
@@ -34,11 +34,11 @@ public final class TestNaming$CEntries {
     )
     public static ObjectHandle custom_prefix_Naming_create(IsolateThread _isolate, ErrorInfo _error,
             int startValue) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestNaming$CEntries._registerInstance(TestNaming.create(startValue));
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }

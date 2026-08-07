@@ -6,7 +6,7 @@ import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestArrays;
@@ -79,11 +79,11 @@ public final class TestArrays$CEntries {
     )
     public static double bindings_tests_Arrays_dotProduct(IsolateThread _isolate, ErrorInfo _error,
             DoubleSpan x, DoubleSpan y) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestArrays.dotProduct(x, y);
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return 0;
         }
     }

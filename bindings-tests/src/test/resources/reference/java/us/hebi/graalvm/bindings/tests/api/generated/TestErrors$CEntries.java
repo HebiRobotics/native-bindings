@@ -5,7 +5,7 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestErrors;
 
@@ -15,11 +15,11 @@ public final class TestErrors$CEntries {
     )
     public static void bindings_tests_Errors_requireNonNegative(IsolateThread _isolate,
             ErrorInfo _error, int value) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             TestErrors.requireNonNegative(value);
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
         }
     }
 
@@ -28,11 +28,11 @@ public final class TestErrors$CEntries {
     )
     public static int bindings_tests_Errors_divideInt32(IsolateThread _isolate, ErrorInfo _error,
             int a, int b) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestErrors.divideInt32(a, b);
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return 0;
         }
     }
@@ -42,11 +42,11 @@ public final class TestErrors$CEntries {
     )
     public static double bindings_tests_Errors_failingFloat64(IsolateThread _isolate,
             ErrorInfo _error, boolean shouldFail) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestErrors.failingFloat64(shouldFail);
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return 0;
         }
     }
@@ -56,11 +56,11 @@ public final class TestErrors$CEntries {
     )
     public static boolean bindings_tests_Errors_failingBool(IsolateThread _isolate,
             ErrorInfo _error, boolean shouldFail) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestErrors.failingBool(shouldFail);
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return false;
         }
     }
@@ -70,11 +70,11 @@ public final class TestErrors$CEntries {
     )
     public static CCharPointer bindings_tests_Errors_failingString(IsolateThread _isolate,
             ErrorInfo _error, boolean shouldFail) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return CPointers.toTempCharPointer(TestErrors.failingString(shouldFail));
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }
@@ -84,11 +84,11 @@ public final class TestErrors$CEntries {
     )
     public static int bindings_tests_Errors_failWithoutMessage(IsolateThread _isolate,
             ErrorInfo _error) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestErrors.failWithoutMessage();
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return 0;
         }
     }

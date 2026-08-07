@@ -6,7 +6,7 @@ import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.Handles;
-import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
 
@@ -26,11 +26,11 @@ public final class TestShape_TestCircle$CEntries {
     )
     public static ObjectHandle bindings_tests_Circle_create(IsolateThread _isolate,
             ErrorInfo _error, double radius) {
-        CLibError.clearStruct(_error);
+        CLibErrors.clear(_error);
         try {
             return TestShape_TestCircle$CEntries._registerInstance(TestShape.TestCircle.create(radius));
         } catch (Throwable throwable) {
-            CLibError.fillStruct(throwable, _error, "bindings_tests");
+            CLibErrors.fill(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
         }
     }
