@@ -47,8 +47,20 @@ using NamingPtr = struct Naming_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
+struct ByteSpan {
+  const uint8_t* data;
+  size_t length;
+};
 struct DoubleSpan {
   const double* data;
+  size_t length;
+};
+struct FloatSpan {
+  const float* data;
+  size_t length;
+};
+struct IntSpan {
+  const int32_t* data;
   size_t length;
 };
 struct ErrorInfo {
@@ -310,6 +322,33 @@ double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
  */
 std::vector<double> addOffset(internal::DoubleSpan values, double offset) noexcept;
 std::vector<double> addOffset(const std::vector<double>& values, double offset) noexcept;
+
+/**
+ * @brief Returns a new array with the offset added to every element. Checks an int32 span in and an array out.
+ *
+ * @param values 
+ * @param offset 
+ */
+std::vector<int32_t> addOffsetInt32(internal::IntSpan values, int offset) noexcept;
+std::vector<int32_t> addOffsetInt32(const std::vector<int32_t>& values, int offset) noexcept;
+
+/**
+ * @brief Returns a new array with the offset added to every element. Checks a float span in and an array out.
+ *
+ * @param values 
+ * @param offset 
+ */
+std::vector<float> addOffsetFloat32(internal::FloatSpan values, float offset) noexcept;
+std::vector<float> addOffsetFloat32(const std::vector<float>& values, float offset) noexcept;
+
+/**
+ * @brief Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.
+ *
+ * @param values 
+ * @param offset 
+ */
+std::vector<uint8_t> addOffsetUint8(internal::ByteSpan values, char offset) noexcept;
+std::vector<uint8_t> addOffsetUint8(const std::vector<uint8_t>& values, char offset) noexcept;
 
 /**
  * @details 
@@ -778,6 +817,9 @@ extern "C" {
   void bindings_tests_Arrays_reverseFloat64(double*, size_t);
   double bindings_tests_Arrays_dotProduct(internal::ErrorInfo*, internal::DoubleSpan, internal::DoubleSpan);
   internal::DoubleSpan bindings_tests_Arrays_addOffset(internal::DoubleSpan, double);
+  internal::IntSpan bindings_tests_Arrays_addOffsetInt32(internal::IntSpan, int);
+  internal::FloatSpan bindings_tests_Arrays_addOffsetFloat32(internal::FloatSpan, float);
+  internal::ByteSpan bindings_tests_Arrays_addOffsetUint8(internal::ByteSpan, char);
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
@@ -1060,6 +1102,27 @@ inline std::vector<double> arrays::addOffset(internal::DoubleSpan values, double
 }
 inline std::vector<double> arrays::addOffset(const std::vector<double>& values, double offset) noexcept {
   return addOffset({values.data(), values.size()}, offset);
+}
+inline std::vector<int32_t> arrays::addOffsetInt32(internal::IntSpan values, int offset) noexcept {
+  auto struct_ = bindings_tests_Arrays_addOffsetInt32(values, offset);
+  return std::vector<int32_t>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
+}
+inline std::vector<int32_t> arrays::addOffsetInt32(const std::vector<int32_t>& values, int offset) noexcept {
+  return addOffsetInt32({values.data(), values.size()}, offset);
+}
+inline std::vector<float> arrays::addOffsetFloat32(internal::FloatSpan values, float offset) noexcept {
+  auto struct_ = bindings_tests_Arrays_addOffsetFloat32(values, offset);
+  return std::vector<float>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
+}
+inline std::vector<float> arrays::addOffsetFloat32(const std::vector<float>& values, float offset) noexcept {
+  return addOffsetFloat32({values.data(), values.size()}, offset);
+}
+inline std::vector<uint8_t> arrays::addOffsetUint8(internal::ByteSpan values, char offset) noexcept {
+  auto struct_ = bindings_tests_Arrays_addOffsetUint8(values, offset);
+  return std::vector<uint8_t>(struct_.data, struct_.data + struct_.length); // copy before the next call invalidates it
+}
+inline std::vector<uint8_t> arrays::addOffsetUint8(const std::vector<uint8_t>& values, char offset) noexcept {
+  return addOffsetUint8({values.data(), values.size()}, offset);
 }
 inline std::vector<double> arrays::getSequence(size_t count) noexcept {
   auto struct_ = bindings_tests_Arrays_getSequence(count);

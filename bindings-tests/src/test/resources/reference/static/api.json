@@ -554,6 +554,75 @@
       "documentation": "Returns a new array with the offset added to every element. Checks a span in and an array out.",
       "flags": ["Noexcept"]
     }, {
+      "name": "addOffsetInt32",
+      "lowerUnderscoreName": "add_offset_int32",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_addOffsetInt32",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "IntSpan",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "cPrefix": "bindings_tests_",
+        "typeName": "IntSpan",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "offset",
+        "lowerUnderscoreParamName": "offset",
+        "dataType": "INT32"
+      }],
+      "documentation": "Returns a new array with the offset added to every element. Checks an int32 span in and an array out.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addOffsetFloat32",
+      "lowerUnderscoreName": "add_offset_float32",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_addOffsetFloat32",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "FloatSpan",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "cPrefix": "bindings_tests_",
+        "typeName": "FloatSpan",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "offset",
+        "lowerUnderscoreParamName": "offset",
+        "dataType": "FLOAT32"
+      }],
+      "documentation": "Returns a new array with the offset added to every element. Checks a float span in and an array out.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "addOffsetUint8",
+      "lowerUnderscoreName": "add_offset_uint8",
+      "isStatic": true,
+      "cName": "bindings_tests_Arrays_addOffsetUint8",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "ByteSpan",
+        "dataType": "STRUCT"
+      },
+      "parameters": [{
+        "paramName": "values",
+        "lowerUnderscoreParamName": "values",
+        "cPrefix": "bindings_tests_",
+        "typeName": "ByteSpan",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "offset",
+        "lowerUnderscoreParamName": "offset",
+        "dataType": "INT8"
+      }],
+      "documentation": "Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.",
+      "flags": ["Noexcept"]
+    }, {
       "name": "getSequence",
       "lowerUnderscoreName": "get_sequence",
       "isStatic": true,
@@ -1656,6 +1725,20 @@
     "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
   }],
   "structs": [{
+    "name": "ByteSpan",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_ByteSpan",
+    "fields": [{
+      "name": "data",
+      "lowerUnderscoreName": "data",
+      "dataType": "UINT8_POINTER"
+    }, {
+      "name": "length",
+      "lowerUnderscoreName": "length",
+      "dataType": "SIZE_T"
+    }],
+    "comment": "A (pointer, length) view of a contiguous byte buffer, passed and returned\nby value. Binary data rather than a string: embedded zeros are data.\nInputs are caller-owned and only read during the call. Returned spans are\nlibrary-owned and stay valid until the calling thread's next library call,\nso they have to be copied immediately.\n"
+  }, {
     "name": "DoubleSpan",
     "cPrefix": "bindings_tests_",
     "cName": "bindings_tests_DoubleSpan",
@@ -1669,6 +1752,34 @@
       "dataType": "SIZE_T"
     }],
     "comment": "A (pointer, length) view of a contiguous double buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
+  }, {
+    "name": "FloatSpan",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_FloatSpan",
+    "fields": [{
+      "name": "data",
+      "lowerUnderscoreName": "data",
+      "dataType": "FLOAT32_POINTER"
+    }, {
+      "name": "length",
+      "lowerUnderscoreName": "length",
+      "dataType": "SIZE_T"
+    }],
+    "comment": "A (pointer, length) view of a contiguous float buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
+  }, {
+    "name": "IntSpan",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_IntSpan",
+    "fields": [{
+      "name": "data",
+      "lowerUnderscoreName": "data",
+      "dataType": "INT32_POINTER"
+    }, {
+      "name": "length",
+      "lowerUnderscoreName": "length",
+      "dataType": "SIZE_T"
+    }],
+    "comment": "A (pointer, length) view of a contiguous int32 buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
   }, {
     "name": "StatusInfo",
     "cPrefix": "bindings_tests_",

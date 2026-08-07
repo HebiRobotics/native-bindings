@@ -176,6 +176,23 @@ inline T getStructField(const mxArray* arg, const char* structName, const char* 
     return getScalar<T>(field, fieldName);
 }
 
+// Layout-compatible with the by-value ByteSpan struct in the C ABI
+struct ByteSpan {
+    const uint8_t* data;
+    size_t length;
+};
+
+// Returned spans are library-owned and only valid until the next call,
+// so they get copied immediately
+inline mxArray* createMexByteArray(ByteSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateNumericMatrix(1, span.length, mxUINT8_CLASS, mxREAL);
+    std::memcpy(mxGetData(array), span.data, span.length * sizeof(uint8_t));
+    return array;
+}
+
 // Layout-compatible with the by-value DoubleSpan struct in the C ABI
 struct DoubleSpan {
     const double* data;
@@ -190,6 +207,40 @@ inline mxArray* createMexDoubleArray(DoubleSpan span) {
     }
     mxArray* array = mxCreateDoubleMatrix(1, span.length, mxREAL);
     std::memcpy(mxGetPr(array), span.data, span.length * sizeof(double));
+    return array;
+}
+
+// Layout-compatible with the by-value FloatSpan struct in the C ABI
+struct FloatSpan {
+    const float* data;
+    size_t length;
+};
+
+// Returned spans are library-owned and only valid until the next call,
+// so they get copied immediately
+inline mxArray* createMexFloatArray(FloatSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateNumericMatrix(1, span.length, mxSINGLE_CLASS, mxREAL);
+    std::memcpy(mxGetData(array), span.data, span.length * sizeof(float));
+    return array;
+}
+
+// Layout-compatible with the by-value IntSpan struct in the C ABI
+struct IntSpan {
+    const int32_t* data;
+    size_t length;
+};
+
+// Returned spans are library-owned and only valid until the next call,
+// so they get copied immediately
+inline mxArray* createMexIntArray(IntSpan span) {
+    if (!span.data || span.length == 0) {
+        return createEmpty();
+    }
+    mxArray* array = mxCreateNumericMatrix(1, span.length, mxINT32_CLASS, mxREAL);
+    std::memcpy(mxGetData(array), span.data, span.length * sizeof(int32_t));
     return array;
 }
 
@@ -689,6 +740,36 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             double offset = getScalar<double>(prhs[2], "offset");
             DoubleSpan _value = bindings_tests_Arrays_addOffset(values, offset);
             if (nlhs > 0) plhs[0] = createMexDoubleArray(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_addOffsetInt32") */ 1137316889: {
+            static auto bindings_tests_Arrays_addOffsetInt32 = libLoader.getFunc<IntSpan(*)(IntSpan, int)>("bindings_tests_Arrays_addOffsetInt32");
+            checkArgCount(nrhs, 2, "bindings_tests_Arrays_addOffsetInt32");
+            MatlabArray<int32_t, mxINT32_CLASS> values_arr(prhs[1]);
+            IntSpan values = {values_arr.ptr, mxGetNumberOfElements(prhs[1])};
+            int offset = getScalar<int>(prhs[2], "offset");
+            IntSpan _value = bindings_tests_Arrays_addOffsetInt32(values, offset);
+            if (nlhs > 0) plhs[0] = createMexIntArray(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_addOffsetFloat32") */ 2272846934: {
+            static auto bindings_tests_Arrays_addOffsetFloat32 = libLoader.getFunc<FloatSpan(*)(FloatSpan, float)>("bindings_tests_Arrays_addOffsetFloat32");
+            checkArgCount(nrhs, 2, "bindings_tests_Arrays_addOffsetFloat32");
+            MatlabArray<float, mxSINGLE_CLASS> values_arr(prhs[1]);
+            FloatSpan values = {values_arr.ptr, mxGetNumberOfElements(prhs[1])};
+            float offset = getScalar<float>(prhs[2], "offset");
+            FloatSpan _value = bindings_tests_Arrays_addOffsetFloat32(values, offset);
+            if (nlhs > 0) plhs[0] = createMexFloatArray(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Arrays_addOffsetUint8") */ 1126113101: {
+            static auto bindings_tests_Arrays_addOffsetUint8 = libLoader.getFunc<ByteSpan(*)(ByteSpan, char)>("bindings_tests_Arrays_addOffsetUint8");
+            checkArgCount(nrhs, 2, "bindings_tests_Arrays_addOffsetUint8");
+            MatlabArray<uint8_t, mxUINT8_CLASS> values_arr(prhs[1]);
+            ByteSpan values = {values_arr.ptr, mxGetNumberOfElements(prhs[1])};
+            char offset = getScalar<char>(prhs[2], "offset");
+            ByteSpan _value = bindings_tests_Arrays_addOffsetUint8(values, offset);
+            if (nlhs > 0) plhs[0] = createMexByteArray(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Arrays_getSequence") */ 3328946390: {

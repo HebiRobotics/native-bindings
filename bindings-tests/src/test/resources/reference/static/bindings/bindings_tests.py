@@ -125,9 +125,21 @@ def _checked(error_, result_):
         raise Error(message, error_.id.decode("utf-8") if error_.id else "")
     return result_
 
+class _ByteSpan(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring ByteSpan
+    _fields_ = [("data", POINTER(c_uint8)), ("length", c_size_t)]
+
 class _DoubleSpan(Structure):
     # Layout of the by-value struct in the C ABI, mirroring DoubleSpan
     _fields_ = [("data", POINTER(c_double)), ("length", c_size_t)]
+
+class _FloatSpan(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring FloatSpan
+    _fields_ = [("data", POINTER(c_float)), ("length", c_size_t)]
+
+class _IntSpan(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring IntSpan
+    _fields_ = [("data", POINTER(c_int32)), ("length", c_size_t)]
 
 class _StatusInfo(Structure):
     # Layout of the by-value struct in the C ABI, mirroring StatusInfo
@@ -278,6 +290,12 @@ libbindings_tests.bindings_tests_Arrays_dotProduct.argtypes = [POINTER(_ErrorInf
 libbindings_tests.bindings_tests_Arrays_dotProduct.restype = c_double
 libbindings_tests.bindings_tests_Arrays_addOffset.argtypes = [_DoubleSpan, c_double]
 libbindings_tests.bindings_tests_Arrays_addOffset.restype = _DoubleSpan
+libbindings_tests.bindings_tests_Arrays_addOffsetInt32.argtypes = [_IntSpan, c_int]
+libbindings_tests.bindings_tests_Arrays_addOffsetInt32.restype = _IntSpan
+libbindings_tests.bindings_tests_Arrays_addOffsetFloat32.argtypes = [_FloatSpan, c_float]
+libbindings_tests.bindings_tests_Arrays_addOffsetFloat32.restype = _FloatSpan
+libbindings_tests.bindings_tests_Arrays_addOffsetUint8.argtypes = [_ByteSpan, c_byte]
+libbindings_tests.bindings_tests_Arrays_addOffsetUint8.restype = _ByteSpan
 libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
 libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 
@@ -776,6 +794,63 @@ class Arrays:
         struct_ = libbindings_tests.bindings_tests_Arrays_addOffset(values, offset)
         if struct_.length == 0 or not struct_.data:
             return np.empty(0, dtype=np.float64)
+        return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
+
+    @classmethod
+    def add_offset_int32(cls, values: Sequence[int], offset: int) -> Sequence[int]:
+        """Returns a new array with the offset added to every element. Checks an int32 span in and an array out.
+
+        Args:
+            values:
+            offset:
+        """
+        np = _require_numpy()
+        if values is None:
+            values = _IntSpan(None, 0)
+        elif not isinstance(values, _IntSpan):
+            values_arr = np.ascontiguousarray(values, dtype=np.int32)
+            values = _IntSpan(values_arr.ctypes.data_as(POINTER(c_int32)), len(values_arr))
+        struct_ = libbindings_tests.bindings_tests_Arrays_addOffsetInt32(values, offset)
+        if struct_.length == 0 or not struct_.data:
+            return np.empty(0, dtype=np.int32)
+        return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
+
+    @classmethod
+    def add_offset_float32(cls, values: Sequence[float], offset: float) -> Sequence[float]:
+        """Returns a new array with the offset added to every element. Checks a float span in and an array out.
+
+        Args:
+            values:
+            offset:
+        """
+        np = _require_numpy()
+        if values is None:
+            values = _FloatSpan(None, 0)
+        elif not isinstance(values, _FloatSpan):
+            values_arr = np.ascontiguousarray(values, dtype=np.float32)
+            values = _FloatSpan(values_arr.ctypes.data_as(POINTER(c_float)), len(values_arr))
+        struct_ = libbindings_tests.bindings_tests_Arrays_addOffsetFloat32(values, offset)
+        if struct_.length == 0 or not struct_.data:
+            return np.empty(0, dtype=np.float32)
+        return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
+
+    @classmethod
+    def add_offset_uint8(cls, values: Sequence[int], offset: int) -> Sequence[int]:
+        """Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.
+
+        Args:
+            values:
+            offset:
+        """
+        np = _require_numpy()
+        if values is None:
+            values = _ByteSpan(None, 0)
+        elif not isinstance(values, _ByteSpan):
+            values_arr = np.ascontiguousarray(values, dtype=np.uint8)
+            values = _ByteSpan(values_arr.ctypes.data_as(POINTER(c_uint8)), len(values_arr))
+        struct_ = libbindings_tests.bindings_tests_Arrays_addOffsetUint8(values, offset)
+        if struct_.length == 0 or not struct_.data:
+            return np.empty(0, dtype=np.uint8)
         return np.ctypeslib.as_array(struct_.data, shape=(struct_.length,)).copy()
 
     @classmethod

@@ -75,6 +75,33 @@ classdef (Sealed) Arrays
             result = bindings_tests_native('bindings_tests_Arrays_addOffset', values, offset);
         end
 
+        function result = addOffsetInt32(values, offset)
+            % Returns a new array with the offset added to every element. Checks an int32 span in and an array out.
+            %
+            %   Inputs:
+            %       values
+            %       offset
+            result = bindings_tests_native('bindings_tests_Arrays_addOffsetInt32', values, offset);
+        end
+
+        function result = addOffsetFloat32(values, offset)
+            % Returns a new array with the offset added to every element. Checks a float span in and an array out.
+            %
+            %   Inputs:
+            %       values
+            %       offset
+            result = bindings_tests_native('bindings_tests_Arrays_addOffsetFloat32', values, offset);
+        end
+
+        function result = addOffsetUint8(values, offset)
+            % Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.
+            %
+            %   Inputs:
+            %       values
+            %       offset
+            result = bindings_tests_native('bindings_tests_Arrays_addOffsetUint8', values, offset);
+        end
+
         function result = getSequence(count)
             % Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
             %   over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.

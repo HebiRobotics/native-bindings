@@ -218,6 +218,24 @@ bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleS
     __bindings_tests_Arrays_addOffset(isolate::global(), &values, offset, &result_);
     return result_;
 }
+void __bindings_tests_Arrays_addOffsetInt32(bindings_tests_IsolateThread* isolate, const bindings_tests_IntSpan* values, int offset, bindings_tests_IntSpan* structOut);
+bindings_tests_IntSpan bindings_tests_Arrays_addOffsetInt32(bindings_tests_IntSpan values, int offset) {
+    bindings_tests_IntSpan result_;
+    __bindings_tests_Arrays_addOffsetInt32(isolate::global(), &values, offset, &result_);
+    return result_;
+}
+void __bindings_tests_Arrays_addOffsetFloat32(bindings_tests_IsolateThread* isolate, const bindings_tests_FloatSpan* values, float offset, bindings_tests_FloatSpan* structOut);
+bindings_tests_FloatSpan bindings_tests_Arrays_addOffsetFloat32(bindings_tests_FloatSpan values, float offset) {
+    bindings_tests_FloatSpan result_;
+    __bindings_tests_Arrays_addOffsetFloat32(isolate::global(), &values, offset, &result_);
+    return result_;
+}
+void __bindings_tests_Arrays_addOffsetUint8(bindings_tests_IsolateThread* isolate, const bindings_tests_ByteSpan* values, char offset, bindings_tests_ByteSpan* structOut);
+bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings_tests_ByteSpan values, char offset) {
+    bindings_tests_ByteSpan result_;
+    __bindings_tests_Arrays_addOffsetUint8(isolate::global(), &values, offset, &result_);
+    return result_;
+}
 void __bindings_tests_Arrays_getSequence(bindings_tests_IsolateThread* isolate, long long count, bindings_tests_DoubleSpan* structOut);
 bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count) {
     bindings_tests_DoubleSpan result_;

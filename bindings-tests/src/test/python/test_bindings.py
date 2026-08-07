@@ -202,6 +202,21 @@ class SpansTest(unittest.TestCase):
         result = bindings_tests.Arrays.add_offset([1.0, 2.0, 3.0], 10.0)
         self.assertEqual([11.0, 12.0, 13.0], list(result))
 
+    def test_add_offset_int32(self):
+        # Typed spans repeat the same shape per element type
+        result = bindings_tests.Arrays.add_offset_int32([1, 2, 3], 10)
+        self.assertEqual([11, 12, 13], list(result))
+
+    def test_add_offset_float32(self):
+        result = bindings_tests.Arrays.add_offset_float32([1.5, 2.5, 3.5], 10.0)
+        self.assertEqual([11.5, 12.5, 13.5], list(result))
+
+    def test_add_offset_uint8(self):
+        # Byte spans carry binary data, so an embedded zero must survive the
+        # roundtrip. 246 + 10 wraps to 0 in uint8.
+        result = bindings_tests.Arrays.add_offset_uint8([1, 246, 3], 10)
+        self.assertEqual([11, 0, 13], list(result))
+
     def test_get_sequence(self):
         self.assertEqual([0.0, 1.0, 2.0, 3.0, 4.0], list(bindings_tests.Arrays.get_sequence(5)))
 

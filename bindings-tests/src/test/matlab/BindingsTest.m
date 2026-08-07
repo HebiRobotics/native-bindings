@@ -191,6 +191,15 @@ classdef BindingsTest < matlab.unittest.TestCase
             % library-owned buffer before returning.
             testCase.verifyEqual(bindings_tests.Arrays.addOffset([1 2 3], 10), [11 12 13]);
 
+            % Typed spans repeat the same shape per element type, coming back
+            % as the matching MATLAB class
+            testCase.verifyEqual(bindings_tests.Arrays.addOffsetInt32([1 2 3], 10), int32([11 12 13]));
+            testCase.verifyEqual(bindings_tests.Arrays.addOffsetFloat32([1.5 2.5 3.5], 10), single([11.5 12.5 13.5]));
+
+            % Byte spans carry binary data, so an embedded zero must survive
+            % the roundtrip. 246 + 10 wraps to 0 in uint8.
+            testCase.verifyEqual(bindings_tests.Arrays.addOffsetUint8([1 246 3], 10), uint8([11 0 13]));
+
             testCase.verifyEqual(bindings_tests.Arrays.getSequence(5), [0 1 2 3 4]);
 
             % A count of zero returns an empty array

@@ -17,6 +17,16 @@ typedef struct {
     int32_t code;
 } bindings_tests_ErrorInfo;
 
+// A (pointer, length) view of a contiguous byte buffer, passed and returned
+// by value. Binary data rather than a string: embedded zeros are data.
+// Inputs are caller-owned and only read during the call. Returned spans are
+// library-owned and stay valid until the calling thread's next library call,
+// so they have to be copied immediately.
+typedef struct {
+    const uint8_t* data;
+    size_t length;
+} bindings_tests_ByteSpan;
+
 // A (pointer, length) view of a contiguous double buffer, passed and returned
 // by value. Inputs are caller-owned and only read during the call. Returned
 // spans are library-owned and stay valid until the calling thread's next
@@ -25,6 +35,24 @@ typedef struct {
     const double* data;
     size_t length;
 } bindings_tests_DoubleSpan;
+
+// A (pointer, length) view of a contiguous float buffer, passed and returned
+// by value. Inputs are caller-owned and only read during the call. Returned
+// spans are library-owned and stay valid until the calling thread's next
+// library call, so they have to be copied immediately.
+typedef struct {
+    const float* data;
+    size_t length;
+} bindings_tests_FloatSpan;
+
+// A (pointer, length) view of a contiguous int32 buffer, passed and returned
+// by value. Inputs are caller-owned and only read during the call. Returned
+// spans are library-owned and stay valid until the calling thread's next
+// library call, so they have to be copied immediately.
+typedef struct {
+    const int32_t* data;
+    size_t length;
+} bindings_tests_IntSpan;
 
 typedef struct {
     double voltage;
@@ -118,6 +146,9 @@ void bindings_tests_Arrays_cumulativeSum(const double* source, double* target, s
 void bindings_tests_Arrays_reverseFloat64(double* values, size_t count);
 double bindings_tests_Arrays_dotProduct(bindings_tests_ErrorInfo* _error, bindings_tests_DoubleSpan x, bindings_tests_DoubleSpan y);
 bindings_tests_DoubleSpan bindings_tests_Arrays_addOffset(bindings_tests_DoubleSpan values, double offset);
+bindings_tests_IntSpan bindings_tests_Arrays_addOffsetInt32(bindings_tests_IntSpan values, int offset);
+bindings_tests_FloatSpan bindings_tests_Arrays_addOffsetFloat32(bindings_tests_FloatSpan values, float offset);
+bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings_tests_ByteSpan values, char offset);
 bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====

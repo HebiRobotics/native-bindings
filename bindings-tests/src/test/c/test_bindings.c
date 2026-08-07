@@ -255,6 +255,42 @@ static void test_spans(void) {
     assert(result.data[1] == 12.0);
     assert(result.data[2] == 13.0);
 
+    /* Typed spans repeat the same shape per element type */
+    {
+        int32_t ints[3];
+        float floats[3];
+        bindings_tests_IntSpan ispan;
+        bindings_tests_FloatSpan fspan;
+        bindings_tests_IntSpan iresult;
+        bindings_tests_FloatSpan fresult;
+        ints[0] = 1; ints[1] = 2; ints[2] = 3;
+        floats[0] = 1.5f; floats[1] = 2.5f; floats[2] = 3.5f;
+        ispan.data = ints;
+        ispan.length = 3;
+        fspan.data = floats;
+        fspan.length = 3;
+        iresult = bindings_tests_Arrays_addOffsetInt32(ispan, 10);
+        assert(iresult.length == 3);
+        assert(iresult.data[0] == 11 && iresult.data[1] == 12 && iresult.data[2] == 13);
+        fresult = bindings_tests_Arrays_addOffsetFloat32(fspan, 10.0f);
+        assert(fresult.length == 3);
+        assert(fresult.data[0] == 11.5f && fresult.data[1] == 12.5f && fresult.data[2] == 13.5f);
+    }
+
+    /* Byte spans carry binary data, so an embedded zero must survive the
+       roundtrip. 246 + 10 wraps to 0 in uint8. */
+    {
+        uint8_t bytes[3];
+        bindings_tests_ByteSpan bspan;
+        bindings_tests_ByteSpan bresult;
+        bytes[0] = 1; bytes[1] = 246; bytes[2] = 3;
+        bspan.data = bytes;
+        bspan.length = 3;
+        bresult = bindings_tests_Arrays_addOffsetUint8(bspan, 10);
+        assert(bresult.length == 3);
+        assert(bresult.data[0] == 11 && bresult.data[1] == 0 && bresult.data[2] == 13);
+    }
+
     result = bindings_tests_Arrays_getSequence((size_t) 5);
     assert(result.length == 5);
     for (i = 0; i < 5; i++) {

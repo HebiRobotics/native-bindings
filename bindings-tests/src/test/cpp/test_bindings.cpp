@@ -222,6 +222,28 @@ static void testSpans() {
   CHECK(offset[1] == 12.0);
   CHECK(offset[2] == 13.0);
 
+  // Typed spans repeat the same shape per element type
+  std::vector<int32_t> intValues = {1, 2, 3};
+  std::vector<int32_t> intOffset = bt::arrays::addOffsetInt32(intValues, 10);
+  CHECK(intOffset.size() == 3);
+  CHECK(intOffset[0] == 11);
+  CHECK(intOffset[2] == 13);
+
+  std::vector<float> floatValues = {1.5f, 2.5f, 3.5f};
+  std::vector<float> floatOffset = bt::arrays::addOffsetFloat32(floatValues, 10.0f);
+  CHECK(floatOffset.size() == 3);
+  CHECK(floatOffset[0] == 11.5f);
+  CHECK(floatOffset[2] == 13.5f);
+
+  // Byte spans carry binary data, so an embedded zero must survive the
+  // roundtrip. 246 + 10 wraps to 0 in uint8.
+  std::vector<uint8_t> byteValues = {1, 246, 3};
+  std::vector<uint8_t> byteOffset = bt::arrays::addOffsetUint8(byteValues, 10);
+  CHECK(byteOffset.size() == 3);
+  CHECK(byteOffset[0] == 11);
+  CHECK(byteOffset[1] == 0);
+  CHECK(byteOffset[2] == 13);
+
   std::vector<double> sequence = bt::arrays::getSequence(5);
   CHECK(sequence.size() == 5);
   for (int i = 0; i < 5; ++i) {

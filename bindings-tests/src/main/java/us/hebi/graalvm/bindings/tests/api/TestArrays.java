@@ -7,7 +7,10 @@ import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.runtime.structs.ByteSpan;
 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
+import us.hebi.graalvm.bindings.runtime.structs.FloatSpan;
+import us.hebi.graalvm.bindings.runtime.structs.IntSpan;
 import us.hebi.graalvm.bindings.runtime.structs.Spans;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
@@ -105,6 +108,37 @@ public class TestArrays {
         double[] result = new double[Spans.size(values)];
         for (int i = 0; i < result.length; i++) {
             result[i] = Spans.read(values, i) + offset;
+        }
+        return result;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Returns a new array with the offset added to every element. Checks an int32 span in and an array out.")
+    public static int[] addOffsetInt32(IntSpan values, int offset) {
+        int[] result = new int[Spans.size(values)];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = Spans.read(values, i) + offset;
+        }
+        return result;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Returns a new array with the offset added to every element. Checks a float span in and an array out.")
+    public static float[] addOffsetFloat32(FloatSpan values, float offset) {
+        float[] result = new float[Spans.size(values)];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = Spans.read(values, i) + offset;
+        }
+        return result;
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Returns a new array with the offset added to every element. Checks a byte span in and an " +
+            "array out, including embedded zeros that would truncate a string.")
+    public static byte[] addOffsetUint8(ByteSpan values, byte offset) {
+        byte[] result = new byte[Spans.size(values)];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = (byte) (Spans.read(values, i) + offset);
         }
         return result;
     }

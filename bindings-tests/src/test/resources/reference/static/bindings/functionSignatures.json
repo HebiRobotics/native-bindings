@@ -11,6 +11,39 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Arrays.addOffsetFloat32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "offset",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.addOffsetInt32": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "offset",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Arrays.addOffsetUint8": {
+    "inputs": [{
+        "kind": "required",
+        "name": "values",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "offset",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Arrays.cumulativeSum": {
     "inputs": [{
         "kind": "required",
