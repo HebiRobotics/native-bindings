@@ -28,6 +28,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -144,7 +145,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
 
             var fieldName = getFieldName(cField, methodName);
             var type = isGetter ? method.getReturnType() : method.getParameters().get(0).asType();
-            var dataType = getFieldDataType(fieldName, type);
+            var dataType = getFieldDataType(fieldName, type, method, isGetter);
 
             // A boolean accessor is 1 byte while the field lands as int32, and the image
             // build rejects the size mismatch unless the accessor allows the cast.
@@ -156,7 +157,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
                 }
             }
 
-            var isConst = isConstType(fieldName, type, dataType);
+            var isConst = isConstType(fieldName, type, dataType, method, isGetter);
             var field = byName.computeIfAbsent(fieldName, name -> new StructField(name, dataType, isConst));
             if (field.dataType != dataType) {
                 throw error("@CField '%s' is declared as both %s and %s: %s",
@@ -184,9 +185,9 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         return List.copyOf(result);
     }
 
-    private DataType getFieldDataType(String fieldName, TypeMirror type) {
+    private DataType getFieldDataType(String fieldName, TypeMirror type, ExecutableElement method, boolean isGetter) {
         var javaType = TypeName.get(type);
-        var dataType = isSizeType(fieldName, type, javaType) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
+        var dataType = isSizeType(fieldName, javaType, method, isGetter) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
         if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
             throw error("@CLibStruct fields may only be primitives, @CSizeType long, "
                             + "or typed GraalVM pointers, got '%s %s': %s",
@@ -200,9 +201,8 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
      * type and on the setter's parameter type rather than on the method. It says the public
      * C face may only read through the pointer, which is meaningless on a value field.
      */
-    private boolean isConstType(String fieldName, TypeMirror type, DataType dataType) {
-        var isConst = type.getAnnotationMirrors().stream().anyMatch(mirror -> CConst.class.getCanonicalName()
-                .contentEquals(((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName()));
+    private boolean isConstType(String fieldName, TypeMirror type, DataType dataType, ExecutableElement method, boolean isGetter) {
+        var isConst = hasTypeAnnotation(method, isGetter, CConst.class);
         if (isConst && !TypeMap.isPointerType(dataType)) {
             throw error("@CConst field '%s' must be a pointer, got '%s': %s", fieldName, type, getQualifiedName());
         }
@@ -214,14 +214,50 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
      * field would map to a plain long. Only long is allowed: unlike a method parameter, which
      * gets converted at the boundary, the field is the probed layout.
      */
-    private boolean isSizeType(String fieldName, TypeMirror type, TypeName javaType) {
-        if (!type.toString().contains(CSizeType.class.getSimpleName())) {
+    private boolean isSizeType(String fieldName, TypeName javaType, ExecutableElement method, boolean isGetter) {
+        if (!hasTypeAnnotation(method, isGetter, CSizeType.class)) {
             return false;
         }
         if (!TypeName.LONG.equals(javaType)) {
-            throw error("@CSizeType field '%s' must be a long, got '%s': %s", fieldName, type, getQualifiedName());
+            throw error("@CSizeType field '%s' must be a long, got '%s': %s", fieldName, javaType, getQualifiedName());
         }
         return true;
+    }
+
+    /**
+     * Checks a type-use annotation on the accessor's return or parameter type. The mirror is
+     * authoritative for source elements, but javac does not reliably surface type annotations
+     * of elements loaded from class files (broken on JDK 21, fine on 25), so precompiled
+     * views fall back to reflection. They are loadable by construction: a precompiled view
+     * ships on the processor classpath the same way its marshaller does.
+     */
+    private boolean hasTypeAnnotation(ExecutableElement method, boolean isGetter, Class<? extends Annotation> annotation) {
+        var type = isGetter ? method.getReturnType() : method.getParameters().get(0).asType();
+        for (var mirror : type.getAnnotationMirrors()) {
+            if (annotation.getCanonicalName().contentEquals(
+                    ((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName())) {
+                return true;
+            }
+        }
+        return hasReflectiveTypeAnnotation(method, isGetter, annotation);
+    }
+
+    private boolean hasReflectiveTypeAnnotation(ExecutableElement method, boolean isGetter, Class<? extends Annotation> annotation) {
+        var binaryName = env.getElementUtils().getBinaryName((TypeElement) method.getEnclosingElement());
+        Class<?> view;
+        try {
+            view = Class.forName(binaryName.toString(), false, AnnotatedCLibStruct.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false; // declared in this compilation, so the mirror was authoritative
+        }
+        for (var candidate : view.getDeclaredMethods()) {
+            if (candidate.getName().contentEquals(method.getSimpleName())
+                    && candidate.getParameterCount() == (isGetter ? 0 : 1)) {
+                var annotated = isGetter ? candidate.getAnnotatedReturnType() : candidate.getAnnotatedParameterTypes()[0];
+                return annotated.isAnnotationPresent(annotation);
+            }
+        }
+        return false;
     }
 
     /**

@@ -14,7 +14,7 @@ import static java.lang.annotation.ElementType.*;
  * @author Florian Enner
  * @since 18 Jul 2024
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME) // needed for pre-compiled views in jdk21; jdk25 works without
 @Target({TYPE_USE, TYPE_PARAMETER})
 public @interface CSizeType {
 }
