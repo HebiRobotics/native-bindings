@@ -8,7 +8,7 @@ import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
-import us.hebi.graalvm.bindings.runtime.include.StructDirectives;
+import us.hebi.graalvm.bindings.runtime.structs.include.StructDirectives;
 
 /**
  * View of a C {@code (const double*, size_t)} pair, i.e. a pointer to the by-value
@@ -28,7 +28,7 @@ import us.hebi.graalvm.bindings.runtime.include.StructDirectives;
         spans are library-owned and stay valid until the calling thread's next
         library call, so they have to be copied immediately.
         """)
-@CContext(StructDirectives.class) // TODO: remove as it's auto-generated?
+@CContext(StructDirectives.class)
 @CStruct("DoubleSpan")
 public interface DoubleSpan extends PointerBase {
 

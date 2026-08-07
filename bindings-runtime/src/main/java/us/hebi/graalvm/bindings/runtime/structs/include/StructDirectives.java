@@ -1,4 +1,4 @@
-package us.hebi.graalvm.bindings.runtime.include;
+package us.hebi.graalvm.bindings.runtime.structs.include;
 
 import org.graalvm.nativeimage.c.CContext;
 
@@ -16,8 +16,9 @@ import java.util.Objects;
  * compiles against. The header ships as a classpath resource so that consuming
  * projects need no build wiring: it gets extracted to a temporary directory at
  * image build time and referenced by absolute path.
- *
- * TODO: can we get rid of this and just auto-generate ErrorInfo with the others?
+ * <p>
+ * Note that we can't auto-generate it because we can't add a dependency on the
+ * generator.
  *
  * @author Florian Enner
  * @since 01 Aug 2026
@@ -31,7 +32,7 @@ public class StructDirectives implements CContext.Directives {
     }
 
     private static String extractHeader() {
-        String resource = "/us/hebi/graalvm/bindings/runtime/include/" + HEADER_NAME;
+        String resource = "/us/hebi/graalvm/bindings/runtime/structs/include/" + HEADER_NAME;
         try (InputStream input = StructDirectives.class.getResourceAsStream(resource)) {
             Objects.requireNonNull(input, "Missing header resource: " + resource);
             Path header = Files.createTempDirectory("hebi_bindings_include").resolve(HEADER_NAME);

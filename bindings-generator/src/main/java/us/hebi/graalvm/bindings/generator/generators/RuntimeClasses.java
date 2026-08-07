@@ -6,6 +6,7 @@ import com.squareup.javapoet.MethodSpec;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller.AllocatingReturn;
 import us.hebi.graalvm.bindings.model.DataType;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 
 /**
  * @author Florian Enner
@@ -18,6 +19,7 @@ class RuntimeClasses {
     public static final ClassName CPointers = ClassName.get(us.hebi.graalvm.bindings.runtime.pointers.CPointers.class);
 
     public static final ClassName CLibError = ClassName.get(us.hebi.graalvm.bindings.runtime.structs.CLibError.class);
+    public static final ClassName CLibErrors = ClassName.get(CLibErrors.class);
 
     public static final ClassName ErrorInfo = ClassName.get(us.hebi.graalvm.bindings.runtime.structs.ErrorInfo.class);
 
@@ -47,13 +49,13 @@ class RuntimeClasses {
                                             AllocatingReturn allocating, String idPrefix, CodeBlock onError) {
 
         if (idPrefix != null) {
-            builder.addStatement("$T.clearStruct($N)", CLibError, ERROR_OUT_PARAM);
+            builder.addStatement("$T.clear($N)", CLibErrors, ERROR_OUT_PARAM);
         }
         builder.beginControlFlow("try")
                 .addCode(getInvocationCode(returnType, allocating, invocation))
                 .nextControlFlow("catch (Throwable throwable)");
         if (idPrefix != null) {
-            builder.addStatement("$T.fillStruct(throwable, $N, $S)", CLibError, ERROR_OUT_PARAM, idPrefix);
+            builder.addStatement("$T.fill(throwable, $N, $S)", CLibErrors, ERROR_OUT_PARAM, idPrefix);
         } else {
             builder.addComment("Declared noexcept, so there is no error struct to report through");
         }
