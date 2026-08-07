@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import us.hebi.graalvm.bindings.runtime.Configuration;
-import us.hebi.graalvm.bindings.runtime.structs.DoubleSpanMock;
 import us.hebi.graalvm.bindings.runtime.views.DoubleBufferView;
 import us.hebi.graalvm.bindings.runtime.views.Utf8StringView;
 
@@ -81,10 +80,6 @@ public class CPointers {
 
     public static CDoublePointerMock toDoublePointer(double... values) {
         return new CDoublePointerMock(values, 0);
-    }
-
-    public static DoubleSpanMock toDoubleSpan(double... values) {
-        return new DoubleSpanMock(values);
     }
 
     public static CDoublePointerMock allocateCDoublePointer(int size) {

@@ -41,6 +41,6 @@ public interface ErrorInfo extends PointerBase {
     void setCode(int code);
 
     // No convenience methods here on purpose: native-image rejects any method on a
-    // @CStruct interface that is not an annotated accessor. Helpers live in CStructs.
+    // @CStruct interface that is not an annotated accessor. Helpers live in CLibErrors.
 
 }

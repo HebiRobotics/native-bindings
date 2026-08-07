@@ -3,16 +3,16 @@ package us.hebi.graalvm.bindings.runtime.structs;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 
 /**
- * Convenience accessors for {@code @CStruct} annotated interface. They cannot live
- * on the interface itself because native-image rejects any method on a {@code @CStruct}
- * interface that is not an annotated accessor.
+ * Convenience accessors for the span structs. They cannot live on the interfaces
+ * themselves because native-image rejects any method on a {@code @CStruct} interface
+ * that is not an annotated accessor. Future element types add overloads here.
  *
  * @author Florian Enner
  * @since 01 Aug 2026
  */
-public final class CStructs {
+public final class Spans {
 
-    private CStructs() {
+    private Spans() {
     }
 
     /**
@@ -32,6 +32,14 @@ public final class CStructs {
 
     public static double[] toArray(DoubleSpan span) {
         return CPointers.getDoubles(span.data(), size(span));
+    }
+
+    /**
+     * Array-backed mock for exercising annotated classes on HotSpot,
+     * where no native struct exists.
+     */
+    public static DoubleSpanMock toDoubleSpan(double... values) {
+        return new DoubleSpanMock(values);
     }
 
 }
