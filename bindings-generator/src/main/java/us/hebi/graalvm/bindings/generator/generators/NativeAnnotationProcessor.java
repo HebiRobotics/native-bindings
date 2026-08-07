@@ -12,6 +12,7 @@ import us.hebi.graalvm.bindings.generator.bindings.CBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.CppBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.MatlabBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.PythonBindingsGenerator;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
@@ -64,6 +65,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
 
     @Override
     protected Iterable<? extends Step> steps() {
+        // Runs once per processor instance, i.e. once per compilation, so a shared JVM
+        // (IDE daemon, compile-testing) never sees a previous run's marshallers
+        StructMarshallers.clearRegistrations();
         return List.of(new Step() {
             @Override
             public Set<String> annotations() {

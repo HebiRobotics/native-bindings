@@ -46,10 +46,10 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
 
         // A marshaller that allocates its return has one Java form per direction: parameters
         // borrow the caller-owned buffer through the view, returns hand back a copy
-        for (var marshaller : StructMarshallers.getAll()) {
-            var allocating = marshaller.allocatingReturn();
+        for (var entry : StructMarshallers.getAll().entrySet()) {
+            var allocating = entry.getValue().allocatingReturn();
             if (allocating.isEmpty()) continue;
-            var view = ClassName.bestGuess(marshaller.viewType());
+            var view = ClassName.bestGuess(entry.getKey());
             var javaType = allocating.get().javaType();
             checkArgument(!view.equals(returnType.getJavaType()),
                     "%s returns must be declared as %s, not %s: %s",

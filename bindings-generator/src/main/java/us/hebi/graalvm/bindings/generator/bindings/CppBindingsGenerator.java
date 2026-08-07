@@ -85,33 +85,29 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     private void writeIncludes(Writer out, boolean useDynamicLookup) throws IOException {
-        // Load DLL
         out.write("#pragma once\n\n");
-        out.write("#include <algorithm>\n"); // TODO: used for std::min() in overloads, but should be added via annotation? Windows.h defines min/max macros, so we need to use (std::min) to get around macro expansion
+
+        // One sorted set for the base headers and the marshaller contributions.
+        // TODO: cppOverload blocks may need to add headers as well
+        var headers = new TreeSet<>(List.of("cstddef", "cstdint", "stdexcept", "string", "vector"));
         if (useDynamicLookup) {
+            headers.add("cassert");
+            headers.add("iostream");
+        }
+        headers.addAll(getMarshallerIncludes());
+        for (String header : headers) {
+            out.write("#include <" + header + ">\n");
+        }
+
+        if (useDynamicLookup) {
+            // Load DLL
             out.write("""
-                    #include <cassert>
-                    #include <cstddef>
-                    #include <cstdint>
-                    #include <stdexcept>
-                    #include <iostream>
-                    #include <string>
-                    #include <vector>
-                    
+
                     #ifdef WIN32
                     #include <Windows.h>
                     #else
                     #include <dlfcn.h>
                     #endif
-                    """);
-        } else {
-            // Note: write the include section separately so we get alphabetical sorting
-            out.write("""
-                    #include <cstddef>
-                    #include <cstdint>
-                    #include <stdexcept>
-                    #include <string>
-                    #include <vector>
                     """);
         }
 
@@ -119,6 +115,16 @@ public class CppBindingsGenerator extends BindingGenerator {
         // if (useDynamicLookup && !OMIT_C_HEADER) {
         //     out.write("#include \"" + api.getLibName() + "_c.h\"\n");
         // }
+    }
+
+    private List<String> getMarshallerIncludes() {
+        var headers = new ArrayList<String>();
+        for (StructDescription struct : lib.getStructs()) {
+            StructMarshallers.resolve(struct)
+                    .flatMap(StructMarshaller::cpp)
+                    .ifPresent(cpp -> headers.addAll(cpp.systemIncludes()));
+        }
+        return headers;
     }
 
     /**

@@ -30,6 +30,7 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
@@ -188,7 +189,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         if (isStructView()) {
             return Optional.of((TypeElement) env.getTypeUtils().asElement(mirror));
         }
-        return getAllocatingMarshaller().map(marshaller -> env.getElementUtils().getTypeElement(marshaller.viewType()));
+        return getAllocatingMarshaller().map(entry -> env.getElementUtils().getTypeElement(entry.getKey()));
     }
 
     /**
@@ -203,12 +204,12 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
      * entry point copies into the span view it fills. Empty for the view type itself.
      */
     public Optional<StructMarshaller.AllocatingReturn> getAllocatingReturn() {
-        return getAllocatingMarshaller().flatMap(StructMarshaller::allocatingReturn);
+        return getAllocatingMarshaller().flatMap(entry -> entry.getValue().allocatingReturn());
     }
 
-    private Optional<StructMarshaller> getAllocatingMarshaller() {
-        return StructMarshallers.getAll().stream()
-                .filter(marshaller -> marshaller.allocatingReturn()
+    private Optional<Map.Entry<String, StructMarshaller>> getAllocatingMarshaller() {
+        return StructMarshallers.getAll().entrySet().stream()
+                .filter(entry -> entry.getValue().allocatingReturn()
                         .filter(allocating -> allocating.javaType().equals(type))
                         .isPresent())
                 .findFirst();

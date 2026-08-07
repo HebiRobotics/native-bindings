@@ -22,11 +22,6 @@ class DoubleSpanMarshaller implements StructMarshaller {
     static final String VIEW_TYPE = "us.hebi.graalvm.bindings.runtime.types.DoubleSpan";
 
     @Override
-    public String viewType() {
-        return VIEW_TYPE;
-    }
-
-    @Override
     public Optional<AllocatingReturn> allocatingReturn() {
         return Optional.of(ALLOCATING_RETURN);
     }

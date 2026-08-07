@@ -12,6 +12,7 @@ import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.generator.bindings.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.DataType;
@@ -23,6 +24,7 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import java.util.ArrayList;
@@ -62,6 +64,41 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         }
 
         fields = parseFields();
+        registerMarshaller();
+    }
+
+    /**
+     * Registers the marshaller named in {@code @CLibStruct(marshaller = ...)}. The class
+     * has to be precompiled (it lives in a separate module), because the annotation is
+     * read while this compilation is still running and the generators need a live
+     * instance to emit the custom code.
+     */
+    private void registerMarshaller() {
+        var marshallerClassName = getMarshallerClassName();
+        if (marshallerClassName == null) {
+            return;
+        }
+        try {
+            StructMarshallers.register(getQualifiedName(), marshallerClassName);
+        } catch (IllegalArgumentException iae) {
+            throw error("%s", iae.getMessage());
+        }
+    }
+
+    private String getMarshallerClassName() {
+        try {
+            // Reading a Class value only succeeds when the class is loadable, which is
+            // exactly the precompiled case. The mirror path covers the rest.
+            Class<?> marshaller = annotation.marshaller();
+            return marshaller == void.class ? null : marshaller.getName();
+        } catch (MirroredTypeException mte) {
+            var mirror = mte.getTypeMirror();
+            if (mirror.getKind() == TypeKind.VOID) {
+                return null;
+            }
+            var element = (TypeElement) env.getTypeUtils().asElement(mirror);
+            return env.getElementUtils().getBinaryName(element).toString();
+        }
     }
 
     private boolean extendsPointerBase() {
