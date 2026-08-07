@@ -100,7 +100,8 @@ class AnnotationUtil {
     }
 
     public static boolean implementsInterface(TypeElement element, Class<?> targetInterface) {
-        String qualifiedName = targetInterface.toString();
+        // Class::toString prefixes "interface ", which never matches a mirror's name
+        String qualifiedName = targetInterface.getCanonicalName();
         for (TypeMirror anInterface : element.getInterfaces()) {
             if (qualifiedName.equals(anInterface.toString())) {
                 return true;

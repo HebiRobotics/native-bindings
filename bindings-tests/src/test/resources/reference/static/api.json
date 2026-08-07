@@ -680,7 +680,7 @@
         "paramName": "func",
         "lowerUnderscoreParamName": "func",
         "typeName": "IndexCallbackFunction",
-        "dataType": "TYPEDEF"
+        "dataType": "CALLBACK"
       }, {
         "paramName": "userData",
         "lowerUnderscoreParamName": "user_data",
@@ -704,7 +704,7 @@
         "paramName": "func",
         "lowerUnderscoreParamName": "func",
         "typeName": "IndexCallbackFunction",
-        "dataType": "TYPEDEF"
+        "dataType": "CALLBACK"
       }, {
         "paramName": "userData",
         "lowerUnderscoreParamName": "user_data",
@@ -1766,12 +1766,6 @@
       "cValue": 1
     }]
   }],
-  "typedefs": [{
-    "name": "IndexCallbackFunction",
-    "cDefinition": "typedef void (*IndexCallbackFunction)(void* userData, int index);",
-    "cppDefinition": "using IndexCallbackFunction = void (*)(void* userData, int index);",
-    "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
-  }],
   "structs": [{
     "name": "ByteSpan",
     "cPrefix": "bindings_tests_",
@@ -1870,6 +1864,19 @@
       "name": "enabled",
       "lowerUnderscoreName": "enabled",
       "dataType": "BOOL"
+    }]
+  }],
+  "callbacks": [{
+    "name": "IndexCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
+    }, {
+      "paramName": "index",
+      "dataType": "INT32"
     }]
   }]
 }

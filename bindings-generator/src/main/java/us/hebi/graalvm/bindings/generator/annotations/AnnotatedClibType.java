@@ -127,6 +127,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         // Special types we added
         if (getStructElement().isPresent()) return DataType.STRUCT;
         if (isGeneratedCEnumType()) return DataType.ENUM;
+        if (isCallbackType(mirror)) return DataType.CALLBACK;
         if (isDefinedType(mirror)) return DataType.TYPEDEF;
         if (isNativeApiType()) return DataType.OBJECT_HANDLE;
 
@@ -255,6 +256,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
             case TYPEDEF ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibTypeDef.class, CLibTypeDef::name);
+            case CALLBACK -> Optional.of(String.valueOf(env.getTypeUtils().asElement(mirror).getSimpleName()));
             case STRUCT -> getStructElement()
                     .map(AnnotatedCLibStruct::getName)
                     .filter(name -> !name.isEmpty());

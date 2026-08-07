@@ -66,10 +66,23 @@ public class CBindingsGenerator extends BindingGenerator {
 
     private static String getInternalQualifiedCType(TypeDescription type) {
         var name = switch (type.getDataType()) {
-            case ENUM, TYPEDEF, OBJECT_HANDLE -> TypeMap.toExternalC(type, true); // a bit of extra type safety
+            case ENUM, TYPEDEF, CALLBACK, OBJECT_HANDLE -> TypeMap.toExternalC(type, true); // a bit of extra type safety
             default -> TypeMap.toInternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + name : name;
+    }
+
+    /**
+     * The function pointer alias a callback crosses the ABI as. The MEX gateway declares its
+     * own copy of this, so it stays a plain string rather than going through the header writer.
+     */
+    public static String getCCallbackTypedef(CallbackDescription callback) {
+        var parameters = new StringJoiner(", ");
+        for (var parameter : callback.getParameters()) {
+            parameters.add(getQualifiedCType(parameter) + " " + parameter.getParamName());
+        }
+        return String.format("typedef %s (*%s)(%s);",
+                getQualifiedCType(callback.getReturnType()), callback.getName(), parameters);
     }
 
     public static String getQualifiedCType(TypeDescription type) {
@@ -181,6 +194,10 @@ public class CBindingsGenerator extends BindingGenerator {
         // Typedefs
         for (var typedef : lib.getTypedefs()) {
             writer.write(typedef.getCDefinition());
+            writer.write("\n");
+        }
+        for (var callback : lib.getCallbacks()) {
+            writer.write(getCCallbackTypedef(callback));
             writer.write("\n");
         }
         writer.write(IndentingTextRenderer.of("""

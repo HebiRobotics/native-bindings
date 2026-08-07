@@ -50,6 +50,8 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
     }
 }
 
+typedef void (*IndexCallbackFunction)(void* userData, int index);
+
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.
 struct ErrorInfo {
@@ -822,18 +824,18 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         // Callbacks
         case /* hash32_fnv1a("bindings_tests_Callbacks_invokeTimes") */ 3311763887: {
-            static auto bindings_tests_Callbacks_invokeTimes = libLoader.getFunc<void(*)(void*, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
+            static auto bindings_tests_Callbacks_invokeTimes = libLoader.getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
             checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeTimes");
-            void* func = getPtr<void*>(prhs[1]);
+            IndexCallbackFunction func = getPtr<IndexCallbackFunction>(prhs[1]);
             void* userData = getPtr<void*>(prhs[2]);
             size_t times = getScalar<size_t>(prhs[3], "times");
             bindings_tests_Callbacks_invokeTimes(func, userData, times);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Callbacks_invokeOnce") */ 3234909522: {
-            static auto bindings_tests_Callbacks_invokeOnce = libLoader.getFunc<void(*)(void*, void*, int)>("bindings_tests_Callbacks_invokeOnce");
+            static auto bindings_tests_Callbacks_invokeOnce = libLoader.getFunc<void(*)(IndexCallbackFunction, void*, int)>("bindings_tests_Callbacks_invokeOnce");
             checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeOnce");
-            void* func = getPtr<void*>(prhs[1]);
+            IndexCallbackFunction func = getPtr<IndexCallbackFunction>(prhs[1]);
             void* userData = getPtr<void*>(prhs[2]);
             int index = getScalar<int>(prhs[3], "index");
             bindings_tests_Callbacks_invokeOnce(func, userData, index);

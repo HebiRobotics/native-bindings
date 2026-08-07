@@ -243,6 +243,22 @@ public class PythonBindingsGenerator extends BindingGenerator {
         for (var type : lib.getTypedefs()) {
             content.append(type.getPythonDefinition()).append("\n");
         }
+        for (var callback : lib.getCallbacks()) {
+            content.append(getPythonCallbackType(callback)).append("\n");
+        }
+    }
+
+    /**
+     * The ctypes prototype a caller wraps its function around. Parameter names have no place
+     * in a CFUNCTYPE, so only the types survive from the invoke signature.
+     */
+    private static String getPythonCallbackType(CallbackDescription callback) {
+        var types = new StringJoiner(", ");
+        types.add(TypeMap.toCPython(callback.getReturnType()));
+        for (var parameter : callback.getParameters()) {
+            types.add(TypeMap.toCPython(parameter));
+        }
+        return String.format("%s = CFUNCTYPE(%s)", callback.getName(), types);
     }
 
     private void appendCFunctionSignatures(StringBuilder content, List<ClassDescription> apiClasses) {

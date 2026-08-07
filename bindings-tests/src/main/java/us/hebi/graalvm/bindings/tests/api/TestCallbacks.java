@@ -7,7 +7,6 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
@@ -25,11 +24,6 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 @CLibClass(value = "Callbacks", enableInstancing = false)
 public class TestCallbacks {
 
-    @CLibTypeDef(name = "IndexCallbackFunction",
-            cDefinition = "typedef void (*IndexCallbackFunction)(void* userData, int index);",
-            cppDefinition = "using IndexCallbackFunction = void (*)(void* userData, int index);",
-            pythonDefinition = "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
-    )
     public interface IndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, int index);

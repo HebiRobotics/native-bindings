@@ -33,6 +33,10 @@ public class AnnotatedCLibElement<T extends Element> implements EnvProcessor {
         return hasTypeAnnotation(type, CLibTypeDef.class);
     }
 
+    protected boolean isCallbackType(TypeMirror type) {
+        return AnnotatedCLibCallback.isCallbackType(toTypeElement(type));
+    }
+
     protected boolean isCStructType(TypeMirror type) {
         return hasTypeAnnotation(type, CStruct.class);
     }

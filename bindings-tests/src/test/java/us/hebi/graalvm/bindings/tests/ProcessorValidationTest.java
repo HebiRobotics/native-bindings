@@ -743,6 +743,56 @@ public class ProcessorValidationTest {
                 """))).succeeded();
     }
 
+    @Test
+    public void rejectsCallbackWithoutInvokeMethod() {
+        assertThat(compile(source("NoInvoke", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                @CLibClass("NoInvoke")
+                public class NoInvoke {
+                    public interface Callback extends CFunctionPointer {
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found none");
+    }
+
+    @Test
+    public void rejectsCallbackWithTwoInvokeMethods() {
+        assertThat(compile(source("TwoInvokes", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("TwoInvokes")
+                public class TwoInvokes {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void first(int index);
+                        @InvokeCFunctionPointer void second(int index);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found [first, second]");
+    }
+
+    @Test
+    public void rejectsCallbackWithUnmappableParameter() {
+        assertThat(compile(source("HandleCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("HandleCallback")
+                public class HandleCallback {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(HandleCallback handle);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("is not supported in a callback signature: Callback.invoke");
+    }
+
     private String readGeneratedFile(String fileName) throws IOException {
         try (var files = Files.walk(outputDir.getRoot().toPath())) {
             var file = files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst();

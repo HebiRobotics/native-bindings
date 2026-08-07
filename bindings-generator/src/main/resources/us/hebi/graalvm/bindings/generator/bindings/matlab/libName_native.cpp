@@ -48,7 +48,7 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
         mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "'%s' expects %d argument(s), but received %d.",
                           name, expected, nrhs - 1);
     }
-}
+}%%CALLBACK_TYPEDEFS%%
 
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.

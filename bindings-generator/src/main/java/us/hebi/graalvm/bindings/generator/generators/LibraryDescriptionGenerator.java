@@ -10,6 +10,7 @@ import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
 import us.hebi.graalvm.bindings.model.*;
 import us.hebi.quickbuf.JsonSink;
 
+import javax.lang.model.element.Element;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,6 +56,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setReturnType(method.getReturnTypeDescription());
 
             collectStructView(method.getReturnType());
+            collectCallback(method.getReturnType());
 
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
@@ -89,6 +91,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                 if (parameter.isIsolateOrThread()) continue;
 
                 collectStructView(parameter);
+                collectCallback(parameter);
 
                 // The out parameter is already recorded as the return type
                 if (parameter.isOutParameter()) continue;
@@ -135,6 +138,36 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     /**
+     * Discovery by use, like {@link #collectStructView(AnnotatedClibType)}: a signature naming a
+     * {@code CFunctionPointer} interface is what puts its typedef into every language face.
+     */
+    private void collectCallback(AnnotatedClibType type) {
+        if (type.getDataType() != DataType.CALLBACK) {
+            return;
+        }
+        var element = type.getTypeElement();
+        usedCallbacks.computeIfAbsent(element.getQualifiedName().toString(),
+                name -> new AnnotatedCLibCallback(element, getEnv()));
+    }
+
+    /**
+     * Two interfaces of the same simple name would emit the same typedef twice, and the second
+     * definition is what the C compiler reports rather than the collision.
+     */
+    private void registerUsedCallbacks() {
+        var declaredBy = new HashMap<String, String>();
+        for (var callback : usedCallbacks.values()) {
+            var previous = declaredBy.putIfAbsent(callback.getName(), callback.getQualifiedName());
+            if (previous != null) {
+                error(callback.getElement(), "Duplicate callback name '%s', already declared by %s",
+                        callback.getName(), previous);
+                continue;
+            }
+            description.addCallbacks(callback.toDescription());
+        }
+    }
+
+    /**
      * The C header declares every struct the descriptor lists, so a view reaches it here or
      * not at all. A view used by two classes arrives twice and is registered once.
      */
@@ -144,7 +177,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         if (previous == null) {
             description.addStructs(struct.toDescription());
         } else if (!previous.equals(declaredBy)) {
-            error(struct, "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
+            error(struct.getElement(), "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
         }
     }
 
@@ -157,7 +190,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         for (var struct : usedStructViews.values()) {
             // Presence is the whole check, the Class value is never read
             if (!structGenerator.isSourceDeclared(struct) && struct.getElement().getAnnotation(CContext.class) == null) {
-                error(struct, "A precompiled @CLibStruct view must ship its own directives and name them in @CContext: %s",
+                error(struct.getElement(), "A precompiled @CLibStruct view must ship its own directives and name them in @CContext: %s",
                         struct.getElement().getQualifiedName());
                 continue;
             }
@@ -169,8 +202,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
      * postRound does not catch, so a thrown error would escape the processor and bury the
      * message in a javac stack trace.
      */
-    private void error(AnnotatedCLibStruct struct, String message, Object... args) {
-        getMessager().printMessage(ERROR, String.format(message, args), struct.getElement());
+    private void error(Element element, String message, Object... args) {
+        getMessager().printMessage(ERROR, String.format(message, args), element);
         errorReported = true;
     }
 
@@ -201,11 +234,13 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         description.setCPrefix(options.getCPrefix());
 
         registerUsedStructViews();
+        registerUsedCallbacks();
 
         // Sort classes by name so the output-diffs are predictable
         ProtoSortUtil.sortClassDescriptions(description.getClasses());
         ProtoSortUtil.sortInPlace(description.getEnums(), Comparator.comparing(EnumDescription::getName));
         ProtoSortUtil.sortInPlace(description.getStructs(), Comparator.comparing(StructDescription::getName));
+        ProtoSortUtil.sortInPlace(description.getCallbacks(), Comparator.comparing(CallbackDescription::getName));
 
         // Fill in children information
         List<TypeDescription> children = new ArrayList<>();
@@ -236,6 +271,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     private final CLibStructGenerator structGenerator;
 
     private final Map<String, AnnotatedCLibStruct> usedStructViews = new LinkedHashMap<>();
+    private final Map<String, AnnotatedCLibCallback> usedCallbacks = new LinkedHashMap<>();
     private final Map<String, String> structNames = new HashMap<>();
     private boolean errorReported = false;
 

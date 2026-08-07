@@ -145,6 +145,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     private String getMexCType(TypeDescription param) {
+        if (param.getDataType() == DataType.CALLBACK) {
+            return param.getTypeName(); // the gateway declares the callback typedefs itself
+        }
         if (param.getDataType() == DataType.TYPEDEF) {
             return "void*"; // callbacks are not supported at this time
         }
@@ -156,7 +159,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexToC(TypeDescription param, int index) {
         return switch (param.getDataType()) {
-            case OBJECT_HANDLE, VOID_POINTER, TYPEDEF ->
+            case OBJECT_HANDLE, VOID_POINTER, TYPEDEF, CALLBACK ->
                     (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
                     "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
 
@@ -318,11 +321,28 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return withLibVars()
                 .set("HASH_SEED", String.format("0x%08X", seed))
                 .set("HASH_PRIME", String.format("0x%08X", prime))
+                .set("CALLBACK_TYPEDEFS", createCallbackTypedefs())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
                 .render();
+    }
+
+    /**
+     * The gateway does not include the public C header, so it repeats the callback typedefs the
+     * same way it repeats the error struct. The token they fill sits at the end of an existing
+     * line, so a library without callbacks renders the template unchanged.
+     */
+    private String createCallbackTypedefs() {
+        if (lib.getCallbacks().length() == 0) {
+            return "";
+        }
+        var out = new IndentingTextRenderer().add("\n");
+        for (var callback : lib.getCallbacks()) {
+            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback));
+        }
+        return out.render();
     }
 
     /**
