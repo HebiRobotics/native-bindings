@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -508,6 +509,10 @@ struct CallbackState {
   int indices[kMaxCallbacks];
 };
 
+void onNotify(void* userData) {
+  ++static_cast<CallbackState*>(userData)->count;
+}
+
 void onIndex(void* userData, int index) {
   CallbackState* state = static_cast<CallbackState*>(userData);
   if (state->count < kMaxCallbacks) {
@@ -537,6 +542,35 @@ static void testCallbacks() {
   bt::callbacks::invokeTimes(nullptr, &none, 5);
   bt::callbacks::invokeOnce(nullptr, &none, 7);
   CHECK(none.count == 0);
+
+  // The template overload keeps the state in the closure, so there is no userData
+  // argument and nothing is allocated. A raw pointer still picks the ABI overload above.
+  int sum = 0;
+  bt::callbacks::invokeTimes([&sum](int index) { sum += index; }, 5);
+  CHECK(sum == 0 + 1 + 2 + 3 + 4);
+
+  int lastIndex = -1;
+  bt::callbacks::invokeOnce([&lastIndex](int index) { lastIndex = index; }, 9);
+  CHECK(lastIndex == 9);
+
+  // A const lvalue binds both overloads equally well, which is what makes the
+  // non-template std::function one win the tiebreak.
+  int calls = 0;
+  const std::function<void(int)> counter = [&calls](int) { ++calls; };
+  bt::callbacks::invokeTimes(counter, 3);
+  CHECK(calls == 3);
+
+  bt::callbacks::invokeOnce(counter, 1);
+  CHECK(calls == 4);
+
+  // The asynchronous default changes nothing on the C++ side, the same overloads apply
+  CallbackState notified = {};
+  bt::callbacks::notifyOnce(&onNotify, &notified);
+  CHECK(notified.count == 1);
+
+  bool called = false;
+  bt::callbacks::notifyOnce([&called] { called = true; });
+  CHECK(called);
 }
 
 // ---------------------------------------------------------------------------

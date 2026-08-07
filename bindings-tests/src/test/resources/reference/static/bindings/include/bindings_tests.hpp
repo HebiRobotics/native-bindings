@@ -2,8 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace bindings {
@@ -48,6 +50,7 @@ class Shape;
 class Circle;
 class Square;
 using IndexCallbackFunction = void (*)(void* userData, int index);
+using NotifyCallbackFunction = void (*)(void* userData);
 
 namespace internal {
 using CounterPtr = struct Counter_*;
@@ -71,6 +74,24 @@ struct IntSpan {
   const int32_t* data;
   size_t length;
 };
+// The ABI channel is a non-const void*, so a const callable still has to lose its
+// constness on the way in. The trampoline below puts it back.
+template <typename F>
+void* toUserData(F& fn) {
+  return const_cast<void*>(static_cast<const void*>(&fn));
+}
+// Calls the closure that arrived through IndexCallbackFunction's userData channel. It lives on
+// the caller's stack and stays valid because the callback runs before the call returns.
+template <typename F>
+void invokeIndexCallbackFunction(void* userData, int index) {
+  (*static_cast<F*>(userData))(index);
+}
+// Calls the closure that arrived through NotifyCallbackFunction's userData channel. It lives on
+// the caller's stack and stays valid because the callback runs before the call returns.
+template <typename F>
+void invokeNotifyCallbackFunction(void* userData) {
+  (*static_cast<F*>(userData))();
+}
 struct ErrorInfo {
   const char* message;
   const char* id;
@@ -393,6 +414,13 @@ namespace callbacks {
  * @param times 
  */
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
+void invokeTimes(F&& func, size_t times) noexcept {
+  invokeTimes(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), times);
+}
+void invokeTimes(const std::function<void(int)>& func, size_t times) noexcept;
 
 /**
  * @brief Invokes the callback once with the given index. Returns after it completes.
@@ -402,6 +430,28 @@ void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexc
  * @param index 
  */
 void invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept;
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
+void invokeOnce(F&& func, int index) noexcept {
+  invokeOnce(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
+}
+void invokeOnce(const std::function<void(int)>& func, int index) noexcept;
+
+/**
+ * @brief Invokes the callback once. Returns after it completes.
+ *
+ * @param func 
+ * @param userData 
+ */
+void notifyOnce(NotifyCallbackFunction func, void* userData) noexcept;
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, NotifyCallbackFunction>::value>::type>
+void notifyOnce(F&& func) noexcept {
+  notifyOnce(&internal::invokeNotifyCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func));
+}
+void notifyOnce(const std::function<void()>& func) noexcept;
 } // namespace callbacks
 
 
@@ -853,6 +903,7 @@ extern "C" {
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
+  void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction, void*);
   void bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
   int bindings_tests_Errors_divideInt32(internal::ErrorInfo*, int, int);
   double bindings_tests_Errors_failingFloat64(internal::ErrorInfo*, int);
@@ -1167,8 +1218,20 @@ inline std::vector<double> arrays::getSequence(size_t count) noexcept {
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   bindings_tests_Callbacks_invokeTimes(func, userData, times);
 }
+inline void callbacks::invokeTimes(const std::function<void(int)>& func, size_t times) noexcept {
+  invokeTimes(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), times);
+}
 inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept {
   bindings_tests_Callbacks_invokeOnce(func, userData, index);
+}
+inline void callbacks::invokeOnce(const std::function<void(int)>& func, int index) noexcept {
+  invokeOnce(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
+}
+inline void callbacks::notifyOnce(NotifyCallbackFunction func, void* userData) noexcept {
+  bindings_tests_Callbacks_notifyOnce(func, userData);
+}
+inline void callbacks::notifyOnce(const std::function<void()>& func) noexcept {
+  notifyOnce(&internal::invokeNotifyCallbackFunction<const std::function<void()>>, internal::toUserData(func));
 }
 
 // Errors

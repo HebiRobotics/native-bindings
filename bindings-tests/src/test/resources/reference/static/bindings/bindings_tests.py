@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import os
 import platform
-from typing import Sequence, Tuple, Any
+from typing import Sequence, Tuple, Any, Callable
 
 # Load the shared library relative to this file
 def load_library():
@@ -103,6 +103,16 @@ def _require_numpy():
         except ImportError:
             raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
     return _numpy
+
+# Asynchronous callbacks are held for the process lifetime. ctypes does not keep the
+# trampoline alive by itself, and such a callback may fire long after the call returns.
+_callback_wrappers = {}
+def _wrap_callback(prototype, func):
+    wrapper = _callback_wrappers.get((prototype, func))
+    if wrapper is None:
+        wrapper = prototype(func)
+        _callback_wrappers[(prototype, func)] = wrapper
+    return wrapper
 
 # API definitions
 class _ErrorInfo(Structure):
@@ -210,6 +220,7 @@ class struct_Structs_(Structure):
 StructsPtr = POINTER(struct_Structs_)
 
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
+NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
 
 # ==== Counter ====
 libbindings_tests.bindings_tests_Counter_create.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -310,6 +321,8 @@ libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallback
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackFunction, c_void_p, c_int]
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_notifyOnce.argtypes = [NotifyCallbackFunction, c_void_p]
+libbindings_tests.bindings_tests_Callbacks_notifyOnce.restype = None
 
 # ==== Errors ====
 libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -900,7 +913,7 @@ class Callbacks:
         raise TypeError('Class is not instantiable')
 
     @classmethod
-    def invoke_times(cls, func: IndexCallbackFunction, user_data: Any | bytes | None, times: int) -> None:
+    def invoke_times(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:
         """Invokes the callback exactly 'times' times with indices 0 to times-1, then
         returns. A null function pointer is ignored, and a non-positive count does
         nothing.
@@ -910,10 +923,12 @@ class Callbacks:
             user_data:
             times:
         """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
         libbindings_tests.bindings_tests_Callbacks_invokeTimes(func, user_data, times)
 
     @classmethod
-    def invoke_once(cls, func: IndexCallbackFunction, user_data: Any | bytes | None, index: int) -> None:
+    def invoke_once(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, index: int) -> None:
         """Invokes the callback once with the given index. Returns after it completes.
 
         Args:
@@ -921,7 +936,21 @@ class Callbacks:
             user_data:
             index:
         """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
         libbindings_tests.bindings_tests_Callbacks_invokeOnce(func, user_data, index)
+
+    @classmethod
+    def notify_once(cls, func: Callable[[Any], None], user_data: Any | bytes | None) -> None:
+        """Invokes the callback once. Returns after it completes.
+
+        Args:
+            func:
+            user_data:
+        """
+        if func is not None and not isinstance(func, NotifyCallbackFunction):
+            func = _wrap_callback(NotifyCallbackFunction, func)
+        libbindings_tests.bindings_tests_Callbacks_notifyOnce(func, user_data)
 
 
 class Errors:

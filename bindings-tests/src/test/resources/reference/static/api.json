@@ -716,6 +716,26 @@
       }],
       "documentation": "Invokes the callback once with the given index. Returns after it completes.",
       "flags": ["Noexcept"]
+    }, {
+      "name": "notifyOnce",
+      "lowerUnderscoreName": "notify_once",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_notifyOnce",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "typeName": "NotifyCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "userData",
+        "lowerUnderscoreParamName": "user_data",
+        "dataType": "VOID_POINTER"
+      }],
+      "documentation": "Invokes the callback once. Returns after it completes.",
+      "flags": ["Noexcept"]
     }]
   }, {
     "type": {
@@ -1877,6 +1897,16 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
+    }],
+    "isSynchronous": true
+  }, {
+    "name": "NotifyCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
     }]
   }]
 }

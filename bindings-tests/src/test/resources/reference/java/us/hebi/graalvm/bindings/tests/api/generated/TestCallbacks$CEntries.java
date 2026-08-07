@@ -30,4 +30,16 @@ public final class TestCallbacks$CEntries {
             // Declared noexcept, so there is no error struct to report through
         }
     }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Callbacks_notifyOnce"
+    )
+    public static void bindings_tests_Callbacks_notifyOnce(IsolateThread _isolate,
+            TestCallbacks.NotifyCallbackFunction func, VoidPointer userData) {
+        try {
+            TestCallbacks.notifyOnce(func, userData);
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+        }
+    }
 }

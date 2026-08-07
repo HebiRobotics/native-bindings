@@ -4,6 +4,7 @@ import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
+import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
@@ -24,9 +25,15 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 @CLibClass(value = "Callbacks", enableInstancing = false)
 public class TestCallbacks {
 
+    @CLibCallback(synchronous = true)
     public interface IndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, int index);
+    }
+
+    public interface NotifyCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
+        void invoke(VoidPointer userData);
     }
 
     @CLibMethod(flags = Noexcept)
@@ -51,6 +58,18 @@ public class TestCallbacks {
             return;
         }
         func.invoke(userData, index);
+    }
+
+    // NotifyCallbackFunction is deliberately left unannotated, so this method is what pins
+    // the asynchronous-default wrapper shape. It still invokes immediately, because the
+    // language suites assert the effect without sleeping.
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Invokes the callback once. Returns after it completes.")
+    public static void notifyOnce(NotifyCallbackFunction func, VoidPointer userData) {
+        if (func.isNull()) {
+            return;
+        }
+        func.invoke(userData);
     }
 
 }

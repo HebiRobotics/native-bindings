@@ -25,6 +25,15 @@ classdef (Sealed) Callbacks
             bindings_tests_native('bindings_tests_Callbacks_invokeOnce', func, userData, index);
         end
 
+        function notifyOnce(func, userData)
+            % Invokes the callback once. Returns after it completes.
+            %
+            %   Inputs:
+            %       func
+            %       userData
+            bindings_tests_native('bindings_tests_Callbacks_notifyOnce', func, userData);
+        end
+
     end
 
 end

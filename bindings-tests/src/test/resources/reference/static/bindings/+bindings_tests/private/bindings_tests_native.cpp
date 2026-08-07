@@ -51,6 +51,7 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
 }
 
 typedef void (*IndexCallbackFunction)(void* userData, int index);
+typedef void (*NotifyCallbackFunction)(void* userData);
 
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.
@@ -839,6 +840,14 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             void* userData = getPtr<void*>(prhs[2]);
             int index = getScalar<int>(prhs[3], "index");
             bindings_tests_Callbacks_invokeOnce(func, userData, index);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_notifyOnce") */ 4271263447: {
+            static auto bindings_tests_Callbacks_notifyOnce = libLoader.getFunc<void(*)(NotifyCallbackFunction, void*)>("bindings_tests_Callbacks_notifyOnce");
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_notifyOnce");
+            NotifyCallbackFunction func = getPtr<NotifyCallbackFunction>(prhs[1]);
+            void* userData = getPtr<void*>(prhs[2]);
+            bindings_tests_Callbacks_notifyOnce(func, userData);
             break;
         }
 

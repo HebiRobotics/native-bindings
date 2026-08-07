@@ -166,6 +166,17 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Callbacks.notifyOnce": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["any"]
+      }, {
+        "kind": "required",
+        "name": "userData",
+        "type": ["any"]
+      }]
+  },
   "bindings_tests.Circle": {
     "inputs": [{
         "kind": "required",

@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 typedef void (*IndexCallbackFunction)(void* userData, int index);
+typedef void (*NotifyCallbackFunction)(void* userData);
 
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
@@ -178,6 +179,7 @@ DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t co
 // ==== Callbacks ====
 DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction func, void* userData);
 
 // ==== Errors ====
 DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);

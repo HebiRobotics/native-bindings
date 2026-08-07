@@ -557,6 +557,55 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual(0, state.count)
 
+    def test_plain_function(self):
+        seen = []
+
+        def handler(user_data, index):
+            seen.append(index)
+
+        # Any callable works, the wrapper builds the ctypes prototype around it
+        bindings_tests.Callbacks.invoke_times(handler, None, 5)
+
+        self.assertEqual([0, 1, 2, 3, 4], seen)
+
+    def test_lambda_with_captured_state(self):
+        seen = []
+
+        # The closure carries the state, so user_data has nothing left to do
+        bindings_tests.Callbacks.invoke_once(lambda user_data, index: seen.append(index), None, 7)
+
+        self.assertEqual([7], seen)
+
+    def test_notify_once(self):
+        seen = []
+
+        # NotifyCallbackFunction is unannotated, so this is the asynchronous-default path
+        bindings_tests.Callbacks.notify_once(lambda user_data: seen.append(1), None)
+
+        self.assertEqual([1], seen)
+
+    def test_asynchronous_wrapper_is_cached_per_callable(self):
+        def handler(user_data):
+            pass
+
+        prototype = bindings_tests.NotifyCallbackFunction
+        first = bindings_tests._wrap_callback(prototype, handler)
+        second = bindings_tests._wrap_callback(prototype, handler)
+
+        # The cache is what keeps the trampoline alive, so the same callable has to
+        # map to the same wrapper rather than to a fresh one per call
+        self.assertIs(first, second)
+
+    def test_synchronous_wrapper_is_not_retained(self):
+        before = len(bindings_tests._callback_wrappers)
+
+        # A fresh lambda per call is the IK-loop shape. The synchronous contract lets the
+        # trampoline live in a local, so the cache must not grow with it.
+        for i in range(10):
+            bindings_tests.Callbacks.invoke_once(lambda user_data, index: None, None, i)
+
+        self.assertEqual(before, len(bindings_tests._callback_wrappers))
+
 
 if __name__ == "__main__":
     unittest.main()

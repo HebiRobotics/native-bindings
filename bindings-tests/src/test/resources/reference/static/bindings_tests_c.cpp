@@ -256,6 +256,10 @@ void __bindings_tests_Callbacks_invokeOnce(bindings_tests_IsolateThread* isolate
 void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index) {
     __bindings_tests_Callbacks_invokeOnce(isolate::global(), func, userData, index);
 }
+void __bindings_tests_Callbacks_notifyOnce(bindings_tests_IsolateThread* isolate, NotifyCallbackFunction func, void* userData);
+void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction func, void* userData) {
+    __bindings_tests_Callbacks_notifyOnce(isolate::global(), func, userData);
+}
 
 // ==== Errors ====
 void __bindings_tests_Errors_requireNonNegative(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, int value);

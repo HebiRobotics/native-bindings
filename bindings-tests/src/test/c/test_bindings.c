@@ -666,6 +666,10 @@ static void on_index(void* userData, int index) {
     state->count++;
 }
 
+static void on_notify(void* userData) {
+    ((CallbackState*) userData)->count++;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
     int i;
@@ -688,6 +692,10 @@ static void test_callbacks(void) {
     bindings_tests_Callbacks_invokeTimes(NULL, &state, (size_t) 5);
     bindings_tests_Callbacks_invokeOnce(NULL, &state, 7);
     assert(state.count == 0);
+
+    memset(&state, 0, sizeof(state));
+    bindings_tests_Callbacks_notifyOnce(&on_notify, &state);
+    assert(state.count == 1);
 
     printf("callbacks ok\n");
 }

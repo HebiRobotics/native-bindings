@@ -793,6 +793,45 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("is not supported in a callback signature: Callback.invoke");
     }
 
+    @Test
+    public void rejectsCallbackAnnotationOnNonFunctionPointer() {
+        assertThat(compile(source("NotAPointer", """
+                @CLibClass("NotAPointer")
+                public class NotAPointer {
+                    @CLibCallback
+                    public interface Callback {
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibCallback requires an interface extending CFunctionPointer: validation.NotAPointer.Callback");
+    }
+
+    @Test
+    public void appliesTheCallbackNameOverride() throws IOException {
+        assertThat(compile(source("Renamed", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Renamed")
+                public class Renamed {
+                    @CLibCallback(name = "OnValue")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).succeeded();
+
+        // The override names the typedef everywhere, so the descriptor is what the
+        // language faces then read it from
+        String json = readGeneratedFile("api.json");
+        assertTrue(json.contains("\"name\": \"OnValue\""));
+        assertFalse(json.contains("\"Callback\""));
+    }
+
     private String readGeneratedFile(String fileName) throws IOException {
         try (var files = Files.walk(outputDir.getRoot().toPath())) {
             var file = files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst();
