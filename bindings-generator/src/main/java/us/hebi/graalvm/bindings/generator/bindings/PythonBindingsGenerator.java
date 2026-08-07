@@ -551,7 +551,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         // Documentation
         String docs = method.hasDocumentation()
-                ? escapeBackslashes(indent.apply("\n" + generatePydoc("", method)))
+                ? escapeBackslashes(indent.apply("\n" + generatePydoc("", method, param -> isSynchronousCallback(lib, param))))
                 : "";
 
         String funcName;

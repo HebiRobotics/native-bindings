@@ -1,5 +1,6 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
+import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.MethodDescription;
 import us.hebi.graalvm.bindings.model.TypeDescription;
 
@@ -62,7 +63,11 @@ public class DocumentationUtil {
         return wrapInPydoc(indent, type.getComment().trim());
     }
 
-    public static String generatePydoc(String indent, MethodDescription methodDesc) {
+    /**
+     * @param isPerCallWrapped a callback parameter whose callable is rebuilt into a ctypes
+     *                         prototype on every call, which the caller can avoid
+     */
+    public static String generatePydoc(String indent, MethodDescription methodDesc, Predicate<TypeDescription> isPerCallWrapped) {
         StringBuilder out = new StringBuilder();
         out.append(methodDesc.getDocumentation().trim());
 
@@ -72,6 +77,12 @@ public class DocumentationUtil {
             for (TypeDescription param : methodDesc.getParameters()) {
                 String name = param.getLowerUnderscoreParamName();
                 out.append("\n").append(INDENT).append(name).append(": ").append(param.getComment());
+                if (param.getDataType() == DataType.CALLBACK && isPerCallWrapped.test(param)) {
+                    if (param.hasComment()) out.append(" ");
+                    out.append("Any callable is accepted, and a plain one is wrapped into a fresh");
+                    out.append("\n").append(INDENT).append(INDENT);
+                    out.append(param.getTypeName()).append(" per call. Build the prototype once for a hot loop.");
+                }
             }
         }
 

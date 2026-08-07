@@ -1095,6 +1095,8 @@ public class CppBindingsGenerator extends BindingGenerator {
         out.write(GeneratorUtil.indent("""
                 // The callable holds the state, so these two need no userData argument. The closure
                 // stays on the caller's stack for the duration of the call and neither one allocates.
+                // It must not throw: the call crosses a C ABI that no exception may unwind, so a
+                // throw terminates.
                 """ + template, indent).stripTrailing());
         out.write("\n");
         overloadWriter.write(functionParams.toString(), "", functionCall.toString());

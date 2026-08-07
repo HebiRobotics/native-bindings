@@ -66,6 +66,13 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         checkArgument(!returnType.isStructView(),
                 "@CLibStruct views may not be returned, declare void with a @CLibOut parameter instead: %s",
                 executableElement.getSimpleName());
+
+        // Handing a function pointer back out would need every face to wrap it into a callable,
+        // which is the opposite direction of the parameter path they all implement
+        checkArgument(!isCallbackType(executableElement.getReturnType()),
+                "a CFunctionPointer return is not supported until a use case needs it: %s",
+                executableElement.getSimpleName());
+
         AnnotatedClibType outParam = null;
         var parameters = getParameters();
         int outIndex = -1;

@@ -75,14 +75,15 @@ public class CBindingsGenerator extends BindingGenerator {
     /**
      * The function pointer alias a callback crosses the ABI as. The MEX gateway declares its
      * own copy of this, so it stays a plain string rather than going through the header writer.
+     * TODO: support custom prefixes
      */
-    public static String getCCallbackTypedef(CallbackDescription callback) {
+    public static String getCCallbackTypedef(String cPrefix, CallbackDescription callback) {
         var parameters = new StringJoiner(", ");
         for (var parameter : callback.getParameters()) {
             parameters.add(getQualifiedCType(parameter) + " " + parameter.getParamName());
         }
         return String.format("typedef %s (*%s)(%s);",
-                getQualifiedCType(callback.getReturnType()), callback.getName(), parameters);
+                getQualifiedCType(callback.getReturnType()), cPrefix + callback.getName(), parameters);
     }
 
     public static String getQualifiedCType(TypeDescription type) {
@@ -193,7 +194,7 @@ public class CBindingsGenerator extends BindingGenerator {
 
         // Typedefs
         for (var callback : lib.getCallbacks()) {
-            writer.write(getCCallbackTypedef(callback));
+            writer.write(getCCallbackTypedef(lib.getCPrefix() + "_", callback));
             writer.write("\n");
         }
         writer.write(IndentingTextRenderer.of("""

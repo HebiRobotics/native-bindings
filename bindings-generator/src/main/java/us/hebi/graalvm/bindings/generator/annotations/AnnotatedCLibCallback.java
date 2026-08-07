@@ -13,6 +13,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * A {@code CFunctionPointer} interface used as a parameter type. The typedef every language
@@ -30,6 +31,7 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
 
     public AnnotatedCLibCallback(TypeElement element, ProcessingEnvironment env) {
         super(element, env);
+        checkNameIsCIdentifier();
         invokeMethod = findInvokeMethod();
 
         description = CallbackDescription.newInstance()
@@ -45,6 +47,19 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
         var annotation = element.getAnnotation(CLibCallback.class);
         if (annotation != null && annotation.synchronous()) {
             description.setIsSynchronous(true);
+        }
+    }
+
+    /**
+     * The name goes into a typedef unchanged, so anything javac accepts as an annotation
+     * value would otherwise surface as a stage 2 C compile error in the consuming build.
+     * TODO: check names in the other annotations as well
+     */
+    private void checkNameIsCIdentifier() {
+        if (!C_IDENTIFIER.matcher(getName()).matches()) {
+            throw new ProcessingException(element,
+                    "@CLibCallback name '%s' is not a valid C identifier: %s",
+                    getName(), getQualifiedName());
         }
     }
 
@@ -125,6 +140,8 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     public CallbackDescription toDescription() {
         return description;
     }
+
+    private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     private final ExecutableElement invokeMethod;
 

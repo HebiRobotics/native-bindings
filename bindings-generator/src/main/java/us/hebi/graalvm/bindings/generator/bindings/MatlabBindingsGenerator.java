@@ -145,7 +145,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexCType(TypeDescription param) {
         if (param.getDataType() == DataType.CALLBACK) {
-            return param.getTypeName(); // the gateway declares the callback typedefs itself
+            return TypeMap.toExternalC(param, false); // the gateway declares the callback typedefs itself
         }
         if (param.getDataType() == DataType.STRUCT) {
             return param.getTypeName(); // layout-compatible local struct generated into the MEX gateway
@@ -351,7 +351,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
         var out = new IndentingTextRenderer().add("\n");
         for (var callback : lib.getCallbacks()) {
-            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback));
+            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(lib.getCPrefix() + "_", callback));
         }
         return out.render();
     }

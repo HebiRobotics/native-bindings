@@ -52,7 +52,9 @@ public final class TypeMap {
         return switch (type.getDataType()) {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
             case ENUM -> type.getCPrefix() + type.getTypeName();
-            case CALLBACK -> type.getTypeName(); // the typedef the header declares, unprefixed
+            // the typedef the header declares. The C++ alias and the Python prototype keep the
+            // plain name the descriptor carries, each inside its own namespace.
+            case CALLBACK -> type.getCPrefix() + type.getTypeName();
             case STRUCT -> toStructCName(type.getCPrefix(), type.getTypeName());
             default -> toExternalC(type.getDataType());
         };

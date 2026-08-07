@@ -143,15 +143,26 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
     /**
      * Two interfaces of the same simple name would emit the same typedef twice, and the second
-     * definition is what the C compiler reports rather than the collision.
+     * definition is what the C compiler reports rather than the collision. Classes, structs and
+     * enums share that one C namespace, so their names are taken here too. Runs after
+     * {@link #registerUsedStructViews()}, which is what makes the struct side complete.
      */
-    private void registerUsedCallbacks() {
+    private void registerUsedCallbacks() { // TODO: do a single general check of duplicate symbols, also structs vs classes
         var declaredBy = new HashMap<String, String>();
+        for (var apiClass : description.getClasses()) {
+            declaredBy.put(apiClass.getType().getTypeName(), "class " + apiClass.getType().getTypeName());
+        }
+        for (var struct : description.getStructs()) {
+            declaredBy.put(struct.getName(), "struct " + struct.getName());
+        }
+        for (var enumDesc : description.getEnums()) {
+            declaredBy.put(enumDesc.getName(), "enum " + enumDesc.getName());
+        }
         for (var callback : usedCallbacks.values()) {
-            var previous = declaredBy.putIfAbsent(callback.getName(), callback.getQualifiedName());
+            var previous = declaredBy.putIfAbsent(callback.getName(), "callback " + callback.getQualifiedName());
             if (previous != null) {
-                error(callback.getElement(), "Duplicate callback name '%s', already declared by %s",
-                        callback.getName(), previous);
+                error(callback.getElement(), "Callback name '%s' collides with %s: %s",
+                        callback.getName(), previous, callback.getQualifiedName());
                 continue;
             }
             description.addCallbacks(callback.toDescription());

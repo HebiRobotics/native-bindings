@@ -832,6 +832,62 @@ public class ProcessorValidationTest {
         assertFalse(json.contains("\"Callback\""));
     }
 
+    @Test
+    public void rejectsCallbackNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadName", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("BadName")
+                public class BadName {
+                    @CLibCallback(name = "on value")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining(
+                "@CLibCallback name 'on value' is not a valid C identifier: validation.BadName.Callback");
+    }
+
+    @Test
+    public void rejectsCallbackNameThatCollidesWithAClass() {
+        assertThat(compile(source("Collision", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Collision")
+                public class Collision {
+                    @CLibCallback(name = "Collision")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining(
+                "Callback name 'Collision' collides with class Collision: validation.Collision.Callback");
+    }
+
+    @Test
+    public void rejectsCallbackReturn() {
+        assertThat(compile(source("CallbackReturn", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("CallbackReturn")
+                public class CallbackReturn {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Callback current() { return null; }
+                }
+                """))).hadErrorContaining(
+                "a CFunctionPointer return is not supported until a use case needs it: current");
+    }
+
     private String readGeneratedFile(String fileName) throws IOException {
         try (var files = Files.walk(outputDir.getRoot().toPath())) {
             var file = files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst();
