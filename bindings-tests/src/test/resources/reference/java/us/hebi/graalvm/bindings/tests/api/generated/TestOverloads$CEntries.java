@@ -4,7 +4,7 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.tests.api.TestOverloads;
 
 public final class TestOverloads$CEntries {
@@ -27,7 +27,7 @@ public final class TestOverloads$CEntries {
     public static CCharPointer bindings_tests_Overloads_greet(IsolateThread _isolate,
             CCharPointer name, CCharPointer greeting) {
         try {
-            return CTypes.toTempCharPointer(TestOverloads.greet(CTypes.utf8ToJavaString(name), CTypes.utf8ToJavaString(greeting)));
+            return CPointers.toTempCharPointer(TestOverloads.greet(CPointers.utf8ToJavaString(name), CPointers.utf8ToJavaString(greeting)));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();

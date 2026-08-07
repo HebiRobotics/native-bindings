@@ -4,7 +4,7 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.tests.api.TestPalette;
 
 public final class TestPalette$CEntries {
@@ -25,7 +25,7 @@ public final class TestPalette$CEntries {
     )
     public static CCharPointer bindings_tests_Palette_nameOf(IsolateThread _isolate, int color) {
         try {
-            return CTypes.toTempCharPointer(TestPalette.nameOf(TestPalette_Color$$CEnum.toJava(color)));
+            return CPointers.toTempCharPointer(TestPalette.nameOf(TestPalette_Color$$CEnum.toJava(color)));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
@@ -50,7 +50,7 @@ public final class TestPalette$CEntries {
     public static CCharPointer bindings_tests_Palette_describe(IsolateThread _isolate, int color,
             int marker) {
         try {
-            return CTypes.toTempCharPointer(TestPalette.describe(TestPalette_Color$$CEnum.toJava(color), TestPalette_Marker$$CEnum.toJava(marker)));
+            return CPointers.toTempCharPointer(TestPalette.describe(TestPalette_Color$$CEnum.toJava(color), TestPalette_Marker$$CEnum.toJava(marker)));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();

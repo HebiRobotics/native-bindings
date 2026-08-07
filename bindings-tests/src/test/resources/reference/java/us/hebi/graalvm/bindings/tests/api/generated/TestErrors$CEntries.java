@@ -4,9 +4,9 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.types.CLibError;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
-import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
+import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestErrors;
 
 public final class TestErrors$CEntries {
@@ -72,7 +72,7 @@ public final class TestErrors$CEntries {
             ErrorInfo _error, boolean shouldFail) {
         CLibError.clearStruct(_error);
         try {
-            return CTypes.toTempCharPointer(TestErrors.failingString(shouldFail));
+            return CPointers.toTempCharPointer(TestErrors.failingString(shouldFail));
         } catch (Throwable throwable) {
             CLibError.fillStruct(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();

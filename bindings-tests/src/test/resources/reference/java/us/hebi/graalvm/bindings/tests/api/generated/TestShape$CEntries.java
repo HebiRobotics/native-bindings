@@ -6,8 +6,8 @@ import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.handles.Handles;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
+import us.hebi.graalvm.bindings.runtime.pointers.Handles;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
 
 public final class TestShape$CEntries {
@@ -35,7 +35,7 @@ public final class TestShape$CEntries {
     public static CCharPointer bindings_tests_Shape_getName(IsolateThread _isolate,
             ObjectHandle _obj) {
         try {
-            return CTypes.toTempCharPointer(_getInstance(_obj).getName());
+            return CPointers.toTempCharPointer(_getInstance(_obj).getName());
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return WordFactory.nullPointer();
@@ -48,7 +48,7 @@ public final class TestShape$CEntries {
     public static void bindings_tests_Shape_setName(IsolateThread _isolate, ObjectHandle _obj,
             CCharPointer name) {
         try {
-            _getInstance(_obj).setName(CTypes.utf8ToJavaString(name));
+            _getInstance(_obj).setName(CPointers.utf8ToJavaString(name));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
         }

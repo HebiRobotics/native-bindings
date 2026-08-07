@@ -5,10 +5,10 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.types.CLibError;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
-import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
-import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
+import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
+import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestArrays;
 
 public final class TestArrays$CEntries {
@@ -18,7 +18,7 @@ public final class TestArrays$CEntries {
     public static double bindings_tests_Arrays_sumFloat64(IsolateThread _isolate,
             CDoublePointer values, long count) {
         try {
-            return TestArrays.sumFloat64(values, CTypes.capSizeToInt(count));
+            return TestArrays.sumFloat64(values, CPointers.capSizeToInt(count));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;
@@ -31,7 +31,7 @@ public final class TestArrays$CEntries {
     public static int bindings_tests_Arrays_sumInt32(IsolateThread _isolate, CIntPointer values,
             long count) {
         try {
-            return TestArrays.sumInt32(values, CTypes.capSizeToInt(count));
+            return TestArrays.sumInt32(values, CPointers.capSizeToInt(count));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;
@@ -44,7 +44,7 @@ public final class TestArrays$CEntries {
     public static void bindings_tests_Arrays_fillFloat64(IsolateThread _isolate,
             CDoublePointer target, long count, double value) {
         try {
-            TestArrays.fillFloat64(target, CTypes.capSizeToInt(count), value);
+            TestArrays.fillFloat64(target, CPointers.capSizeToInt(count), value);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
         }
@@ -56,7 +56,7 @@ public final class TestArrays$CEntries {
     public static void bindings_tests_Arrays_cumulativeSum(IsolateThread _isolate,
             CDoublePointer source, CDoublePointer target, long count) {
         try {
-            TestArrays.cumulativeSum(source, target, CTypes.capSizeToInt(count));
+            TestArrays.cumulativeSum(source, target, CPointers.capSizeToInt(count));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
         }
@@ -68,7 +68,7 @@ public final class TestArrays$CEntries {
     public static void bindings_tests_Arrays_reverseFloat64(IsolateThread _isolate,
             CDoublePointer values, long count) {
         try {
-            TestArrays.reverseFloat64(values, CTypes.capSizeToInt(count));
+            TestArrays.reverseFloat64(values, CPointers.capSizeToInt(count));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
         }
@@ -95,7 +95,7 @@ public final class TestArrays$CEntries {
             double offset, DoubleSpan _structOut) {
         try {
             double[] _values = TestArrays.addOffset(values, offset);
-            _structOut.setData(CTypes.toTempDoublePointer(_values));
+            _structOut.setData(CPointers.toTempDoublePointer(_values));
             _structOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
@@ -110,8 +110,8 @@ public final class TestArrays$CEntries {
     public static void bindings_tests_Arrays_getSequence(IsolateThread _isolate, long count,
             DoubleSpan _structOut) {
         try {
-            double[] _values = TestArrays.getSequence(CTypes.capSizeToInt(count));
-            _structOut.setData(CTypes.toTempDoublePointer(_values));
+            double[] _values = TestArrays.getSequence(CPointers.capSizeToInt(count));
+            _structOut.setData(CPointers.toTempDoublePointer(_values));
             _structOut.setLength(_values == null ? 0 : _values.length);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through

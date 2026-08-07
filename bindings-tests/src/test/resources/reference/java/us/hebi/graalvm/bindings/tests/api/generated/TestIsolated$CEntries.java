@@ -2,8 +2,8 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.types.CLibError;
-import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
+import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestIsolated;
 
 public final class TestIsolated$CEntries {

@@ -5,9 +5,9 @@ import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.runtime.handles.Handles;
-import us.hebi.graalvm.bindings.runtime.types.CLibError;
-import us.hebi.graalvm.bindings.runtime.types.ErrorInfo;
+import us.hebi.graalvm.bindings.runtime.pointers.Handles;
+import us.hebi.graalvm.bindings.runtime.structs.CLibError;
+import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
 
 public final class TestShape_TestCircle$CEntries {

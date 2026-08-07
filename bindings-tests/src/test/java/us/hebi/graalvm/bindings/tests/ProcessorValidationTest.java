@@ -76,7 +76,7 @@ public class ProcessorValidationTest {
     @Test
     public void rejectsDoubleSpanReturn() {
         assertThat(compile(source("SpanReturn", """
-                import us.hebi.graalvm.bindings.runtime.types.DoubleSpan;
+                import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
                 @CLibClass("SpanReturn")
                 public class SpanReturn {
                     @CLibMethod(flags = Noexcept)

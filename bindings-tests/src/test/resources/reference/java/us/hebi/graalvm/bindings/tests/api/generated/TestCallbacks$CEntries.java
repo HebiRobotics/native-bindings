@@ -3,7 +3,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.VoidPointer;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.tests.api.TestCallbacks;
 
 public final class TestCallbacks$CEntries {
@@ -13,7 +13,7 @@ public final class TestCallbacks$CEntries {
     public static void bindings_tests_Callbacks_invokeTimes(IsolateThread _isolate,
             TestCallbacks.IndexCallbackFunction func, VoidPointer userData, long times) {
         try {
-            TestCallbacks.invokeTimes(func, userData, CTypes.capSizeToInt(times));
+            TestCallbacks.invokeTimes(func, userData, CPointers.capSizeToInt(times));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
         }

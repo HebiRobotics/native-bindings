@@ -2,7 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.tests.api.TestIndices;
 
 public final class TestIndices$CEntries {
@@ -71,7 +71,7 @@ public final class TestIndices$CEntries {
     )
     public static long bindings_tests_Indices_echoSize(IsolateThread _isolate, long index) {
         try {
-            return TestIndices.echoSize(CTypes.capSizeToLong(index));
+            return TestIndices.echoSize(CPointers.capSizeToLong(index));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;

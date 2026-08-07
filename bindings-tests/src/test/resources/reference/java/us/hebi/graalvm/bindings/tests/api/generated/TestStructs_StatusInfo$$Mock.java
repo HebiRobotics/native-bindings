@@ -1,6 +1,6 @@
 package us.hebi.graalvm.bindings.tests.api.generated;
 
-import us.hebi.graalvm.bindings.runtime.types.MockPointerBase;
+import us.hebi.graalvm.bindings.runtime.pointers.MockPointerBase;
 import us.hebi.graalvm.bindings.tests.api.TestStructs;
 
 /**

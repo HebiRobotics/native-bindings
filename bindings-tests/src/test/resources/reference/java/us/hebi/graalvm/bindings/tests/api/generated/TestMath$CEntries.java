@@ -2,7 +2,7 @@ package us.hebi.graalvm.bindings.tests.api.generated;
 
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import us.hebi.graalvm.bindings.runtime.types.CTypes;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.tests.api.TestMath;
 
 public final class TestMath$CEntries {
@@ -108,7 +108,7 @@ public final class TestMath$CEntries {
     )
     public static long bindings_tests_Math_addSize(IsolateThread _isolate, long a, long b) {
         try {
-            return TestMath.addSize(CTypes.capSizeToLong(a), CTypes.capSizeToLong(b));
+            return TestMath.addSize(CPointers.capSizeToLong(a), CPointers.capSizeToLong(b));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;
@@ -120,7 +120,7 @@ public final class TestMath$CEntries {
     )
     public static int bindings_tests_Math_sizeToInt32(IsolateThread _isolate, long value) {
         try {
-            return TestMath.sizeToInt32(CTypes.capSizeToInt(value));
+            return TestMath.sizeToInt32(CPointers.capSizeToInt(value));
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;
