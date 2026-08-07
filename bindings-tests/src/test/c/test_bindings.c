@@ -222,10 +222,10 @@ static void test_arrays(void) {
 static void test_spans(void) {
     double xs[3];
     double ys[3];
-    bindings_tests_double_span x;
-    bindings_tests_double_span y;
-    bindings_tests_double_span result;
-    bindings_tests_error_info_t error;
+    bindings_tests_DoubleSpan x;
+    bindings_tests_DoubleSpan y;
+    bindings_tests_DoubleSpan result;
+    bindings_tests_ErrorInfo error;
     int i;
 
     xs[0] = 1.0;
@@ -279,9 +279,9 @@ static void test_spans(void) {
 
 static void test_structs(void) {
     /* Declaration order is the ABI, so the initializer doubles as a layout check. */
-    bindings_tests_status_info status = {48.0, 2, 1};
-    bindings_tests_status_info out;
-    bindings_tests_error_info_t error;
+    bindings_tests_StatusInfo status = {48.0, 2, 1};
+    bindings_tests_StatusInfo out;
+    bindings_tests_ErrorInfo error;
 
     assert(bindings_tests_Structs_totalPower(status, 2.5) == 120.0);
     assert(bindings_tests_Structs_checkedVoltage(&error, status) == 48.0);
@@ -401,7 +401,7 @@ static void test_palette(void) {
 
 static void test_errors(void) {
     const char* message;
-    bindings_tests_error_info_t error;
+    bindings_tests_ErrorInfo error;
 
     /* A throwing void method stays void: the struct is the only report. */
     bindings_tests_Errors_requireNonNegative(NULL, 5);
@@ -527,7 +527,7 @@ static void test_overloads(void) {
 /* ------------------------------------------------------------------ */
 
 static void test_isolated(void) {
-    bindings_tests_error_info_t error;
+    bindings_tests_ErrorInfo error;
 
     /*
      * This state lives in a second GraalVM isolate. It does not share static
@@ -556,15 +556,15 @@ static void test_isolated(void) {
  * but kept out of the public header on purpose, so this test declares the
  * symbols it links against itself.
  */
-typedef struct bindings_tests_isolate_s bindings_tests_isolate_t;
-typedef struct bindings_tests_isolatethread_s bindings_tests_isolatethread_t;
+typedef struct bindings_tests_Isolate_s bindings_tests_Isolate;
+typedef struct bindings_tests_IsolateThread_s bindings_tests_IsolateThread;
 
-bindings_tests_isolatethread_t* bindings_tests_createIsolate(void);
-bindings_tests_isolate_t* bindings_tests_getIsolate(bindings_tests_isolatethread_t* thread);
-bindings_tests_isolatethread_t* bindings_tests_attachThread(bindings_tests_isolate_t* isolate);
-bindings_tests_isolatethread_t* bindings_tests_getCurrentThread(bindings_tests_isolate_t* isolate);
-int bindings_tests_detachThread(bindings_tests_isolatethread_t* thread);
-int bindings_tests_tearDownIsolate(bindings_tests_isolatethread_t* thread);
+bindings_tests_IsolateThread* bindings_tests_createIsolate(void);
+bindings_tests_Isolate* bindings_tests_getIsolate(bindings_tests_IsolateThread* thread);
+bindings_tests_IsolateThread* bindings_tests_attachThread(bindings_tests_Isolate* isolate);
+bindings_tests_IsolateThread* bindings_tests_getCurrentThread(bindings_tests_Isolate* isolate);
+int bindings_tests_detachThread(bindings_tests_IsolateThread* thread);
+int bindings_tests_tearDownIsolate(bindings_tests_IsolateThread* thread);
 
 static void test_isolate_api(void) {
     /*
@@ -573,9 +573,9 @@ static void test_isolate_api(void) {
      * wrappers stay untouched: tearing down the shared global isolate would
      * break every later call.
      */
-    bindings_tests_isolatethread_t* thread = bindings_tests_createIsolate();
+    bindings_tests_IsolateThread* thread = bindings_tests_createIsolate();
     assert(thread != NULL);
-    bindings_tests_isolate_t* isolate = bindings_tests_getIsolate(thread);
+    bindings_tests_Isolate* isolate = bindings_tests_getIsolate(thread);
     assert(isolate != NULL);
     assert(bindings_tests_getCurrentThread(isolate) == thread);
     assert(bindings_tests_detachThread(thread) == 0);

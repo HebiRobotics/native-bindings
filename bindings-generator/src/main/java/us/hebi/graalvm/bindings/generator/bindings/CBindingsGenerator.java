@@ -281,8 +281,8 @@ public class CBindingsGenerator extends BindingGenerator {
      */
     private String getIsolateApiDeclarations() {
         return IndentingTextRenderer.of("""
-                        typedef struct %%PREFIX%%_isolate_s %%ISOLATE_TYPE%%;
-                        typedef struct %%PREFIX%%_isolatethread_s %%THREAD_TYPE%%;
+                        typedef struct %%PREFIX%%_Isolate_s %%ISOLATE_TYPE%%;
+                        typedef struct %%PREFIX%%_IsolateThread_s %%THREAD_TYPE%%;
 
                         %%THREAD_TYPE%%* %%PREFIX%%_createIsolate();
                         %%ISOLATE_TYPE%%* %%PREFIX%%_getIsolate(%%THREAD_TYPE%%* thread);
@@ -297,15 +297,15 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     private String getIsolateType() {
-        return lib.getCPrefix() + "_isolate_t";
+        return lib.getCPrefix() + "_Isolate";
     }
 
     private String getErrorType() {
-        return lib.getCPrefix() + "_error_info_t";
+        return lib.getCPrefix() + "_ErrorInfo";
     }
 
     private String getIsolateThreadType() {
-        return lib.getCPrefix() + "_isolatethread_t";
+        return lib.getCPrefix() + "_IsolateThread";
     }
 
     private void writeCMakeStatic(Writer writer) throws IOException {

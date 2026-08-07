@@ -57,12 +57,11 @@ public final class TypeMap {
     }
 
     /**
-     * Public C name of a user struct. Bare rather than suffixed with {@code _t}, which POSIX
-     * reserves and which here marks the hand-built plumbing typedefs, while generated data
-     * structs follow the span's style.
+     * Public C name of a struct. Types are {@code <prefix>_UpperCamel} like the handle
+     * typedefs and the class segment in function names.
      */
     public static String toStructCName(String cPrefix, String name) {
-        return cPrefix + CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, name);
+        return cPrefix + name;
     }
 
     /**

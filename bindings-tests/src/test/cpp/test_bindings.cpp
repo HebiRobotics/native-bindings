@@ -199,8 +199,8 @@ static void testSpans() {
   CHECK(bt::arrays::dotProduct(x, y) == 32.0);
 
   // The raw span form stays available for existing C style callers
-  bt::internal::double_span rawX{x.data(), x.size()};
-  bt::internal::double_span rawY{y.data(), y.size()};
+  bt::internal::DoubleSpan rawX{x.data(), x.size()};
+  bt::internal::DoubleSpan rawY{y.data(), y.size()};
   CHECK(bt::arrays::dotProduct(rawX, rawY) == 32.0);
 
   // The length check lives once in the Java implementation, and the wrapper turns

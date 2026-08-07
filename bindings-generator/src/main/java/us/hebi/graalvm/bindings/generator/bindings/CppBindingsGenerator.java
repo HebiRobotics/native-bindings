@@ -760,8 +760,9 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The mirror shares the C name minus the library prefix, which no public type can collide
-     * with because a public struct keeps its UpperCamel name.
+     * The mirror shares the C name minus the library prefix, so it carries the canonical
+     * UpperCamel struct name. The {@code internal} namespace is what separates it from a
+     * public wrapper type of the same name.
      */
     private static String getInternalStructName(String structName) {
         return TypeMap.toStructCName("", structName);

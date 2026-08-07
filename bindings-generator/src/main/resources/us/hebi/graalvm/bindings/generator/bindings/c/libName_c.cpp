@@ -11,21 +11,21 @@ namespace isolate {
 // Initial static creation. We attach the thread in the
 // constructor, so we detach immediately to get an even
 // number of operations.
-<cPrefix>_isolate_t* createIsolate() {
-    <cPrefix>_isolatethread_t* thread = <cPrefix>_createIsolate();
+<cPrefix>_Isolate* createIsolate() {
+    <cPrefix>_IsolateThread* thread = <cPrefix>_createIsolate();
     if (!thread) {
-        return (<cPrefix>_isolate_t*) nullptr;
+        return (<cPrefix>_Isolate*) nullptr;
     }
-    <cPrefix>_isolate_t* iso = <cPrefix>_getIsolate(thread);
+    <cPrefix>_Isolate* iso = <cPrefix>_getIsolate(thread);
     <cPrefix>_detachThread(thread);
     return iso;
 }
 
 // Thread-local attachment that lives for the lifetime of the thread
 struct ThreadHandle {
-    <cPrefix>_isolatethread_t* ptr = nullptr;
+    <cPrefix>_IsolateThread* ptr = nullptr;
 
-    explicit ThreadHandle(<cPrefix>_isolate_t* iso) {
+    explicit ThreadHandle(<cPrefix>_Isolate* iso) {
         if (iso) ptr = <cPrefix>_attachThread(iso);
     }
 
@@ -35,8 +35,8 @@ struct ThreadHandle {
 };
 
 // Default global isolate
-<cPrefix>_isolatethread_t* global() {
-    static <cPrefix>_isolate_t* isolate = createIsolate();
+<cPrefix>_IsolateThread* global() {
+    static <cPrefix>_Isolate* isolate = createIsolate();
     static thread_local ThreadHandle thread(isolate);
     return thread.ptr;
 }

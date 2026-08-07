@@ -27,9 +27,9 @@ int main(void) {
     bindings_tests_CounterPtr counter;
     double x[3] = {1.0, 2.0, 3.0};
     double y[3] = {4.0, 5.0, 6.0};
-    bindings_tests_double_span xSpan;
-    bindings_tests_double_span ySpan;
-    bindings_tests_error_info_t error;
+    bindings_tests_DoubleSpan xSpan;
+    bindings_tests_DoubleSpan ySpan;
+    bindings_tests_ErrorInfo error;
 
     CHECK(bindings_tests_Math_addInt32(2, 3) == 5);
     CHECK(bindings_tests_Math_negate(0) == 1); /* boolean not */
