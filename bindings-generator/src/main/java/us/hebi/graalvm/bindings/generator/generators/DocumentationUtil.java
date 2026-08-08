@@ -4,9 +4,6 @@ import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.MethodDescription;
 import us.hebi.graalvm.bindings.model.TypeDescription;
 
-import java.util.ArrayList;
-import java.util.function.Predicate;
-
 import static us.hebi.graalvm.bindings.generator.bindings.BindingGenerator.*;
 
 /**
@@ -19,21 +16,12 @@ public class DocumentationUtil {
         return wrapInMatlabDoc(indent, type.getComment().trim()) + "\n";
     }
 
-    /**
-     * @param isVisible parameters the MATLAB signature does not carry are documented nowhere,
-     *                  which today is the void* a callback's handle travels through
-     */
-    public static String generateMatlabdoc(String indent, MethodDescription methodDesc, Predicate<TypeDescription> isVisible) {
+    public static String generateMatlabdoc(String indent, MethodDescription methodDesc) {
         StringBuilder out = new StringBuilder(methodDesc.getDocumentation().trim());
 
-        var parameters = new ArrayList<TypeDescription>();
-        for (TypeDescription parameter : methodDesc.getParameters()) {
-            if (isVisible.test(parameter)) parameters.add(parameter);
-        }
-
-        if (!parameters.isEmpty()) {
+        if (methodDesc.getParameters().length() != 0) {
             out.append("\n\nInputs:");
-            for (TypeDescription parameter : parameters) {
+            for (TypeDescription parameter : methodDesc.getParameters()) {
                 out.append("\n").append(INDENT).append(parameter.getParamName());
                 if (parameter.hasComment()) {
                     out.append(" - ").append(parameter.getComment());
