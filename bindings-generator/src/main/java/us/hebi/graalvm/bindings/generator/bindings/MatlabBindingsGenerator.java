@@ -256,7 +256,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         for (ClassDescription clazz : lib.getClasses()) {
             cases.addLine("\n// " + getMatlabClassName(clazz));
             for (MethodDescription method : clazz.getMethods()) {
-                if (!isMatlabVisible(method)) continue;
+                if (getMatlabExclusionReason(method).isPresent()) continue;
                 int index = FIRST_INDEX;
                 pre.setLength(0);
                 post.setLength(0);
@@ -265,7 +265,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 // The error struct is filled by the call and raises before any output is built
                 if (isThrowing(method)) {
                     pre.append("ErrorInfo _error = {};\n");
-                    post.append("\ncheckError(_error);");
                     types.add("ErrorInfo*");
                     args.add("&_error");
                 }
@@ -287,6 +286,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         pre.append(getMexToC(param, index++)).append(";\n");
                         args.add(param.getParamName());
                     }
+                }
+                // A library error raised because the callback failed would otherwise mask
+                // the root cause, so the callback error is checked first
+                if (isThrowing(method)) {
+                    post.append("\ncheckError(_error);");
                 }
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
@@ -432,8 +436,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         for (var callback : lib.getCallbacks()) {
             if (!exposed.contains(callback.getName())) continue;
             if (!TypeMap.isVoid(callback.getReturnType().getDataType())) {
-                throw new IllegalStateException("Callback '" + callback.getName()
-                                                + "' returns a value, which the MEX trampoline cannot hand back to the library");
+                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value, which the MEX trampoline cannot hand back to the library");
             }
             var params = new ArrayList<String>();
             var mexArgs = new ArrayList<String>();
@@ -488,7 +491,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         var names = new LinkedHashSet<String>();
         for (var apiClass : lib.getClasses()) {
             for (var method : apiClass.getMethods()) {
-                if (!isMatlabVisible(method)) continue;
+                if (getMatlabExclusionReason(method).isPresent()) continue;
                 for (var param : method.getParameters()) {
                     if (param.getDataType() == DataType.CALLBACK) names.add(param.getTypeName());
                 }
@@ -502,17 +505,27 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * A callback that does not promise to fire before the method returns cannot run through
-     * mexCallMATLAB, so the whole method is omitted from the MATLAB face rather than exposed
-     * in a form nobody can call.
+     * The single decision point for shapes the MATLAB face cannot express. An excluded method
+     * still appears in the m-file, as a stub that raises the returned reason, but it reaches
+     * neither the gateway nor the auto-complete signatures.
+     *
+     * @return why the method cannot be called from MATLAB, or empty if it can
      */
-    private boolean isMatlabVisible(MethodDescription method) {
+    private Optional<String> getMatlabExclusionReason(MethodDescription method) {
         for (var param : method.getParameters()) {
-            if (param.getDataType() == DataType.CALLBACK && !getCallback(param).getIsSynchronous()) {
-                return false;
+            if (param.getDataType() != DataType.CALLBACK) continue;
+            // Anything invoked after the call returns is outside the window in which the
+            // gateway may reach back into MATLAB through mexCallMATLAB.
+            if (!getCallback(param).getIsSynchronous()) {
+                return Optional.of("its callback may fire after the call returns");
+            }
+            // The trampoline calls feval with zero outputs, so a value the function handle
+            // produces has no route back into the library.
+            if (!TypeMap.isVoid(getCallback(param).getReturnType().getDataType())) {
+                return Optional.of("its callback returns a value, which the gateway cannot hand back yet");
             }
         }
-        return true;
+        return Optional.empty();
     }
 
     private CallbackDescription getCallback(TypeDescription param) {
@@ -823,7 +836,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         content.indent();
 
         // Static methods
-        var staticMethods = getMethods(apiClass, m -> m.getIsStatic() && !m.getIsConstructor() && isMatlabVisible(m));
+        var staticMethods = getMethods(apiClass, m -> m.getIsStatic() && !m.getIsConstructor());
         if (!staticMethods.isEmpty()) {
             content.beginControlFlow("\nmethods(Static)\n");
             staticMethods.forEach(m -> addWrapperMethod(apiClass, m, content.snapshot()));
@@ -841,7 +854,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
 
         // Instance methods
-        var instanceMethods = getMethods(apiClass, m -> !m.getIsStatic() && isMatlabVisible(m));
+        var instanceMethods = getMethods(apiClass, m -> !m.getIsStatic());
         if (!instanceMethods.isEmpty()) {
             content.beginControlFlow("\nmethods\n");
             instanceMethods.forEach(m -> addWrapperMethod(apiClass, m, content.snapshot()));
@@ -984,6 +997,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private void addWrapperMethod(ClassDescription apiClass, MethodDescription method, IndentingTextRenderer
             content) {
+        var exclusionReason = getMatlabExclusionReason(method);
+        if (exclusionReason.isPresent()) {
+            addUnsupportedStub(apiClass, method, exclusionReason.get(), content);
+            return;
+        }
+
         var params = new ParameterLists(lib, method);
 
         // Property accessor naming
@@ -1028,6 +1047,30 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         content.endControlFlow("end\n");
 
+    }
+
+    /**
+     * The m-file entry for a method that {@link #getMatlabExclusionReason} rejected. It takes
+     * varargin so that every call reaches the error rather than an argument count mismatch,
+     * and it is the one wrapper shape with no dispatch case behind it.
+     */
+    private void addUnsupportedStub(ClassDescription apiClass, MethodDescription method, String reason,
+                                    IndentingTextRenderer content) {
+        boolean isConstructor = GeneratorUtil.isConstructor(method);
+        content.set("FUNC_NAME", isConstructor ? getMatlabClassName(apiClass) : method.getName());
+        content.set("OUTPUT", isConstructor ? "this" : "varargout");
+        content.set("REASON", reason);
+
+        var help = new StringBuilder();
+        if (method.hasDocumentation()) {
+            help.append(method.getDocumentation().trim()).append("\n\n");
+        }
+        help.append("Not supported from MATLAB: %%REASON%%.");
+
+        content.beginControlFlow("function %%OUTPUT%% = %%FUNC_NAME%%(varargin)");
+        content.addLine(DocumentationUtil.wrapInMatlabDoc("", help.toString()));
+        content.addLine("error('%%LIB_NAME%%:NotSupported', \"'%%FUNC_NAME%%' is not supported from MATLAB: %%REASON%%.\");");
+        content.endControlFlow("end\n");
     }
 
     /**
@@ -1368,7 +1411,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             String classPrefix = getFullyQualifiedType(lib, apiClass.getType());
             for (var method : apiClass.getMethods()) {
                 if (GeneratorUtil.isAccessor(method)) continue;
-                if (!isMatlabVisible(method)) continue;
+                if (getMatlabExclusionReason(method).isPresent()) continue;
                 var params = new ParameterLists(lib, method);
 
                 Map<String, Object> methodData = new LinkedHashMap<>();

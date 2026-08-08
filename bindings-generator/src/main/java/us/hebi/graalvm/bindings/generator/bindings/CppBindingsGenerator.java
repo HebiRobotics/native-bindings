@@ -815,6 +815,8 @@ public class CppBindingsGenerator extends BindingGenerator {
         for (ClassDescription apiClass : getApiClasses()) {
             for (MethodDescription method : apiClass.getMethods()) {
                 if (method.getCppOverloads().length() > 0) continue;
+                // TODO: support constructor overloads
+                if (method.getIsConstructor()) continue;
                 tryGetCallbackOverload(method).ifPresent(overload -> names.add(overload.callback.getName()));
             }
         }
@@ -1029,6 +1031,12 @@ public class CppBindingsGenerator extends BindingGenerator {
             overloadWriter.write(joiner.join(parameters), "", joiner.join(call));
         }
 
+        // Constructors keep the raw form. The emission below is method-shaped and would
+        // name a constructor's overloads after the Java factory, which does not compile.
+        // TODO: support constructor overloads
+        if (method.getIsConstructor()) {
+            return;
+        }
         var callbackOverload = tryGetCallbackOverload(method);
         if (callbackOverload.isPresent()) {
             writeCallbackOverloads(apiClass, method, callbackOverload.get(), out, overloadWriter);

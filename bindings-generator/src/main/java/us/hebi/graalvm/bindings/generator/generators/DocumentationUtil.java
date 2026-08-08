@@ -54,7 +54,7 @@ public class DocumentationUtil {
         return wrapInMatlabDoc(indent, out.toString());
     }
 
-    private static String wrapInMatlabDoc(String indent, String comment) {
+    public static String wrapInMatlabDoc(String indent, String comment) {
         // First line uses 1 space, next lines use 3 spaces
         return indent + "% " + comment.trim().replaceAll("\n", indent + "\n%   ");
     }

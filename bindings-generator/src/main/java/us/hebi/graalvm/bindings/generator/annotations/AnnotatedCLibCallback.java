@@ -80,9 +80,10 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * The callback crosses the ABI as a raw function pointer, so every type in its signature
-     * has to be one the C, C++ and Python faces already marshal on their own. Handles, enums
-     * and by-value structs are rejected rather than guessed at.
+     * The allow-list is GraalVM's, not ours. {@code @InvokeCFunctionPointer} accepts only
+     * primitive types, word types and {@code @CEnum} types, so a handle, a by-value struct
+     * or a plain Java enum fails the image build rather than this processor. Rejecting them
+     * here turns a stage 1 failure into a diagnostic on the offending declaration.
      */
     private TypeDescription toCallbackType(AnnotatedClibType type, boolean isReturn) {
         DataType dataType;
@@ -90,6 +91,9 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
             dataType = type.getDataType();
         } catch (IllegalArgumentException iae) {
             throw unsupported(type, isReturn);
+        }
+        if (dataType == DataType.ENUM) {
+            throw javaEnum(type, isReturn);
         }
         if (!(isReturn && dataType == DataType.VOID) && !isSupportedType(dataType)) {
             throw unsupported(type, isReturn);
@@ -109,6 +113,19 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     private ProcessingException unsupported(AnnotatedClibType type, boolean isReturn) {
         return new ProcessingException(invokeMethod,
                 "@InvokeCFunctionPointer %s type '%s' is not supported in a callback signature: %s.%s",
+                isReturn ? "return" : "parameter", type.getJavaType(),
+                element.getSimpleName(), invokeMethod.getSimpleName());
+    }
+
+    /**
+     * The annotated API declares plain Java enums and the {@code @CEnum} mirror is generated
+     * from them, so the mirror is not what the interface names. Admitting the plain enum here
+     * only moves the failure to the image build.
+     */
+    private ProcessingException javaEnum(AnnotatedClibType type, boolean isReturn) {
+        return new ProcessingException(invokeMethod,
+                "@InvokeCFunctionPointer %s type '%s' is a Java enum, which a callback signature cannot use"
+                + " because GraalVM only accepts @CEnum types there: %s.%s",
                 isReturn ? "return" : "parameter", type.getJavaType(),
                 element.getSimpleName(), invokeMethod.getSimpleName());
     }
