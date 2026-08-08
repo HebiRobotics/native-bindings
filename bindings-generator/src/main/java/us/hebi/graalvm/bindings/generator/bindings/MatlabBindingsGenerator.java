@@ -230,6 +230,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         var cases = withLibVars().indent(2)
                 .set("PRE", "")
                 .set("POST", "")
+                .set("EXTRA_SYMBOLS", "")
                 .set("CALL", "%%CNAME%%(%%ARGS%%);")
                 .set("RETURN_VALUE", "_value")
                 .set("ARG_COUNT", "0");
@@ -242,7 +243,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         Consumer<IndentingTextRenderer> addCase = (template) -> {
             template.beginControlFlow("case /* hash32_fnv1a(\"%%CNAME%%\") */ %%HASH%%: {");
-            template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");");
+            template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");%%EXTRA_SYMBOLS%%");
             template.addLine("checkArgCount(nrhs, %%ARG_COUNT%%, \"%%CNAME%%\");");
             template.addLine("%%PRE%%%%CALL%%%%POST%%");
             template.addLine("break;").unindent().addLine("}");
@@ -273,11 +274,20 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     args.add(getMexToC(clazz.getType(), index++));
                 }
                 var callbackPair = tryGetCallbackPair(method);
+                var releaseOnCallbackError = tryGetCallbackErrorRelease(method);
                 for (var param : method.getParameters()) {
                     types.add(getMexCType(param));
                     if (param.getDataType() == DataType.CALLBACK) {
                         pre.append(getMexToC(param, index++)).append(";\n");
                         args.add(getCallbackTrampolineName(param.getTypeName()));
+                        releaseOnCallbackError.ifPresent(release -> post.append(IndentingTextRenderer.of("""
+
+                                // A raising mexFunction discards plhs, so a handle created before the
+                                // callback failed or was skipped would never reach an owner that releases it
+                                if (willRaiseCallbackError(%%PARAM%%) && %%RETURN_VALUE%% != nullptr) %%RELEASE%%(%%RETURN_VALUE%%);""")
+                                .set("PARAM", param.getParamName())
+                                .set("RELEASE", release)
+                                .render()));
                         post.append("\ncheckCallbackError(").append(param.getParamName()).append(");");
                     } else if (callbackPair.isPresent() && callbackPair.get().isUserData(param)) {
                         // MatlabCallback converts to the address of its slot, which the handle needs
@@ -294,6 +304,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 }
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
+                releaseOnCallbackError.ifPresent(release -> vars.set("EXTRA_SYMBOLS",
+                        "\nstatic auto " + release + " = libLoader.getFunc<void(*)("
+                        + getMexCType(method.getReturnType()) + ")>(\"" + release + "\");"));
                 if (method.getReturnType().getDataType() != DataType.VOID) {
                     pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
                     post.append("\nif (nlhs > 0) plhs[0] = ").append(getCToMex(method.getReturnType())).append(";");
@@ -376,9 +389,14 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 // clobber. The gateway passes the slot address through the method's void* userData
                 // parameter, so a trampoline finds its own handle without relying on top of stack.
                 struct CallbackSlot {
-                    const mxArray* handle; // the function handle to invoke, owned by the caller's prhs
-                    mxArray* error;        // what a failed invocation trapped, raised after the call
+                    const mxArray* handle;    // the function handle to invoke, owned by the caller's prhs
+                    mxArray* error;           // what a failed invocation trapped, raised after the call
+                    std::atomic<int> dropped; // invocations that never reached MATLAB, reported after the call
                 };
+
+                // The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
+                // may enter the Matrix API. Any other thread has to skip rather than corrupt it.
+                static const std::thread::id matlabThread = std::this_thread::get_id();
 
                 static const int MAX_CALLBACK_DEPTH = 32;
                 static CallbackSlot callbackStack[MAX_CALLBACK_DEPTH];
@@ -398,7 +416,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     if (callbackDepth == MAX_CALLBACK_DEPTH) {
                         mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "Callbacks are nested more than %d deep.", MAX_CALLBACK_DEPTH);
                     }
-                    callbackStack[callbackDepth] = CallbackSlot{arg, nullptr};
+                    // std::atomic is not copyable, so the slot is filled field by field
+                    CallbackSlot& slot = callbackStack[callbackDepth];
+                    slot.handle = arg;
+                    slot.error = nullptr;
+                    slot.dropped.store(0, std::memory_order_relaxed);
                     return callbackDepth++;
                 }
 
@@ -411,14 +433,28 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     MatlabCallback(const MatlabCallback&) = delete;
                 };
 
+                // True while a trampoline outcome is still waiting to be raised, either a trapped error
+                // or a skipped invocation. A case that returns a handle asks before raising, because
+                // the raise discards its outputs.
+                inline bool willRaiseCallbackError(const MatlabCallback& callback) {
+                    const CallbackSlot& slot = callbackStack[callback.index];
+                    return slot.error != nullptr || slot.dropped.load(std::memory_order_relaxed) != 0;
+                }
+
                 // Raises what a trampoline trapped, once the library has unwound its own frames. Throwing
                 // the MException keeps the original identifier and message, and it longjmps like any
                 // other error. rethrow is the wrong verb here, it rejects an exception that was never
-                // caught in MATLAB code.
+                // caught in MATLAB code. A trapped error wins over the skip count, it is the more
+                // specific failure.
                 inline void checkCallbackError(const MatlabCallback& callback) {
-                    mxArray* error = callbackStack[callback.index].error;
-                    if (error != nullptr) {
-                        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+                    CallbackSlot& slot = callbackStack[callback.index];
+                    if (slot.error != nullptr) {
+                        mexCallMATLAB(0, nullptr, 1, &slot.error, "throw");
+                    }
+                    const int dropped = slot.dropped.load(std::memory_order_relaxed);
+                    if (dropped != 0) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:NotSupported",
+                                          "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
                     }
                 }""";
     }
@@ -470,6 +506,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     // library's own frames. One mxArray per argument per call is inherent to MATLAB.
                     static void %%NAME%%(%%PARAMS%%) {
                         auto* slot = static_cast<CallbackSlot*>(%%USER_DATA%%);
+                        // The thread comes first, because everything below reaches into MATLAB. The
+                        // count is read after the library call has joined its threads, so relaxed is
+                        // enough, and checkCallbackError turns it into an error the caller sees.
+                        if (std::this_thread::get_id() != matlabThread) {
+                            slot->dropped.fetch_add(1, std::memory_order_relaxed);
+                            return;
+                        }
                         if (slot->error != nullptr) {
                             return; // an earlier invocation already failed, and that error is the one raised
                         }
@@ -533,6 +576,24 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             if (callback.getName().equals(param.getTypeName())) return callback;
         }
         throw new IllegalArgumentException("No callback found for type " + param.getTypeName());
+    }
+
+    /**
+     * The release symbol of a handle the dispatch case has to clean up itself. A method that
+     * pairs a callback with a handle return leaks it when the callback fails, because the raise
+     * discards plhs and no MATLAB object ever takes ownership.
+     */
+    private Optional<String> tryGetCallbackErrorRelease(MethodDescription method) {
+        var returnType = method.getReturnType();
+        if (returnType.getDataType() != DataType.OBJECT_HANDLE || tryGetCallbackPair(method).isEmpty()) {
+            return Optional.empty();
+        }
+        for (var clazz : lib.getClasses()) {
+            if (clazz.getType().getTypeName().equals(returnType.getTypeName())) {
+                return clazz.hasCDestructorName() ? Optional.of(clazz.getCDestructorName()) : Optional.empty();
+            }
+        }
+        return Optional.empty();
     }
 
     /**
