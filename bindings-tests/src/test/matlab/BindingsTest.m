@@ -449,8 +449,8 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes([], 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(42, 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
 
-            % A synchronous callback is legal in a constructor, so Counted runs the slot
-            % mechanics through the construction path and hands back a usable handle.
+            % A constructor keeps its callback in a per-object record rather than on the
+            % handle stack, so Counted runs that path and hands back a usable handle.
             collected = [];
             counted = bindings_tests.Counted(@collect, 3);
             testCase.verifyEqual(collected, [0 1 2]);
@@ -464,7 +464,7 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyError(@() bindings_tests.Counted(@fail, 1), 'bindings_tests:CallbackFailed');
             testCase.verifyEqual(bindings_tests.Counted.getClosedCount(), released + 1);
 
-            % The slot stack recovers from it, so the next construction still works
+            % The pending error slot is cleared by the raise, so the next construction works
             collected = [];
             counted = bindings_tests.Counted(@collect, 2);
             testCase.verifyEqual(collected, [0 1]);
@@ -537,12 +537,9 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testAsynchronousCallback(testCase)
-            % TODO: notifyOnce stays a NotSupported stub past the thread gate. Its slot
-            % is reused after the call returns, so a later invocation on the MATLAB
-            % thread passes the check and reaches the wrong handle. Retired by the
-            % callback objects in plans item 1b.
-            testCase.assumeFail('notifyOnce waits on the callback objects, plans item 1b');
+        function testArgumentlessCallback(testCase)
+            % The callback carries nothing but its userData, which the wrapper hides, so
+            % the function handle takes no arguments and feval gets the handle alone.
             called = false;
             bindings_tests.Callbacks.notifyOnce(@() note());
             testCase.verifyTrue(called);
@@ -559,13 +556,55 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 42);
         end
 
-        function testAsynchronousCallbackConstructor(testCase)
-            % TODO: Notified is a NotSupported stub until callback objects own the
-            % persistent handle, plans item 1b.
-            testCase.assumeFail('Notified waits on the owning callback objects, plans item 1b');
-            notified = bindings_tests.Notified(@() []);
+        function testNotifiedCallbackConstructor(testCase)
+            % The same typedef a method takes, here owned by the object the constructor
+            % creates, so it goes through the per-object record instead of the slot stack.
+            called = false;
+            notified = bindings_tests.Notified(@() note());
+            testCase.verifyTrue(called);
             testCase.verifyNotEmpty(notified.c_ptr());
             delete(notified);
+
+            function note()
+                called = true;
+            end
+        end
+
+        function testStoredCallbackConstructor(testCase)
+            % A stored callback outlives the call that registered it, which is what the
+            % per-object record exists for. The handle stays valid across later calls.
+            collected = [];
+
+            stored = bindings_tests.Stored(@collect);
+            stored.fire(3);
+            stored.fire(7);
+            testCase.verifyEqual(collected, [3 7]);
+
+            % The record dies with the object, and the release reaches the library
+            released = bindings_tests.Stored.getClosedCount();
+            delete(stored);
+            testCase.verifyEqual(bindings_tests.Stored.getClosedCount(), released + 1);
+
+            % An error inside a stored callback is raised on the fire that ran it, since
+            % that is the call the user was making at the time.
+            failing = bindings_tests.Stored(@fail);
+            testCase.verifyError(@() failing.fire(1), 'bindings_tests:CallbackFailed');
+            delete(failing);
+
+            % The pending error slot is cleared by the raise, so a later object still works
+            collected = [];
+            stored = bindings_tests.Stored(@collect);
+            stored.fire(5);
+            testCase.verifyEqual(collected, 5);
+            delete(stored);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
         end
 
         function testIsolated(testCase)

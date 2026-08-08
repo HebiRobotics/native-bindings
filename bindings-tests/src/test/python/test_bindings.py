@@ -617,7 +617,7 @@ class CallbacksTest(unittest.TestCase):
     def test_notify_once(self):
         seen = []
 
-        # NotifyCallbackFunction is unannotated, so this is the asynchronous-default path
+        # The callback carries nothing but its userData
         bindings_tests.Callbacks.notify_once(lambda user_data: seen.append(1), None)
 
         self.assertEqual([1], seen)
@@ -632,40 +632,43 @@ class CallbacksTest(unittest.TestCase):
         del notified
         gc.collect()
 
-    def test_synchronous_constructor_callback(self):
+    def test_counted_constructor_callback(self):
         seen = []
-        before = len(bindings_tests._callback_wrappers)
 
-        # The indices arrive during construction, and the synchronous contract lets the
-        # trampoline live in a local, so a fresh lambda must not grow the cache
+        # The indices all arrive during construction, so the instance still owns the
+        # trampoline afterwards even though nothing will fire again
         counted = bindings_tests.Counted(lambda user_data, index: seen.append(index), None, 3)
         self.assertEqual([0, 1, 2], seen)
-        self.assertEqual(before, len(bindings_tests._callback_wrappers))
+        self.assertIsNotNone(counted._func)
 
         del counted
         gc.collect()
 
-    def test_asynchronous_wrapper_is_cached_per_callable(self):
-        def handler(user_data):
-            pass
+    def test_stored_constructor_owns_the_callback(self):
+        seen = []
+        closed = bindings_tests.Stored.get_closed_count()
 
-        prototype = bindings_tests.NotifyCallbackFunction
-        first = bindings_tests._wrap_callback(prototype, handler)
-        second = bindings_tests._wrap_callback(prototype, handler)
+        # Nothing fires during construction. The handle owns the trampoline, which is what
+        # keeps it alive for the later calls that do fire.
+        stored = bindings_tests.Stored(lambda user_data, index: seen.append(index), None)
+        self.assertEqual([], seen)
 
-        # The cache is what keeps the trampoline alive, so the same callable has to
-        # map to the same wrapper rather than to a fresh one per call
-        self.assertIs(first, second)
+        stored.fire(2)
+        stored.fire(5)
+        self.assertEqual([2, 5], seen)
 
-    def test_synchronous_wrapper_is_not_retained(self):
-        before = len(bindings_tests._callback_wrappers)
+        del stored
+        gc.collect()
+        self.assertEqual(closed + 1, bindings_tests.Stored.get_closed_count())
 
-        # A fresh lambda per call is the IK-loop shape. The synchronous contract lets the
-        # trampoline live in a local, so the cache must not grow with it.
+    def test_method_wrapper_is_not_retained(self):
+        # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call
+        # that passed it. The module therefore has no process-lifetime cache at all.
         for i in range(10):
             bindings_tests.Callbacks.invoke_once(lambda user_data, index: None, None, i)
 
-        self.assertEqual(before, len(bindings_tests._callback_wrappers))
+        self.assertFalse(hasattr(bindings_tests, "_callback_wrappers"))
+        self.assertFalse(hasattr(bindings_tests, "_wrap_callback"))
 
 
 if __name__ == "__main__":

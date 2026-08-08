@@ -680,6 +680,8 @@ static void test_callbacks(void) {
     bindings_tests_ErrorInfo error;
     bindings_tests_NotifiedPtr notified;
     bindings_tests_CountedPtr counted;
+    bindings_tests_StoredPtr stored;
+    int released;
     int i;
 
     /* Fires synchronously, five times, with indices 0..4, before returning. */
@@ -742,7 +744,7 @@ static void test_callbacks(void) {
     assert(state.count == 1);
     bindings_tests_Notified_release(notified);
 
-    /* A synchronous callback in a constructor fires once per index, in order. */
+    /* A constructor's callback fires once per index, in order, before it returns. */
     memset(&state, 0, sizeof(state));
     counted = bindings_tests_Counted_create(&error, &on_index, &state, 3);
     assert(error.code == 0);
@@ -752,6 +754,22 @@ static void test_callbacks(void) {
         assert(state.indices[i] == i);
     }
     bindings_tests_Counted_release(counted);
+
+    /* A stored callback fires during later calls rather than during construction, so the
+       pair has to stay valid for as long as the handle does. */
+    memset(&state, 0, sizeof(state));
+    released = bindings_tests_Stored_getClosedCount();
+    stored = bindings_tests_Stored_create(&error, &on_index, &state);
+    assert(error.code == 0);
+    assert(stored != NULL);
+    assert(state.count == 0);
+    bindings_tests_Stored_fire(stored, 2);
+    bindings_tests_Stored_fire(stored, 5);
+    assert(state.count == 2);
+    assert(state.indices[0] == 2);
+    assert(state.indices[1] == 5);
+    bindings_tests_Stored_release(stored);
+    assert(bindings_tests_Stored_getClosedCount() == released + 1);
 
     printf("callbacks ok\n");
 }

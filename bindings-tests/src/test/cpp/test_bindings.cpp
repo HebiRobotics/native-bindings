@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bindings_tests.hpp"
@@ -580,7 +581,7 @@ static void testCallbacks() {
   CHECK(failed.count == 1);
   CHECK(failed.indices[0] == -1);
 
-  // The asynchronous default changes nothing on the C++ side, the same overloads apply
+  // A callback that carries only its userData gets the same overloads as any other
   CallbackState notified = {};
   bt::callbacks::notifyOnce(&onNotify, &notified);
   CHECK(notified.count == 1);
@@ -612,17 +613,19 @@ static void testCallbacks() {
   bt::callbacks::invokeOnWorkerThread([&workerIndex](int index) { workerIndex = index; }, 6);
   CHECK(workerIndex == 6);
 
-  // A constructor takes the raw form only. The ergonomic overloads keep the closure on
-  // the caller's stack, which a handle that stores its callback would outlive.
+  // A constructor takes the raw pair like any other method
   CallbackState constructed = {};
   {
     bt::Notified notified(&onNotify, &constructed);
     CHECK(constructed.count == 1);
   }
 
-  // A synchronous callback constructor takes the same raw form, for the same reason.
-  // The owning form that could carry a closure belongs to the callback objects in
-  // plans item 1b.
+  bool notifiedByClosure = false;
+  {
+    bt::Notified notified([&notifiedByClosure] { notifiedByClosure = true; });
+    CHECK(notifiedByClosure);
+  }
+
   CallbackState counted = {};
   {
     bt::Counted handle(&onIndex, &counted, 3);
@@ -631,6 +634,48 @@ static void testCallbacks() {
       CHECK(counted.indices[i] == i);
     }
   }
+
+  const int closedBefore = bt::Stored::getClosedCount();
+
+  // A stored callback fires during later calls, so nothing happens at construction
+  CallbackState fired = {};
+  {
+    bt::Stored handle(&onIndex, &fired);
+    CHECK(fired.count == 0);
+    handle.fire(2);
+    handle.fire(5);
+    CHECK(fired.count == 2);
+    CHECK(fired.indices[0] == 2);
+    CHECK(fired.indices[1] == 5);
+  }
+
+  // The owning constructor copies the closure to the heap and releases it with the
+  // handle, which is the only way a stored callback can carry state.
+  std::vector<int> seen;
+  {
+    bt::Stored handle([&seen](int index) { seen.push_back(index); });
+    handle.fire(3);
+    handle.fire(4);
+    CHECK(seen.size() == 2);
+    CHECK(seen[0] == 3);
+    CHECK(seen[1] == 4);
+
+    // The closure sits behind a unique_ptr, so the userData address the library holds
+    // survives the wrapper moving. Both moves keep firing into the same closure.
+    bt::Stored moved(std::move(handle));
+    moved.fire(5);
+
+    bt::Stored assigned([](int) {});
+    assigned = std::move(moved);
+    assigned.fire(6);
+
+    CHECK(seen.size() == 4);
+    CHECK(seen[2] == 5);
+    CHECK(seen[3] == 6);
+  }
+
+  // Three constructions, three releases: a moved-from wrapper owns nothing
+  CHECK(bt::Stored::getClosedCount() == closedBefore + 3);
 }
 
 // ---------------------------------------------------------------------------
