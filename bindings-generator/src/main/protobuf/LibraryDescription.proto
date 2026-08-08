@@ -49,6 +49,7 @@ message CallbackDescription {
   optional TypeDescription return_type = 2;
   repeated TypeDescription parameters = 3;
   reserved 4;                 // was is_synchronous, the lifetime axis is structural
+  optional string c_prefix = 5; // namespaced prefix to guarantee uniqueness
 }
 
 // A user-defined struct that crosses the public C ABI by value. The field order is

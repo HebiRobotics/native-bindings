@@ -36,6 +36,7 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
 
         description = CallbackDescription.newInstance()
                 .setName(getName())
+                .setCPrefix(getCPrefix())
                 .setReturnType(toCallbackType(AnnotatedClibType.fromType(invokeMethod.getReturnType(), env), true));
         for (var parameter : invokeMethod.getParameters()) {
             var type = AnnotatedClibType.fromVariable(parameter, env);
@@ -139,6 +140,19 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
 
     public String getName() {
         return getName(element);
+    }
+
+    /**
+     * An unannotated interface is a valid callback, so the annotation is optional here the
+     * way it is in {@link #getName(TypeElement)}.
+     */
+    public static String getCPrefix(EnvProcessor.GeneratorOptions options, TypeElement element) {
+        var annotation = element.getAnnotation(CLibCallback.class);
+        return AnnotationUtil.getCPrefix(options, annotation == null ? "" : annotation.cPrefix()) + "_";
+    }
+
+    public String getCPrefix() {
+        return getCPrefix(getOptions(), element);
     }
 
     public String getQualifiedName() {

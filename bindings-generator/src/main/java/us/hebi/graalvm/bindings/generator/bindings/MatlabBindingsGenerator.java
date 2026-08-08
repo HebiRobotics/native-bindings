@@ -415,7 +415,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
         var out = new IndentingTextRenderer().add("\n");
         for (var callback : lib.getCallbacks()) {
-            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(lib.getCPrefix() + "_", callback));
+            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback));
         }
         return out.render();
     }

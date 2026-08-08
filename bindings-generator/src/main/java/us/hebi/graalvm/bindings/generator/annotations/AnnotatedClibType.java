@@ -242,7 +242,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
             case STRUCT -> getStructElement()
                     .map(element -> element.getAnnotation(CLibStruct.class))
                     .map(annotation -> AnnotatedCLibStruct.getCPrefix(getOptions(), annotation));
-            case CALLBACK -> Optional.of(getOptions().getCPrefix() + "_"); // TODO: add prefix to annotation
+            case CALLBACK -> Optional.of(AnnotatedCLibCallback.getCPrefix(getOptions(), toTypeElement(mirror)));
             default -> Optional.empty();
         };
     }
