@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -343,7 +344,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
     // Bind to the binary once per MATLAB session/clear
     static std::string binPath = getLibraryPath();
-    static LibLoader libLoader(binPath);
+    static LibLoader libLoader(binPath);%%CALLBACK_ENTRY%%
 
     // Switch on a Perfect Hash (seeds are chosen until there are no collisions)
     switch (funcHash) {
@@ -351,7 +352,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
 
         default:
             mexErrMsgIdAndTxt("%%LIB_NAME%%:NotFound", "Function hash %08X not found.", funcHash);
-    }
+    }%%CALLBACK_EXIT%%
 
 }
 

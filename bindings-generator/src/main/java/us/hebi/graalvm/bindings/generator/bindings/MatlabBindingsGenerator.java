@@ -250,6 +250,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         };
 
         final StringBuilder pre = new StringBuilder();
+        final StringBuilder record = new StringBuilder();
         final StringBuilder post = new StringBuilder();
         final List<String> types = new ArrayList<>();
         final List<String> args = new ArrayList<>();
@@ -260,6 +261,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 if (getMatlabExclusionReason(method).isPresent()) continue;
                 int index = FIRST_INDEX;
                 pre.setLength(0);
+                record.setLength(0);
                 post.setLength(0);
                 types.clear();
                 args.clear();
@@ -277,9 +279,18 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 var releaseOnCallbackError = tryGetCallbackErrorRelease(method);
                 for (var param : method.getParameters()) {
                     types.add(getMexCType(param));
-                    if (param.getDataType() == DataType.CALLBACK) {
+                    if (param.getDataType() == DataType.CALLBACK && method.getIsConstructor()) {
+                        // A constructor's callback is stored on the object it creates, so the
+                        // handle moves to a heap record that outlives this call. It is allocated
+                        // last, because a raise from any argument conversion after it would leak it.
+                        record.append("CallbackRecord* ").append(param.getParamName())
+                                .append(" = createCallbackRecord(prhs[").append(index++).append("]);\n");
+                        args.add(getCallbackTrampolineName(param.getTypeName(), true));
+                        post.append(createRecordOwnershipTransfer(releaseOnCallbackError.orElse(null),
+                                param.getParamName()));
+                    } else if (param.getDataType() == DataType.CALLBACK) {
                         pre.append(getMexToC(param, index++)).append(";\n");
-                        args.add(getCallbackTrampolineName(param.getTypeName()));
+                        args.add(getCallbackTrampolineName(param.getTypeName(), false));
                         releaseOnCallbackError.ifPresent(release -> post.append(IndentingTextRenderer.of("""
 
                                 // A raising mexFunction discards plhs, so a handle created before the
@@ -302,6 +313,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 if (isThrowing(method)) {
                     post.append("\ncheckError(_error);");
                 }
+                pre.append(record);
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
                 releaseOnCallbackError.ifPresent(release -> vars.set("EXTRA_SYMBOLS",
@@ -321,14 +333,22 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             }
             if (clazz.getInstantiable()) {
                 if (clazz.hasCDestructorName()) {
-                    addCase.accept(cases.snapshot()
+                    var release = cases.snapshot()
                             .set("RETURN_TYPE", "void")
                             .set("TYPES", getMexCType(clazz.getType()))
                             .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
                             .set("CNAME", clazz.getCDestructorName())
                             .set("HASH", computeHash.apply(clazz.getCDestructorName()))
-                            .set("ARG_COUNT", "1")
-                    );
+                            .set("ARG_COUNT", "1");
+                    // The record is destroyed after the library release, so a callback fired from
+                    // the object's own teardown still finds its handle
+                    if (hasOwningCallbackConstructor(clazz)) {
+                        release.set("PRE", getMexCType(clazz.getType()) + " _handle = "
+                                            + getMexToC(clazz.getType(), FIRST_INDEX) + ";\n")
+                                .set("ARGS", "_handle")
+                                .set("POST", "\nreleaseCallbackRecord(_handle);");
+                    }
+                    addCase.accept(release);
                 }
                 if (clazz.hasToParentCastMethod()) {
                     addCase.accept(cases.snapshot()
@@ -350,10 +370,37 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("CALLBACK_TYPEDEFS", createCallbackTypedefs())
                 .set("CALLBACK_SUPPORT", createCallbackSupport())
                 .set("CALLBACK_TRAMPOLINES", createCallbackTrampolines())
+                .set("CALLBACK_ENTRY", createCallbackEntry())
+                .set("CALLBACK_EXIT", createCallbackExit())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
+                .render();
+    }
+
+    /**
+     * Hands the record to the object that was created, or destroys both when the creation
+     * failed. An entry point that caught returns a null handle, so a library error needs no
+     * check of its own here, and the callback error is raised first because it is the more
+     * likely root cause.
+     *
+     * @param release the release symbol of the created type, or null if it has none
+     */
+    private String createRecordOwnershipTransfer(String release, String paramName) {
+        return IndentingTextRenderer.of("""
+
+                        // The object owns the record from here on. A failed creation has no owner,
+                        // and a raising mexFunction discards plhs, so both go away instead.
+                        if (%%RETURN_VALUE%% != nullptr && !hasPendingCallbackError()) {
+                            registerCallbackRecord(%%RETURN_VALUE%%, %%PARAM%%);
+                        } else {
+                            destroyCallbackRecord(%%PARAM%%);%%RELEASE_CREATED%%
+                        }
+                        checkPendingCallbackError();""")
+                .set("PARAM", paramName)
+                .set("RELEASE_CREATED", release == null ? ""
+                        : "\n    if (%%RETURN_VALUE%% != nullptr) " + release + "(%%RETURN_VALUE%%);")
                 .render();
     }
 
@@ -374,17 +421,46 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The handle stack and its RAII registration, emitted only for a library that exposes a
-     * callback to MATLAB. The token it fills sits at the end of an existing line.
+     * The handle stack and its RAII registration, the per-object records, or both, depending on
+     * what the library's MATLAB-visible callbacks need. The token it fills sits at the end of an
+     * existing line.
      */
     private String createCallbackSupport() {
-        if (getExposedCallbacks().isEmpty()) {
+        boolean hasSlots = !getSlotCallbacks().isEmpty();
+        boolean hasRecords = !getOwnedCallbacks().isEmpty();
+        if (!hasSlots && !hasRecords) {
             return "";
         }
-        return """
+        var out = new IndentingTextRenderer().add("""
 
 
-                // A synchronous callback may re-enter the library and trigger another callback, so the
+                // The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
+                // may enter the Matrix API. Any other thread has to skip rather than corrupt it.
+                static const std::thread::id matlabThread = std::this_thread::get_id();
+
+                inline void checkFunctionHandle(const mxArray* arg) {
+                    if (!mxIsClass(arg, "function_handle")) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Expected a function handle.");
+                    }
+                }""");
+        if (hasSlots) {
+            out.add(createCallbackSlotSupport());
+        }
+        if (hasRecords) {
+            out.add(createCallbackRecordSupport());
+        }
+        return out.render();
+    }
+
+    /**
+     * The stack of function handles that call-scoped callbacks live on, emitted for a library
+     * whose MATLAB-visible methods take a callback.
+     */
+    private String createCallbackSlotSupport() {
+        return new IndentingTextRenderer().set("SLOT_LEAK_GUARD", createSlotLeakGuard()).add("""
+
+
+                // A call-scoped callback may re-enter the library and trigger another callback, so the
                 // handles live on a stack rather than in a single slot, which a nested registration would
                 // clobber. The gateway passes the slot address through the method's void* userData
                 // parameter, so a trampoline finds its own handle without relying on top of stack.
@@ -394,19 +470,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     std::atomic<int> dropped; // invocations that never reached MATLAB, reported after the call
                 };
 
-                // The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
-                // may enter the Matrix API. Any other thread has to skip rather than corrupt it.
-                static const std::thread::id matlabThread = std::this_thread::get_id();
-
                 static const int MAX_CALLBACK_DEPTH = 32;
                 static CallbackSlot callbackStack[MAX_CALLBACK_DEPTH];
                 static int callbackDepth = 0;     // slots in use
                 static int activeTrampolines = 0; // nonzero while a callback is running MATLAB code
 
                 inline int pushCallbackHandle(const mxArray* arg) {
-                    if (!mxIsClass(arg, "function_handle")) {
-                        mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Expected a function handle.");
-                    }
+                    checkFunctionHandle(arg);
                     // mexErrMsgIdAndTxt longjmps to MATLAB's prompt, so a pop can be skipped and its slot
                     // left behind. A trampoline traps its own errors and therefore always balances
                     // activeTrampolines, so a zero count means nothing is running and the stack is stale.
@@ -431,15 +501,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     ~MatlabCallback() { callbackDepth = index; }
                     operator void*() const { return &callbackStack[index]; }
                     MatlabCallback(const MatlabCallback&) = delete;
-                };
-
-                // True while a trampoline outcome is still waiting to be raised, either a trapped error
-                // or a skipped invocation. A case that returns a handle asks before raising, because
-                // the raise discards its outputs.
-                inline bool willRaiseCallbackError(const MatlabCallback& callback) {
-                    const CallbackSlot& slot = callbackStack[callback.index];
-                    return slot.error != nullptr || slot.dropped.load(std::memory_order_relaxed) != 0;
-                }
+                };%%SLOT_LEAK_GUARD%%
 
                 // Raises what a trampoline trapped, once the library has unwound its own frames. Throwing
                 // the MException keeps the original identifier and message, and it longjmps like any
@@ -456,21 +518,181 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         mexErrMsgIdAndTxt("%%LIB_NAME%%:NotSupported",
                                           "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
                     }
+                }""").render();
+    }
+
+    /**
+     * The predicate a case that returns a handle asks before it raises, since the raise discards
+     * its outputs. Only a factory method needs it, a constructor owns its record instead, so it is
+     * emitted where a case actually calls it.
+     */
+    private String createSlotLeakGuard() {
+        boolean needed = false;
+        for (var apiClass : lib.getClasses()) {
+            for (var method : apiClass.getMethods()) {
+                needed |= !method.getIsConstructor() && getMatlabExclusionReason(method).isEmpty()
+                          && tryGetCallbackErrorRelease(method).isPresent();
+            }
+        }
+        if (!needed) {
+            return "";
+        }
+        return """
+
+
+                // True while a trampoline outcome is still waiting to be raised, either a trapped error
+                // or a skipped invocation.
+                inline bool willRaiseCallbackError(const MatlabCallback& callback) {
+                    const CallbackSlot& slot = callbackStack[callback.index];
+                    return slot.error != nullptr || slot.dropped.load(std::memory_order_relaxed) != 0;
                 }""";
     }
 
     /**
-     * One trampoline per callback typedef that a MATLAB-visible method takes. The token they fill
-     * sits at the end of an existing line, and they come after the createMex helpers they call.
+     * The per-object records that constructor callbacks live in, emitted for a library whose
+     * MATLAB-visible constructors take a callback.
      */
-    private String createCallbackTrampolines() {
-        var exposed = getExposedCallbacks();
-        if (exposed.isEmpty()) {
+    private String createCallbackRecordSupport() {
+        return """
+
+
+                // A constructor's callback is invoked by later calls, so its handle outlives the call that
+                // registered it and cannot live on the stack above. Each created object owns a heap record
+                // instead, which the release case finds again through the map below.
+                struct CallbackRecord {
+                    mxArray* handle;          // persistent copy of the caller's function handle
+                    std::atomic<int> dropped; // invocations that never reached MATLAB, warned about at the next entry
+                };
+
+                // prhs is caller-owned, so the handle is duplicated before it is taken off MATLAB's
+                // allocation list. Persisting the caller's array hands over memory MATLAB still owns.
+                inline CallbackRecord* createCallbackRecord(const mxArray* arg) {
+                    checkFunctionHandle(arg);
+                    auto* record = new CallbackRecord();
+                    record->handle = mxDuplicateArray(arg);
+                    mexMakeArrayPersistent(record->handle);
+                    record->dropped.store(0, std::memory_order_relaxed);
+                    return record;
+                }
+
+                // Never fevals the handle. Teardown is not a place to run user code, and a released
+                // object has nothing left to notify.
+                inline void destroyCallbackRecord(CallbackRecord* record) {
+                    mxDestroyArray(record->handle);
+                    delete record;
+                }
+
+                // Keyed on the handle the library returned, which is all the release case has. Objects
+                // carrying a callback are rare, so the lookup cost never shows up next to the feval.
+                static std::unordered_map<const void*, CallbackRecord*> callbackRecords;
+
+                // 'clear mex' arrives here, with whatever the user never released
+                static void destroyRemainingCallbackRecords() {
+                    for (auto& entry : callbackRecords) {
+                        destroyCallbackRecord(entry.second);
+                    }
+                    callbackRecords.clear();
+                }
+
+                inline void registerCallbackRecord(const void* handle, CallbackRecord* record) {
+                    // The first construction is the earliest point at which the sweep has anything to do
+                    static const int atExitStatus = mexAtExit(destroyRemainingCallbackRecords);
+                    (void) atExitStatus;
+                    callbackRecords[handle] = record;
+                }
+
+                inline void releaseCallbackRecord(const void* handle) {
+                    auto entry = callbackRecords.find(handle);
+                    if (entry != callbackRecords.end()) {
+                        destroyCallbackRecord(entry->second);
+                        callbackRecords.erase(entry);
+                    }
+                }
+
+                // An owned callback has no call of its own to report into, so a trapped error waits here
+                // until the end of the mexFunction it fired in. That is the call the user was making while
+                // the callback ran, which is where the error belongs.
+                static mxArray* pendingCallbackError = nullptr;
+
+                inline bool hasPendingCallbackError() {
+                    return pendingCallbackError != nullptr;
+                }
+
+                // Cleared before the throw, because mexCallMATLAB longjmps past everything after it. A case
+                // that raises on its own skips this, so its stashed error surfaces one call later.
+                inline void checkPendingCallbackError() {
+                    if (pendingCallbackError != nullptr) {
+                        mxArray* error = pendingCallbackError;
+                        pendingCallbackError = nullptr;
+                        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+                    }
+                }
+
+                // A skipped invocation belongs to a thread nobody is waiting on, so it is reported at the
+                // next entry rather than raised on a call that did not cause it.
+                inline void warnAboutDroppedCallbacks() {
+                    for (auto& entry : callbackRecords) {
+                        const int dropped = entry.second->dropped.exchange(0, std::memory_order_relaxed);
+                        if (dropped != 0) {
+                            mexWarnMsgIdAndTxt("%%LIB_NAME%%:NotSupported",
+                                               "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
+                        }
+                    }
+                }""";
+    }
+
+    /**
+     * True if a MATLAB-visible constructor of this class hands a callback record to the object it
+     * creates, which is what makes the release case responsible for destroying it.
+     */
+    private boolean hasOwningCallbackConstructor(ClassDescription clazz) {
+        for (var method : clazz.getMethods()) {
+            if (!method.getIsConstructor() || getMatlabExclusionReason(method).isPresent()) continue;
+            for (var param : method.getParameters()) {
+                if (param.getDataType() == DataType.CALLBACK) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * What runs before the dispatch switch. The renderer only indents after a newline it wrote
+     * itself, so the token's own line is fed in first.
+     */
+    private String createCallbackEntry() {
+        if (getOwnedCallbacks().isEmpty()) {
             return "";
         }
+        return new IndentingTextRenderer().add("\n").indent().add("""
+
+                // An owned callback skipped on another thread has no call of its own to report on,
+                // so the count is warned about here instead
+                warnAboutDroppedCallbacks();""").render();
+    }
+
+    /** What runs after the dispatch switch, so a trapped error reaches the call it fired in */
+    private String createCallbackExit() {
+        if (getOwnedCallbacks().isEmpty()) {
+            return "";
+        }
+        return new IndentingTextRenderer().add("\n").indent().add("""
+
+                checkPendingCallbackError();""").render();
+    }
+
+    /**
+     * One trampoline per callback typedef and lifetime that a MATLAB-visible method or constructor
+     * takes. A callback used both ways gets both. The token they fill sits at the end of an
+     * existing line, and they come after the createMex helpers they call.
+     */
+    private String createCallbackTrampolines() {
+        var slotCallbacks = getSlotCallbacks();
+        var ownedCallbacks = getOwnedCallbacks();
         var out = new IndentingTextRenderer();
         for (var callback : lib.getCallbacks()) {
-            if (!exposed.contains(callback.getName())) continue;
+            boolean isSlot = slotCallbacks.contains(callback.getName());
+            boolean isOwned = ownedCallbacks.contains(callback.getName());
+            if (!isSlot && !isOwned) continue;
             if (!TypeMap.isVoid(callback.getReturnType().getDataType())) {
                 throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value, which the MEX trampoline cannot hand back to the library");
             }
@@ -492,49 +714,86 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
             // feval takes the handle as its first argument, so the trapped error is the only output
             var content = out.snapshot()
-                    .set("NAME", getCallbackTrampolineName(callback.getName()))
                     .set("CALLBACK", callback.getName())
                     .set("PARAMS", joiner.join(params))
                     .set("USER_DATA", userData)
                     .set("ARG_COUNT", String.valueOf(mexArgs.size() + 1))
                     .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + joiner.join(mexArgs));
-            content.add("""
+            if (isSlot) {
+                addCallbackTrampolineBody(content.snapshot()
+                        .set("NAME", getCallbackTrampolineName(callback.getName(), false)), mexArgs, """
 
 
-                    // Invokes the function handle a MATLAB caller registered for %%CALLBACK%%. An error
-                    // is trapped rather than raised, because a longjmp from here would tear down the
-                    // library's own frames. One mxArray per argument per call is inherent to MATLAB.
-                    static void %%NAME%%(%%PARAMS%%) {
-                        auto* slot = static_cast<CallbackSlot*>(%%USER_DATA%%);
-                        // The thread comes first, because everything below reaches into MATLAB. The
-                        // count is read after the library call has joined its threads, so relaxed is
-                        // enough, and checkCallbackError turns it into an error the caller sees.
-                        if (std::this_thread::get_id() != matlabThread) {
-                            slot->dropped.fetch_add(1, std::memory_order_relaxed);
-                            return;
-                        }
-                        if (slot->error != nullptr) {
-                            return; // an earlier invocation already failed, and that error is the one raised
-                        }
-                        mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(slot->handle)%%MEX_ARGS%%};
-                        activeTrampolines++;
-                        slot->error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
-                        activeTrampolines--;
-                    """).indent();
-            for (int i = 0; i < mexArgs.size(); i++) {
-                content.addLine("mxDestroyArray(args[" + (i + 1) + "]);");
+                        // Invokes the function handle a MATLAB caller registered for %%CALLBACK%%. An error
+                        // is trapped rather than raised, because a longjmp from here would tear down the
+                        // library's own frames. One mxArray per argument per call is inherent to MATLAB.
+                        static void %%NAME%%(%%PARAMS%%) {
+                            auto* slot = static_cast<CallbackSlot*>(%%USER_DATA%%);
+                            // The thread comes first, because everything below reaches into MATLAB. The
+                            // count is read after the library call has joined its threads, so relaxed is
+                            // enough, and checkCallbackError turns it into an error the caller sees.
+                            if (std::this_thread::get_id() != matlabThread) {
+                                slot->dropped.fetch_add(1, std::memory_order_relaxed);
+                                return;
+                            }
+                            if (slot->error != nullptr) {
+                                return; // an earlier invocation already failed, and that error is the one raised
+                            }
+                            mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(slot->handle)%%MEX_ARGS%%};
+                            activeTrampolines++;
+                            slot->error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
+                            activeTrampolines--;
+                        """);
             }
-            content.unindent().add("}");
+            if (isOwned) {
+                addCallbackTrampolineBody(content.snapshot()
+                        .set("NAME", getCallbackTrampolineName(callback.getName(), true)), mexArgs, """
+
+
+                        // Invokes the function handle a constructed object owns for %%CALLBACK%%. The object
+                        // outlives the call that created it, so the trapped error goes to the slot that the
+                        // mexFunction it fired in raises, and a skipped invocation only bumps the count.
+                        static void %%NAME%%(%%PARAMS%%) {
+                            auto* record = static_cast<CallbackRecord*>(%%USER_DATA%%);
+                            if (std::this_thread::get_id() != matlabThread) {
+                                record->dropped.fetch_add(1, std::memory_order_relaxed);
+                                return;
+                            }
+                            if (pendingCallbackError != nullptr) {
+                                return; // an earlier invocation already failed, and that error is the one raised
+                            }
+                            mxArray* args[%%ARG_COUNT%%] = {record->handle%%MEX_ARGS%%};
+                            pendingCallbackError = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
+                        """);
+            }
         }
         return out.render();
     }
 
-    /** Names of the callback typedefs that reach MATLAB, which are the synchronous ones a method takes */
-    private Set<String> getExposedCallbacks() {
+    /** Appends the shared tail: one mxDestroyArray per converted argument, then the closing brace */
+    private static void addCallbackTrampolineBody(IndentingTextRenderer content, List<String> mexArgs, String body) {
+        content.add(body).indent();
+        for (int i = 0; i < mexArgs.size(); i++) {
+            content.addLine("mxDestroyArray(args[" + (i + 1) + "]);");
+        }
+        content.unindent().add("}");
+    }
+
+    /** Callback typedefs that a MATLAB-visible method takes, which live on the handle stack */
+    private Set<String> getSlotCallbacks() {
+        return getVisibleCallbacks(method -> !method.getIsConstructor());
+    }
+
+    /** Callback typedefs that a MATLAB-visible constructor takes, which live in a per-object record */
+    private Set<String> getOwnedCallbacks() {
+        return getVisibleCallbacks(MethodDescription::getIsConstructor);
+    }
+
+    private Set<String> getVisibleCallbacks(Predicate<MethodDescription> filter) {
         var names = new LinkedHashSet<String>();
         for (var apiClass : lib.getClasses()) {
             for (var method : apiClass.getMethods()) {
-                if (getMatlabExclusionReason(method).isPresent()) continue;
+                if (!filter.test(method) || getMatlabExclusionReason(method).isPresent()) continue;
                 for (var param : method.getParameters()) {
                     if (param.getDataType() == DataType.CALLBACK) names.add(param.getTypeName());
                 }
@@ -543,8 +802,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return names;
     }
 
-    private static String getCallbackTrampolineName(String callbackName) {
-        return "invoke" + callbackName;
+    private static String getCallbackTrampolineName(String callbackName, boolean owned) {
+        return "invoke" + callbackName + (owned ? "Owned" : "");
     }
 
     /**
@@ -557,18 +816,29 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     private Optional<String> getMatlabExclusionReason(MethodDescription method) {
         for (var param : method.getParameters()) {
             if (param.getDataType() != DataType.CALLBACK) continue;
-            // Anything invoked after the call returns is outside the window in which the
-            // gateway may reach back into MATLAB through mexCallMATLAB.
-            if (!getCallback(param).getIsSynchronous()) {
-                return Optional.of("its callback may fire after the call returns");
-            }
             // The trampoline calls feval with zero outputs, so a value the function handle
             // produces has no route back into the library.
             if (!TypeMap.isVoid(getCallback(param).getReturnType().getDataType())) {
                 return Optional.of("its callback returns a value, which the gateway cannot hand back yet");
             }
+            // The void* the gateway hands its slot or record address through is the only
+            // channel a trampoline has for finding its function handle.
+            if (!hasCallbackPair(method)) {
+                return Optional.of("its callback is not paired with exactly one void* userData parameter,"
+                                   + " which is the gateway's only channel for the function handle");
+            }
         }
         return Optional.empty();
+    }
+
+    private static boolean hasCallbackPair(MethodDescription method) {
+        int callbacks = 0;
+        int userDataParams = 0;
+        for (var param : method.getParameters()) {
+            if (param.getDataType() == DataType.CALLBACK) callbacks++;
+            if (param.getDataType() == DataType.VOID_POINTER) userDataParams++;
+        }
+        return callbacks == 1 && userDataParams == 1;
     }
 
     private CallbackDescription getCallback(TypeDescription param) {
@@ -599,7 +869,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     /**
      * The callback parameter and the void* the gateway hands its slot address through. Neither has
      * a positional rule, so the pairing is only unambiguous when the signature holds exactly one
-     * of each, and a callback without a userData partner has no channel at all.
+     * of each, and a callback without a userData partner has no channel at all. Only reached for
+     * a method the exclusion gate admitted, so the throw is an invariant rather than a diagnostic.
      */
     static Optional<CallbackPair> tryGetCallbackPair(MethodDescription method) {
         TypeDescription callbackParam = null;
