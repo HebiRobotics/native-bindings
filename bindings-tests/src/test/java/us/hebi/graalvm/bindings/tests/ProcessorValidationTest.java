@@ -202,6 +202,95 @@ public class ProcessorValidationTest {
     }
 
     @Test
+    public void rejectsClassNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadClass", """
+                @CLibClass("Bad Name")
+                public class BadClass {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'Bad Name' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsClassPrefixThatIsNotACIdentifier() {
+        assertThat(compile(source("BadPrefix", """
+                @CLibClass(value = "BadPrefix", cPrefix = "bad prefix")
+                public class BadPrefix {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'bad prefix' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsMethodNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadMethod", """
+                @CLibClass("BadMethod")
+                public class BadMethod {
+                    @CLibMethod(flags = Noexcept, name = "2ndValue")
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'2ndValue' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsStructNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadStruct", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("BadStruct")
+                public class BadStruct {
+                    @CLibStruct("Bad Point")
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'Bad Point' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsStructNameThatCollidesWithAClass() {
+        assertThat(compile(source("ClassStructCollision", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("Point")
+                public class ClassStructCollision {
+                    @CLibStruct("Point")
+                    @CStruct("Coord")
+                    public interface Coord extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining(
+                "Struct name 'Point' collides with class Point: validation.ClassStructCollision.Coord");
+    }
+
+    @Test
+    public void rejectsEnumNameThatCollidesWithAClass() {
+        assertThat(compile(source("EnumClassCollision", """
+                @CLibClass("Shade")
+                public class EnumClassCollision {
+                    @CLibEnum("Shade")
+                    public enum Tone { Dark }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Tone first() { return Tone.Dark; }
+                }
+                """))).hadErrorContaining(
+                "Enum name 'Shade' collides with class Shade: validation.EnumClassCollision.Tone");
+    }
+
+    @Test
     public void acceptsAStructView() {
         assertThat(compile(source("Points", """
                 import org.graalvm.nativeimage.c.struct.CField;
@@ -861,6 +950,30 @@ public class ProcessorValidationTest {
     }
 
     @Test
+    public void appliesTheCallbackPrefixOverride() throws IOException {
+        assertThat(compile(source("Prefixed", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Prefixed")
+                public class Prefixed {
+                    @CLibCallback(cPrefix = "custom")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).succeeded();
+
+        // Only C needs the prefix to stay unique, the namespaced faces keep the plain name
+        assertTrue(readGeneratedFile("validation_c.h").contains("typedef void (*custom_Callback)(int value);"));
+        assertFalse(readGeneratedFile("validation_c.h").contains("validation_Callback"));
+        assertTrue(readGeneratedFile("validation.hpp").contains("using Callback = void (*)(int value);"));
+        assertTrue(readGeneratedFile("validation.py").contains("Callback = CFUNCTYPE(None, c_int)"));
+    }
+
+    @Test
     public void rejectsCallbackNameThatIsNotACIdentifier() {
         assertThat(compile(source("BadName", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
@@ -876,7 +989,7 @@ public class ProcessorValidationTest {
                     public static void run(Callback callback) { }
                 }
                 """))).hadErrorContaining(
-                "@CLibCallback name 'on value' is not a valid C identifier: validation.BadName.Callback");
+                "'on value' is not a valid C identifier");
     }
 
     @Test

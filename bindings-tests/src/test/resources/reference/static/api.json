@@ -2115,7 +2115,8 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
-    }]
+    }],
+    "cPrefix": "bindings_tests_"
   }, {
     "name": "NotifyCallbackFunction",
     "returnType": {
@@ -2124,7 +2125,8 @@
     "parameters": [{
       "paramName": "userData",
       "dataType": "VOID_POINTER"
-    }]
+    }],
+    "cPrefix": "bindings_tests_"
   }, {
     "name": "ScaleCallbackFunction",
     "returnType": {
@@ -2136,7 +2138,8 @@
     }, {
       "paramName": "value",
       "dataType": "FLOAT64"
-    }]
+    }],
+    "cPrefix": "bindings_tests_"
   }, {
     "name": "StoredCallbackFunction",
     "returnType": {
@@ -2148,6 +2151,7 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
-    }]
+    }],
+    "cPrefix": "bindings_tests_"
   }]
 }
