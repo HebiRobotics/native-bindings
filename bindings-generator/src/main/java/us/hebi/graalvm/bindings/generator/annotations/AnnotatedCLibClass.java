@@ -26,6 +26,13 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     public AnnotatedCLibClass(TypeElement typeElement, ProcessingEnvironment processingEnvironment) {
         super(typeElement, processingEnvironment);
         annotation = checkNotNull(typeElement.getAnnotation(CLibClass.class), "Class %s is not annotated with @CApiClass");
+
+        var qualifiedName = String.valueOf(typeElement.getQualifiedName());
+        AnnotationUtil.checkIsCIdentifier(typeElement, annotation.value());
+        if (!annotation.cPrefix().isEmpty()) {
+            AnnotationUtil.checkIsCIdentifier(typeElement, annotation.cPrefix());
+        }
+
         publicApiMethods = getPublicMethodsUpToAnnotatedParent(typeElement);
 
         nestedEnums = typeElement.getEnclosedElements().stream()

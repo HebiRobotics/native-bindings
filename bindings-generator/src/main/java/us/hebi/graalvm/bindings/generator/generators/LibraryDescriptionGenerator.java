@@ -10,6 +10,7 @@ import us.hebi.graalvm.bindings.model.*;
 import us.hebi.quickbuf.JsonSink;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,6 +35,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
     @Override
     protected void process(AnnotatedCLibClass apiClass) {
+        registerName("class", apiClass.getName(), apiClass.getElement());
+
         var classDesc = description.getMutableClasses().next()
                 .setCDestructorName(apiClass.getDestructorCEntryName())
                 .setInstantiable(apiClass.enableInstancing())
@@ -105,6 +108,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         }
 
         for (AnnotatedCLibEnum nestedEnum : apiClass.getNestedEnums()) {
+            registerName("enum", nestedEnum.getName(), nestedEnum.getElement());
             description.addEnums(nestedEnum.toDescription());
         }
 
@@ -143,30 +147,34 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
     /**
      * Two interfaces of the same simple name would emit the same typedef twice, and the second
-     * definition is what the C compiler reports rather than the collision. Classes, structs and
-     * enums share that one C namespace, so their names are taken here too. Runs after
+     * definition is what the C compiler reports rather than the collision. Runs after
      * {@link #registerUsedStructViews()}, which is what makes the struct side complete.
      */
-    private void registerUsedCallbacks() { // TODO: do a single general check of duplicate symbols, also structs vs classes
-        var declaredBy = new HashMap<String, String>();
-        for (var apiClass : description.getClasses()) {
-            declaredBy.put(apiClass.getType().getTypeName(), "class " + apiClass.getType().getTypeName());
-        }
-        for (var struct : description.getStructs()) {
-            declaredBy.put(struct.getName(), "struct " + struct.getName());
-        }
-        for (var enumDesc : description.getEnums()) {
-            declaredBy.put(enumDesc.getName(), "enum " + enumDesc.getName());
-        }
+    private void registerUsedCallbacks() {
         for (var callback : usedCallbacks.values()) {
-            var previous = declaredBy.putIfAbsent(callback.getName(), "callback " + callback.getQualifiedName());
-            if (previous != null) {
-                error(callback.getElement(), "Callback name '%s' collides with %s: %s",
-                        callback.getName(), previous, callback.getQualifiedName());
-                continue;
-            }
+            registerName("callback", callback.getName(), callback.getElement());
             description.addCallbacks(callback.toDescription());
         }
+    }
+
+    /**
+     * The four kinds a library declares share one namespace, so the same name may only be taken
+     * once. The comparison is on the plain name rather than on the C name: the Python module and
+     * the MATLAB package are one flat namespace per library, so two kinds with the same plain
+     * name overwrite each other there even when their C prefixes keep them apart in the header.
+     * Two declarations of the same kind are rejected earlier, with their own message.
+     */
+    private void registerName(String kind, String name, TypeElement element) {
+        var qualifiedName = element.getQualifiedName().toString();
+        var previous = declaredNames.putIfAbsent(name, new DeclaredName(kind, qualifiedName));
+        if (previous != null) {
+            error(element, "%s name '%s' collides with %s %s: %s",
+                    capitalized(kind), name, previous.kind(), name, qualifiedName);
+        }
+    }
+
+    private static String capitalized(String kind) {
+        return Character.toUpperCase(kind.charAt(0)) + kind.substring(1);
     }
 
     /**
@@ -177,6 +185,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         var declaredBy = struct.getElement().getQualifiedName().toString();
         var previous = structNames.putIfAbsent(struct.getName(), declaredBy);
         if (previous == null) {
+            registerName("struct", struct.getName(), struct.getElement());
             description.addStructs(struct.toDescription());
         } else if (!previous.equals(declaredBy)) {
             error(struct.getElement(), "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
@@ -268,6 +277,9 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         return description;
     }
 
+    private record DeclaredName(String kind, String qualifiedName) {
+    }
+
     final LibraryDescription description = LibraryDescription.newInstance();
 
     private final CLibStructGenerator structGenerator;
@@ -275,6 +287,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     private final Map<String, AnnotatedCLibStruct> usedStructViews = new LinkedHashMap<>();
     private final Map<String, AnnotatedCLibCallback> usedCallbacks = new LinkedHashMap<>();
     private final Map<String, String> structNames = new HashMap<>();
+    private final Map<String, DeclaredName> declaredNames = new HashMap<>();
     private boolean errorReported = false;
 
 }

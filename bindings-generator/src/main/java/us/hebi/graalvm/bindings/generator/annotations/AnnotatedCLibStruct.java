@@ -64,6 +64,10 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         if (getName().isEmpty()) {
             throw error("@CLibStruct requires a name in either @CLibStruct or @CStruct: %s", getQualifiedName());
         }
+        AnnotationUtil.checkIsCIdentifier(this.element, getName());
+        if (!annotation.prefix().isEmpty()) {
+            AnnotationUtil.checkIsCIdentifier(this.element, annotation.prefix());
+        }
 
         fields = parseFields();
         registerMarshaller();

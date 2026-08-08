@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import static java.util.function.Predicate.*;
 
@@ -24,7 +25,22 @@ import static java.util.function.Predicate.*;
  * @author Florian Enner
  * @since 05 Jan 2024
  */
-class AnnotationUtil {
+public class AnnotationUtil {
+
+    /**
+     * A user-chosen name goes into a C symbol or typedef unchanged, so anything javac accepts
+     * as an annotation value would otherwise surface as a stage 2 C compile error in the
+     * consuming build. The element carries the location, the message only needs the value.
+     */
+    public static void checkIsCIdentifier(Element element, String value) {
+        if (!isCIdentifier(value)) {
+            throw new ProcessingException(element, "'%s' is not a valid C identifier", value);
+        }
+    }
+
+    public static boolean isCIdentifier(String value) {
+        return C_IDENTIFIER.matcher(value).matches();
+    }
 
     public static <A extends Annotation> Optional<String> tryGetAnnotationValue(Element element, Class<A> annotation, Function<A, String> getter) {
         return getAnnotation(element, annotation).map(getter).filter(not(Strings::isNullOrEmpty));
@@ -215,5 +231,7 @@ class AnnotationUtil {
                kind == ElementKind.ENUM ||
                kind == ElementKind.INTERFACE;
     }
+
+    private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
 }

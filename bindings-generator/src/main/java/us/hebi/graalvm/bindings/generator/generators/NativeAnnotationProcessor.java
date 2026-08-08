@@ -9,6 +9,7 @@ import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibCallback;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotationUtil;
 import us.hebi.graalvm.bindings.generator.annotations.EnvProcessor;
 import us.hebi.graalvm.bindings.generator.bindings.CBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.CppBindingsGenerator;
@@ -70,6 +71,7 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         // Runs once per processor instance, i.e. once per compilation, so a shared JVM
         // (IDE daemon, compile-testing) never sees a previous run's marshallers
         StructMarshallers.clearRegistrations();
+        checkLibraryCPrefix();
         return List.of(new Step() {
             @Override
             public Set<String> annotations() {
@@ -87,6 +89,20 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
                 return Collections.emptySet();
             }
         });
+    }
+
+    /**
+     * The library prefix leads every non-namespaced C name, and it defaults to the namespace
+     * with the dots replaced. There is no annotated element to point at, so this is reported
+     * the way a missing option is.
+     */
+    private void checkLibraryCPrefix() {
+        String cPrefix = new EnvProcessor.GeneratorOptions(processingEnv).getCPrefix();
+        if (!AnnotationUtil.isCIdentifier(cPrefix)) {
+            processingEnv.getMessager().printMessage(ERROR, String.format(
+                    "-A%s: '%s' is not a valid C identifier",
+                    EnvProcessor.OPTION_C_PREFIX, cPrefix));
+        }
     }
 
     private void reportErrors(Runnable task) {
@@ -188,7 +204,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
      * an unstable sort in the descriptor. Unlike the generated Java names, these are the
      * author's own and no mangling can keep them apart, so the only fix is to reject them.
      * Without this check the first symptom is a swallowed FilerException from
-     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file".
+     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file". Names taken
+     * by a different kind are rejected in {@code LibraryDescriptionGenerator}, which is where
+     * all four kinds are known.
      */
     private void checkNamesAreUnique(AnnotatedCLibClass apiClass) {
         checkNameIsUnique(classNames, "@CLibClass", apiClass.getName(), apiClass.getElement());

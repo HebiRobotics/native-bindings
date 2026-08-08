@@ -28,6 +28,12 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
     public AnnotatedCLibEnum(Element element, ProcessingEnvironment processingEnvironment, AnnotatedCLibClass parent) {
         super(AnnotationUtil.castToEnumElement(element), processingEnvironment);
         annotation = checkNotNull(element.getAnnotation(CLibEnum.class), "Enum must contain a @CGeneratedEnum annotation");
+
+        var qualifiedName = String.valueOf(this.element.getQualifiedName());
+        AnnotationUtil.checkIsCIdentifier(element, annotation.value());
+        if (!annotation.prefix().isEmpty()) {
+            AnnotationUtil.checkIsCIdentifier(element, annotation.prefix());
+        }
     }
 
     public EnumDescription toDescription() {
