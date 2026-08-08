@@ -675,12 +675,41 @@ static double on_scale(void* userData, double value) {
     return value * 2.0;
 }
 
+/* The callback's pointers carry no length, so the element count is agreed on out of band. */
+#define TRANSFORM_COUNT 3
+
+static void on_transform(void* userData, const double* input, double* output) {
+    int i;
+    ((CallbackState*) userData)->count++;
+    for (i = 0; i < TRANSFORM_COUNT; i++) {
+        output[i] = input[i] * 2.0;
+    }
+}
+
+/* The plain shapes carry no userData, so their state has to live at file scope. That is
+   the constraint the MATLAB face imposes, written out in C. */
+static CallbackState plain_state;
+
+static void on_plain_index(int index) {
+    if (plain_state.count < MAX_CALLBACKS) {
+        plain_state.indices[plain_state.count] = index;
+    }
+    plain_state.count++;
+}
+
+static void on_plain_notify(void) {
+    plain_state.count++;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
     bindings_tests_NotifiedPtr notified;
     bindings_tests_CountedPtr counted;
     bindings_tests_StoredPtr stored;
+    bindings_tests_PlainStoredPtr plain_stored;
+    double source[TRANSFORM_COUNT];
+    double target[TRANSFORM_COUNT];
     int released;
     int i;
 
@@ -728,6 +757,17 @@ static void test_callbacks(void) {
     assert(bindings_tests_Callbacks_applyScaled(NULL, &state, 21.0) == 21.0);
     assert(state.count == 1);
 
+    /* A callback whose own arguments are raw pointers, the shape a solver objective has.
+       Only the MATLAB face cannot express it, C hands the pointers straight through. */
+    memset(&state, 0, sizeof(state));
+    source[0] = 1.0;
+    source[1] = 2.0;
+    source[2] = 3.0;
+    memset(target, 0, sizeof(target));
+    bindings_tests_Callbacks_transformOnce(&on_transform, &state, source, target);
+    assert(state.count == 1);
+    assert(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
+
     /* Fires on a worker thread the method joins before returning, so the recorded index
        is visible here without any synchronization of our own. */
     memset(&state, 0, sizeof(state));
@@ -770,6 +810,56 @@ static void test_callbacks(void) {
     assert(state.indices[1] == 5);
     bindings_tests_Stored_release(stored);
     assert(bindings_tests_Stored_getClosedCount() == released + 1);
+
+    /* The same shapes without a context pointer. C loses nothing but the argument, which
+       is what makes them expressible in MATLAB. */
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainTimes(&on_plain_index, (size_t) 4);
+    assert(plain_state.count == 4);
+    for (i = 0; i < 4; i++) {
+        assert(plain_state.indices[i] == i);
+    }
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainTimes(NULL, (size_t) 4);
+    bindings_tests_Callbacks_notifyPlainOnce(NULL);
+    assert(plain_state.count == 0);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainChecked(&error, &on_plain_index, 3);
+    assert(error.code == 0);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == 3);
+
+    /* The callback fires before the validation, so a failing call still records it. */
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainChecked(&error, &on_plain_index, -1);
+    assert(error.code != 0);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == -1);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainOnWorkerThread(&on_plain_index, 6);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == 6);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_notifyPlainOnce(&on_plain_notify);
+    assert(plain_state.count == 1);
+
+    /* The constructor both fires the callback and keeps it, so the later fire reaches the
+       same function pointer the creation used. */
+    memset(&plain_state, 0, sizeof(plain_state));
+    released = bindings_tests_PlainStored_getClosedCount();
+    plain_stored = bindings_tests_PlainStored_create(&error, &on_plain_index, (size_t) 2);
+    assert(error.code == 0);
+    assert(plain_stored != NULL);
+    assert(plain_state.count == 2);
+    bindings_tests_PlainStored_fire(plain_stored, 9);
+    assert(plain_state.count == 3);
+    assert(plain_state.indices[2] == 9);
+    bindings_tests_PlainStored_release(plain_stored);
+    assert(bindings_tests_PlainStored_getClosedCount() == released + 1);
 
     printf("callbacks ok\n");
 }

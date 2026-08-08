@@ -136,7 +136,7 @@
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.invokeChecked": {
+  "bindings_tests.Callbacks.invokePlainChecked": {
     "inputs": [{
         "kind": "required",
         "name": "func",
@@ -147,7 +147,7 @@
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.invokeOnWorkerThread": {
+  "bindings_tests.Callbacks.invokePlainOnWorkerThread": {
     "inputs": [{
         "kind": "required",
         "name": "func",
@@ -158,18 +158,7 @@
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.invokeOnce": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["function_handle"]
-      }, {
-        "kind": "required",
-        "name": "index",
-        "type": ["numeric"]
-      }]
-  },
-  "bindings_tests.Callbacks.invokeTimes": {
+  "bindings_tests.Callbacks.invokePlainTimes": {
     "inputs": [{
         "kind": "required",
         "name": "func",
@@ -180,7 +169,7 @@
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.notifyOnce": {
+  "bindings_tests.Callbacks.notifyPlainOnce": {
     "inputs": [{
         "kind": "required",
         "name": "func",
@@ -222,21 +211,6 @@
     "inputs": [{
         "name": "this",
         "type": "bindings_tests.Circle"
-      }]
-  },
-  "bindings_tests.Counted": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["function_handle"]
-      }, {
-        "kind": "required",
-        "name": "times",
-        "type": ["numeric"]
-      }],
-    "outputs": [{
-        "name": "obj",
-        "type": ["bindings_tests.Counted"]
       }]
   },
   "bindings_tests.Counted.getClosedCount": {
@@ -540,17 +514,6 @@
         "type": "bindings_tests.Naming"
       }]
   },
-  "bindings_tests.Notified": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["function_handle"]
-      }],
-    "outputs": [{
-        "name": "obj",
-        "type": ["bindings_tests.Notified"]
-      }]
-  },
   "bindings_tests.Overloads.answer": {
     "inputs": [{
         "kind": "required",
@@ -671,6 +634,34 @@
         "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
       }]
   },
+  "bindings_tests.PlainStored": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "times",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.PlainStored"]
+      }]
+  },
+  "bindings_tests.PlainStored.fire": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.PlainStored"
+      }, {
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.PlainStored.getClosedCount": {
+    "inputs": []
+  },
   "bindings_tests.Shape.area": {
     "inputs": [{
         "name": "this",
@@ -708,17 +699,6 @@
     "inputs": [{
         "name": "this",
         "type": "bindings_tests.Square"
-      }]
-  },
-  "bindings_tests.Stored": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["function_handle"]
-      }],
-    "outputs": [{
-        "name": "obj",
-        "type": ["bindings_tests.Stored"]
       }]
   },
   "bindings_tests.Stored.fire": {

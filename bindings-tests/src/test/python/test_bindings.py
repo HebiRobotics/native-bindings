@@ -614,6 +614,20 @@ class CallbacksTest(unittest.TestCase):
         self.assertIsInstance(result, float)
         self.assertEqual(42.0, result)
 
+    def test_callback_with_raw_pointer_arguments(self):
+        # The solver-objective shape. The callback's pointers carry no length, which is
+        # why MATLAB excludes the method, so the count is agreed on out of band.
+        source = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+        target = np.zeros(3, dtype=np.float64)
+
+        def double_all(user_data, values_in, values_out):
+            for i in range(3):
+                values_out[i] = values_in[i] * 2.0
+
+        bindings_tests.Callbacks.transform_once(double_all, None, source, target)
+
+        self.assertEqual([2.0, 4.0, 6.0], list(target))
+
     def test_notify_once(self):
         seen = []
 
@@ -660,6 +674,60 @@ class CallbacksTest(unittest.TestCase):
         del stored
         gc.collect()
         self.assertEqual(closed + 1, bindings_tests.Stored.get_closed_count())
+
+    def test_invoke_plain_times(self):
+        seen = []
+
+        # No user_data at all, so the closure is the only channel left. Any callable is
+        # still accepted, the wrapper builds the CFUNCTYPE prototype around it.
+        bindings_tests.Callbacks.invoke_plain_times(seen.append, 4)
+
+        self.assertEqual([0, 1, 2, 3], seen)
+
+    def test_invoke_plain_checked(self):
+        seen = []
+
+        bindings_tests.Callbacks.invoke_plain_checked(seen.append, 3)
+        self.assertEqual([3], seen)
+
+        # The callback fires before the validation, so a failing call still records it
+        with self.assertRaises(bindings_tests.Error) as caught:
+            bindings_tests.Callbacks.invoke_plain_checked(seen.append, -1)
+        self.assertIn("must not be negative", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+        self.assertEqual([3, -1], seen)
+
+    def test_invoke_plain_on_worker_thread(self):
+        seen = []
+
+        bindings_tests.Callbacks.invoke_plain_on_worker_thread(seen.append, 6)
+
+        self.assertEqual([6], seen)
+
+    def test_notify_plain_once(self):
+        seen = []
+
+        # Nothing crosses the ABI, so the callable takes no arguments either
+        bindings_tests.Callbacks.notify_plain_once(lambda: seen.append(1))
+
+        self.assertEqual([1], seen)
+
+    def test_plain_stored_fires_during_and_after_construction(self):
+        seen = []
+        closed = bindings_tests.PlainStored.get_closed_count()
+
+        # The indices arrive during construction, and the instance owns the trampoline,
+        # which is what keeps it alive for the later fire() calls
+        stored = bindings_tests.PlainStored(seen.append, 2)
+        self.assertEqual([0, 1], seen)
+        self.assertIsNotNone(stored._func)
+
+        stored.fire(9)
+        self.assertEqual([0, 1, 9], seen)
+
+        del stored
+        gc.collect()
+        self.assertEqual(closed + 1, bindings_tests.PlainStored.get_closed_count())
 
     def test_method_wrapper_is_not_retained(self):
         # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call

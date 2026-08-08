@@ -519,12 +519,34 @@ double onScale(void* userData, double value) {
   return value * 2.0;
 }
 
+// The callback's pointers carry no length, so the element count is agreed on out of band.
+const int kTransformCount = 3;
+
+void onTransform(void* userData, const double* input, double* output) {
+  ++static_cast<CallbackState*>(userData)->count;
+  for (int i = 0; i < kTransformCount; ++i) {
+    output[i] = input[i] * 2.0;
+  }
+}
+
 void onIndex(void* userData, int index) {
   CallbackState* state = static_cast<CallbackState*>(userData);
   if (state->count < kMaxCallbacks) {
     state->indices[state->count] = index;
   }
   ++state->count;
+}
+
+// The plain shapes carry no userData, so their state has to live at file scope and only a
+// captureless lambda converts to the parameter type. That is the cost of dropping the
+// context, and it is what makes the shape expressible in MATLAB.
+CallbackState plainState;
+
+void onPlainIndex(int index) {
+  if (plainState.count < kMaxCallbacks) {
+    plainState.indices[plainState.count] = index;
+  }
+  ++plainState.count;
 }
 
 }  // namespace
@@ -602,6 +624,33 @@ static void testCallbacks() {
   const std::function<double(double)> halve = [](double value) { return value / 2.0; };
   CHECK(bt::callbacks::applyScaled(halve, 84.0) == 42.0);
 
+  // A callback whose own arguments are raw pointers, the shape a solver objective has.
+  // Only the MATLAB face cannot express it, here the const input still gets its vector
+  // overload and the callback still gets the closure form.
+  CallbackState transformed = {};
+  const double source[kTransformCount] = {1.0, 2.0, 3.0};
+  double target[kTransformCount] = {};
+  bt::callbacks::transformOnce(&onTransform, &transformed, source, target);
+  CHECK(transformed.count == 1);
+  CHECK(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
+
+  const std::vector<double> sourceVector = {4.0, 5.0, 6.0};
+  bt::callbacks::transformOnce(&onTransform, &transformed, sourceVector, target);
+  CHECK(transformed.count == 2);
+  CHECK(target[0] == 8.0 && target[1] == 10.0 && target[2] == 12.0);
+
+  int increments = 0;
+  bt::callbacks::transformOnce(
+      [&increments](const double* in, double* out) {
+        ++increments;
+        for (int i = 0; i < kTransformCount; ++i) {
+          out[i] = in[i] + 1.0;
+        }
+      },
+      source, target);
+  CHECK(increments == 1);
+  CHECK(target[0] == 2.0 && target[1] == 3.0 && target[2] == 4.0);
+
   // Fires on a worker thread the method joins before returning. The callable has to be
   // thread safe in this shape, which the ergonomic overloads cannot enforce for the user.
   CallbackState worker = {};
@@ -676,6 +725,56 @@ static void testCallbacks() {
 
   // Three constructions, three releases: a moved-from wrapper owns nothing
   CHECK(bt::Stored::getClosedCount() == closedBefore + 3);
+
+  // Without a userData there is nothing for a closure to be smuggled through, so these
+  // parameters are the raw function pointer and there is deliberately no std::function
+  // overload beside them. A captureless lambda still converts.
+  plainState = CallbackState();
+  bt::callbacks::invokePlainTimes(&onPlainIndex, 4);
+  CHECK(plainState.count == 4);
+  for (int i = 0; i < 4; ++i) {
+    CHECK(plainState.indices[i] == i);
+  }
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainTimes([](int index) { onPlainIndex(index); }, 3);
+  CHECK(plainState.count == 3);
+  CHECK(plainState.indices[2] == 2);
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainChecked(&onPlainIndex, 3);
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == 3);
+
+  // The callback fires before the validation, so a throwing call still records it.
+  plainState = CallbackState();
+  CHECK(throwsWithMessage([] { bt::callbacks::invokePlainChecked(&onPlainIndex, -1); },
+                          "must not be negative"));
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == -1);
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainOnWorkerThread(&onPlainIndex, 6);
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == 6);
+
+  plainState = CallbackState();
+  bt::callbacks::notifyPlainOnce([] { ++plainState.count; });
+  CHECK(plainState.count == 1);
+
+  // The constructor both fires the callback and keeps it, so the later fire reaches the
+  // same function pointer the creation used.
+  const int plainClosedBefore = bt::PlainStored::getClosedCount();
+  plainState = CallbackState();
+  {
+    bt::PlainStored handle(&onPlainIndex, 2);
+    CHECK(plainState.count == 2);
+    CHECK(plainState.indices[0] == 0 && plainState.indices[1] == 1);
+    handle.fire(9);
+    CHECK(plainState.count == 3);
+    CHECK(plainState.indices[2] == 9);
+  }
+  CHECK(bt::PlainStored::getClosedCount() == plainClosedBefore + 1);
 }
 
 // ---------------------------------------------------------------------------

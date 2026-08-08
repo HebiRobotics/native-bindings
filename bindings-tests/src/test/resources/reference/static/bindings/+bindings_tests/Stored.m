@@ -24,25 +24,13 @@ classdef (Sealed) Stored < handle & matlab.mixin.SetGet
     end
 
     methods(Access = public)
-        function this = Stored(func)
+        function this = Stored(varargin)
             % Stores the callback and returns without invoking it. Every later call to
             %   fire() runs it on the calling thread, so it has to stay alive for as long
             %   as the handle does.
             %
-            %   Inputs:
-            %       func
-            %
-            %   Outputs:
-            %       A handle that stores a callback and invokes it during later calls.
-            %
-            %   Throws:
-            %       Error on internal errors
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Stored.Stored', 'func');
-            ptr_ = bindings_tests_native('bindings_tests_Stored_create', func);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Stored in Stored.Stored');
-            end
-            this.ptr = ptr_;
+            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
+            error('bindings_tests:NotSupported', "'Stored' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
         end
     end
     properties (SetAccess = private, GetAccess = private, Hidden = true)

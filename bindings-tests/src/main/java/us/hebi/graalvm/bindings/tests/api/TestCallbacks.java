@@ -3,6 +3,8 @@ package us.hebi.graalvm.bindings.tests.api;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+import org.graalvm.nativeimage.c.type.CConst;
+import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
@@ -48,6 +50,29 @@ public class TestCallbacks {
     public interface ScaleCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         double invoke(VoidPointer userData, double value);
+    }
+
+    // A raw pointer argument has no length travelling with it, so the MEX trampoline cannot
+    // size the mxArray it would have to build. This is the shape that excludes the methods
+    // taking it from the MATLAB face, and it is what a numerical solver's objective looks like.
+    public interface TransformCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
+        void invoke(VoidPointer userData, @CConst CDoublePointer input, CDoublePointer output);
+    }
+
+    // The shape the MATLAB gateway supports, now that nothing may cross the ABI as context.
+    // The registry thunk the library was handed is the channel, so its identity is what
+    // replaces the void* every other callback here carries.
+    public interface PlainIndexCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
+        void invoke(int index);
+    }
+
+    // No arguments at all. Together with a method that takes no void* either, this is the
+    // pair the MATLAB face used to reject outright.
+    public interface PlainNotifyCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
+        void invoke();
     }
 
     @CLibMethod(flags = Noexcept)
@@ -141,6 +166,92 @@ public class TestCallbacks {
             return value;
         }
         return func.invoke(userData, value);
+    }
+
+    // Pins a callback whose own arguments are raw pointers, the shape a solver objective has
+    // when it reads a parameter vector and writes a residual vector.
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("""
+            Invokes the callback once with the two buffers and returns after it completes.
+            Both buffers stay owned by the caller, and how many elements they hold is
+            between the caller and the callback, since a raw pointer carries no length.
+            The input is not verified! A null function pointer leaves output untouched.
+            """)
+    public static void transformOnce(TransformCallbackFunction func, VoidPointer userData,
+                                     @CConst CDoublePointer input, CDoublePointer output) {
+        if (func.isNull()) {
+            return;
+        }
+        func.invoke(userData, input, output);
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("""
+            Invokes the callback exactly 'times' times with indices 0 to times-1, then
+            returns. A null function pointer is ignored, and a non-positive count does
+            nothing.
+            """)
+    public static void invokePlainTimes(PlainIndexCallbackFunction func, @CSizeType int times) {
+        if (func.isNull()) {
+            return;
+        }
+        for (int i = 0; i < times; i++) {
+            func.invoke(i);
+        }
+    }
+
+    @CLibMethod
+    @CLibComment(value = """
+            Invokes the callback once with the given index, then throws if the index is
+            negative. The invocation happens before the validation on purpose, so that a
+            caller can observe both failures in one call.
+            """,
+            throwsOn = "index is negative")
+    public static void invokePlainChecked(PlainIndexCallbackFunction func, int index) {
+        if (!func.isNull()) {
+            func.invoke(index);
+        }
+        if (index < 0) {
+            throw new IllegalArgumentException("index must not be negative, but was " + index);
+        }
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("""
+            Invokes the callback once with the given index on a worker thread, and joins that
+            thread before returning. The invocation therefore completes within the call but not
+            on the calling thread, which is the shape a solver has when it fans an objective
+            out to workers. The callback must be thread safe.
+            """)
+    public static void invokePlainOnWorkerThread(PlainIndexCallbackFunction func, int index) {
+        if (func.isNull()) {
+            return;
+        }
+        // A lambda capture becomes a field of the lambda object, and a word type may not be
+        // stored in one, so the pointer crosses to the worker as a raw address.
+        final long function = func.rawValue();
+        Thread worker = new Thread(() -> {
+            PlainIndexCallbackFunction target = WordFactory.pointer(function);
+            target.invoke(index);
+        });
+        worker.start();
+        try {
+            worker.join();
+        } catch (InterruptedException e) {
+            // Noexcept, so the flag is the only way to report it
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // Nothing crosses the ABI here but the function pointer itself, which is the narrowest
+    // callback a library can declare and the one MATLAB needs no conversion at all for.
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Invokes the callback once. Returns after it completes.")
+    public static void notifyPlainOnce(PlainNotifyCallbackFunction func) {
+        if (func.isNull()) {
+            return;
+        }
+        func.invoke();
     }
 
     @CLibComment("A handle whose construction invokes a callback.")
@@ -274,6 +385,74 @@ public class TestCallbacks {
 
         private final long function;
         private final long context;
+        private boolean closed = false;
+
+        // Single threaded by contract: the tests only ever touch this from the calling thread.
+        private static int closedCount = 0;
+
+    }
+
+    /**
+     * The owned lifetime without a context pointer. The constructor both fires the callback
+     * and keeps it, so one class covers construction-time invocation, invocation after the
+     * call that registered it, and the release path a construction that failed has to take.
+     * <p>
+     * {@link #close()} follows {@link TestStored}, so the suites can see the release.
+     */
+    @CLibComment("A handle that invokes a callback during construction and stores it for later calls.")
+    @CLibClass("PlainStored")
+    public static class TestPlainStored implements AutoCloseable {
+
+        @CLibMethod(constructor = true)
+        @CLibComment("""
+                Invokes the callback with indices 0 to times-1 before returning the handle, and
+                keeps it for every later call to fire(), so it has to stay alive for as long as
+                the handle does.
+                """)
+        public static TestPlainStored create(PlainIndexCallbackFunction func, @CSizeType int times) {
+            return new TestPlainStored(func, times);
+        }
+
+        @CLibMethod(flags = Noexcept)
+        @CLibComment("Invokes the stored callback once with the given index, on the calling thread.")
+        public void fire(int index) {
+            PlainIndexCallbackFunction func = WordFactory.pointer(function);
+            if (func.isNull()) {
+                return;
+            }
+            func.invoke(index);
+        }
+
+        @CLibMethod(flags = Noexcept)
+        @CLibComment("""
+                Total number of handles of this type that have been released so far in this
+                isolate. Increments exactly once per released handle.
+                """)
+        public static int getClosedCount() {
+            return closedCount;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                closed = true;
+                closedCount++;
+            }
+        }
+
+        private TestPlainStored(PlainIndexCallbackFunction func, int times) {
+            // A word type may not be stored in an object field, so the pointer is kept as a
+            // raw address and rebuilt on every fire.
+            this.function = func.rawValue();
+            if (func.isNull()) {
+                return;
+            }
+            for (int i = 0; i < times; i++) {
+                func.invoke(i);
+            }
+        }
+
+        private final long function;
         private boolean closed = false;
 
         // Single threaded by contract: the tests only ever touch this from the calling thread.

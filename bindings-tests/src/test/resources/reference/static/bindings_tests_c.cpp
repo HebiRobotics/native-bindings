@@ -143,6 +143,24 @@ void bindings_tests_Notified_release(bindings_tests_NotifiedPtr obj) {
     __bindings_tests_Notified_release(isolate::global(), obj);
 }
 
+// ==== PlainStored ====
+bindings_tests_PlainStoredPtr __bindings_tests_PlainStored_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, long long times);
+bindings_tests_PlainStoredPtr bindings_tests_PlainStored_create(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, size_t times) {
+    return __bindings_tests_PlainStored_create(isolate::global(), _error, func, static_cast<long long>(times));
+}
+void __bindings_tests_PlainStored_fire(bindings_tests_IsolateThread* isolate, bindings_tests_PlainStoredPtr obj, int index);
+void bindings_tests_PlainStored_fire(bindings_tests_PlainStoredPtr obj, int index) {
+    __bindings_tests_PlainStored_fire(isolate::global(), obj, index);
+}
+int __bindings_tests_PlainStored_getClosedCount(bindings_tests_IsolateThread* isolate);
+int bindings_tests_PlainStored_getClosedCount() {
+    return __bindings_tests_PlainStored_getClosedCount(isolate::global());
+}
+void __bindings_tests_PlainStored_release(bindings_tests_IsolateThread* isolate, bindings_tests_PlainStoredPtr obj);
+void bindings_tests_PlainStored_release(bindings_tests_PlainStoredPtr obj) {
+    __bindings_tests_PlainStored_release(isolate::global(), obj);
+}
+
 // ==== Shape ====
 const char* __bindings_tests_Shape_getName(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj);
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj) {
@@ -313,6 +331,26 @@ void bindings_tests_Callbacks_notifyOnce(bindings_tests_NotifyCallbackFunction f
 double __bindings_tests_Callbacks_applyScaled(bindings_tests_IsolateThread* isolate, bindings_tests_ScaleCallbackFunction func, void* userData, double value);
 double bindings_tests_Callbacks_applyScaled(bindings_tests_ScaleCallbackFunction func, void* userData, double value) {
     return __bindings_tests_Callbacks_applyScaled(isolate::global(), func, userData, value);
+}
+void __bindings_tests_Callbacks_transformOnce(bindings_tests_IsolateThread* isolate, bindings_tests_TransformCallbackFunction func, void* userData, const double* input, double* output);
+void bindings_tests_Callbacks_transformOnce(bindings_tests_TransformCallbackFunction func, void* userData, const double* input, double* output) {
+    __bindings_tests_Callbacks_transformOnce(isolate::global(), func, userData, input, output);
+}
+void __bindings_tests_Callbacks_invokePlainTimes(bindings_tests_IsolateThread* isolate, bindings_tests_PlainIndexCallbackFunction func, long long times);
+void bindings_tests_Callbacks_invokePlainTimes(bindings_tests_PlainIndexCallbackFunction func, size_t times) {
+    __bindings_tests_Callbacks_invokePlainTimes(isolate::global(), func, static_cast<long long>(times));
+}
+void __bindings_tests_Callbacks_invokePlainChecked(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, int index);
+void bindings_tests_Callbacks_invokePlainChecked(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, int index) {
+    __bindings_tests_Callbacks_invokePlainChecked(isolate::global(), _error, func, index);
+}
+void __bindings_tests_Callbacks_invokePlainOnWorkerThread(bindings_tests_IsolateThread* isolate, bindings_tests_PlainIndexCallbackFunction func, int index);
+void bindings_tests_Callbacks_invokePlainOnWorkerThread(bindings_tests_PlainIndexCallbackFunction func, int index) {
+    __bindings_tests_Callbacks_invokePlainOnWorkerThread(isolate::global(), func, index);
+}
+void __bindings_tests_Callbacks_notifyPlainOnce(bindings_tests_IsolateThread* isolate, bindings_tests_PlainNotifyCallbackFunction func);
+void bindings_tests_Callbacks_notifyPlainOnce(bindings_tests_PlainNotifyCallbackFunction func) {
+    __bindings_tests_Callbacks_notifyPlainOnce(isolate::global(), func);
 }
 
 // ==== Errors ====

@@ -249,6 +249,64 @@
   }, {
     "type": {
       "cPrefix": "bindings_tests_",
+      "typeName": "PlainStored",
+      "comment": "A handle that invokes a callback during construction and stores it for later calls.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "cDestructorName": "bindings_tests_PlainStored_release",
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_PlainStored_create",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainStored",
+        "comment": "A handle that invokes a callback during construction and stores it for later calls.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "times",
+        "lowerUnderscoreParamName": "times",
+        "dataType": "SIZE_T"
+      }],
+      "isConstructor": true,
+      "documentation": "Invokes the callback with indices 0 to times-1 before returning the handle, and\nkeeps it for every later call to fire(), so it has to stay alive for as long as\nthe handle does.\n"
+    }, {
+      "name": "fire",
+      "lowerUnderscoreName": "fire",
+      "cName": "bindings_tests_PlainStored_fire",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Invokes the stored callback once with the given index, on the calling thread.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getClosedCount",
+      "lowerUnderscoreName": "get_closed_count",
+      "isStatic": true,
+      "cName": "bindings_tests_PlainStored_getClosedCount",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "documentation": "Total number of handles of this type that have been released so far in this\nisolate. Increments exactly once per released handle.\n",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "cPrefix": "bindings_tests_",
       "typeName": "Shape",
       "comment": "Base class for the shape hierarchy.",
       "dataType": "OBJECT_HANDLE"
@@ -953,6 +1011,116 @@
         "dataType": "FLOAT64"
       }],
       "documentation": "Passes the value to the callback and returns what the callback produced. A null\nfunction pointer leaves the value unchanged.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "transformOnce",
+      "lowerUnderscoreName": "transform_once",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_transformOnce",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "TransformCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "userData",
+        "lowerUnderscoreParamName": "user_data",
+        "dataType": "VOID_POINTER"
+      }, {
+        "isConst": true,
+        "paramName": "input",
+        "lowerUnderscoreParamName": "input",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "paramName": "output",
+        "lowerUnderscoreParamName": "output",
+        "dataType": "FLOAT64_POINTER"
+      }],
+      "documentation": "Invokes the callback once with the two buffers and returns after it completes.\nBoth buffers stay owned by the caller, and how many elements they hold is\nbetween the caller and the callback, since a raw pointer carries no length.\nThe input is not verified! A null function pointer leaves output untouched.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokePlainTimes",
+      "lowerUnderscoreName": "invoke_plain_times",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainTimes",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "times",
+        "lowerUnderscoreParamName": "times",
+        "dataType": "SIZE_T"
+      }],
+      "documentation": "Invokes the callback exactly 'times' times with indices 0 to times-1, then\nreturns. A null function pointer is ignored, and a non-positive count does\nnothing.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokePlainChecked",
+      "lowerUnderscoreName": "invoke_plain_checked",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainChecked",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Invokes the callback once with the given index, then throws if the index is\nnegative. The invocation happens before the validation on purpose, so that a\ncaller can observe both failures in one call.\n",
+      "throwsOn": "index is negative"
+    }, {
+      "name": "invokePlainOnWorkerThread",
+      "lowerUnderscoreName": "invoke_plain_on_worker_thread",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainOnWorkerThread",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Invokes the callback once with the given index on a worker thread, and joins that\nthread before returning. The invocation therefore completes within the call but not\non the calling thread, which is the shape a solver has when it fans an objective\nout to workers. The callback must be thread safe.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "notifyPlainOnce",
+      "lowerUnderscoreName": "notify_plain_once",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_notifyPlainOnce",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainNotifyCallbackFunction",
+        "dataType": "CALLBACK"
+      }],
+      "documentation": "Invokes the callback once. Returns after it completes.",
       "flags": ["Noexcept"]
     }]
   }, {
@@ -2128,6 +2296,22 @@
     }],
     "cPrefix": "bindings_tests_"
   }, {
+    "name": "PlainIndexCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "index",
+      "dataType": "INT32"
+    }],
+    "cPrefix": "bindings_tests_"
+  }, {
+    "name": "PlainNotifyCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "cPrefix": "bindings_tests_"
+  }, {
     "name": "ScaleCallbackFunction",
     "returnType": {
       "dataType": "FLOAT64"
@@ -2151,6 +2335,23 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
+    }],
+    "cPrefix": "bindings_tests_"
+  }, {
+    "name": "TransformCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
+    }, {
+      "isConst": true,
+      "paramName": "input",
+      "dataType": "FLOAT64_POINTER"
+    }, {
+      "paramName": "output",
+      "dataType": "FLOAT64_POINTER"
     }],
     "cPrefix": "bindings_tests_"
   }]

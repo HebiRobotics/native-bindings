@@ -12,24 +12,11 @@ classdef (Sealed) Counted < handle & matlab.mixin.SetGet
     end
 
     methods(Access = public)
-        function this = Counted(func, times)
+        function this = Counted(varargin)
             % Creates the handle, invoking the callback with indices 0 to times-1 before returning it.
             %
-            %   Inputs:
-            %       func
-            %       times
-            %
-            %   Outputs:
-            %       A handle whose construction invokes a callback once per index.
-            %
-            %   Throws:
-            %       Error on internal errors
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Counted.Counted', 'func');
-            ptr_ = bindings_tests_native('bindings_tests_Counted_create', func, times);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Counted in Counted.Counted');
-            end
-            this.ptr = ptr_;
+            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
+            error('bindings_tests:NotSupported', "'Counted' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
         end
     end
     properties (SetAccess = private, GetAccess = private, Hidden = true)

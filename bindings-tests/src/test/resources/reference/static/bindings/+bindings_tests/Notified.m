@@ -2,23 +2,11 @@ classdef (Sealed) Notified < handle & matlab.mixin.SetGet
 % A handle whose construction invokes a callback.
 
     methods(Access = public)
-        function this = Notified(func)
+        function this = Notified(varargin)
             % Creates the handle and invokes the callback once before returning it.
             %
-            %   Inputs:
-            %       func
-            %
-            %   Outputs:
-            %       A handle whose construction invokes a callback.
-            %
-            %   Throws:
-            %       Error on internal errors
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Notified.Notified', 'func');
-            ptr_ = bindings_tests_native('bindings_tests_Notified_create', func);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Notified in Notified.Notified');
-            end
-            this.ptr = ptr_;
+            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
+            error('bindings_tests:NotSupported', "'Notified' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
         end
     end
     properties (SetAccess = private, GetAccess = private, Hidden = true)

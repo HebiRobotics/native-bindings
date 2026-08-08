@@ -165,6 +165,10 @@ class struct_Notified_(Structure):
     pass
 NotifiedPtr = POINTER(struct_Notified_)
 
+class struct_PlainStored_(Structure):
+    pass
+PlainStoredPtr = POINTER(struct_PlainStored_)
+
 class struct_Shape_(Structure):
     pass
 ShapePtr = POINTER(struct_Shape_)
@@ -223,8 +227,11 @@ StructsPtr = POINTER(struct_Structs_)
 
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
+PlainIndexCallbackFunction = CFUNCTYPE(None, c_int)
+PlainNotifyCallbackFunction = CFUNCTYPE(None)
 ScaleCallbackFunction = CFUNCTYPE(c_double, c_void_p, c_double)
 StoredCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
+TransformCallbackFunction = CFUNCTYPE(None, c_void_p, POINTER(c_double), POINTER(c_double))
 
 # ==== Counted ====
 libbindings_tests.bindings_tests_Counted_create.argtypes = [POINTER(_ErrorInfo), IndexCallbackFunction, c_void_p, c_int]
@@ -269,6 +276,16 @@ libbindings_tests.bindings_tests_Notified_create.argtypes = [POINTER(_ErrorInfo)
 libbindings_tests.bindings_tests_Notified_create.restype = NotifiedPtr
 libbindings_tests.bindings_tests_Notified_release.argtypes = [NotifiedPtr]
 libbindings_tests.bindings_tests_Notified_release.restype = None
+
+# ==== PlainStored ====
+libbindings_tests.bindings_tests_PlainStored_create.argtypes = [POINTER(_ErrorInfo), PlainIndexCallbackFunction, c_size_t]
+libbindings_tests.bindings_tests_PlainStored_create.restype = PlainStoredPtr
+libbindings_tests.bindings_tests_PlainStored_fire.argtypes = [PlainStoredPtr, c_int]
+libbindings_tests.bindings_tests_PlainStored_fire.restype = None
+libbindings_tests.bindings_tests_PlainStored_getClosedCount.argtypes = []
+libbindings_tests.bindings_tests_PlainStored_getClosedCount.restype = c_int
+libbindings_tests.bindings_tests_PlainStored_release.argtypes = [PlainStoredPtr]
+libbindings_tests.bindings_tests_PlainStored_release.restype = None
 
 # ==== Shape ====
 libbindings_tests.bindings_tests_Shape_getName.argtypes = [ShapePtr]
@@ -357,6 +374,16 @@ libbindings_tests.bindings_tests_Callbacks_notifyOnce.argtypes = [NotifyCallback
 libbindings_tests.bindings_tests_Callbacks_notifyOnce.restype = None
 libbindings_tests.bindings_tests_Callbacks_applyScaled.argtypes = [ScaleCallbackFunction, c_void_p, c_double]
 libbindings_tests.bindings_tests_Callbacks_applyScaled.restype = c_double
+libbindings_tests.bindings_tests_Callbacks_transformOnce.argtypes = [TransformCallbackFunction, c_void_p, POINTER(c_double), POINTER(c_double)]
+libbindings_tests.bindings_tests_Callbacks_transformOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainTimes.argtypes = [PlainIndexCallbackFunction, c_size_t]
+libbindings_tests.bindings_tests_Callbacks_invokePlainTimes.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainChecked.argtypes = [POINTER(_ErrorInfo), PlainIndexCallbackFunction, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokePlainChecked.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread.argtypes = [PlainIndexCallbackFunction, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread.restype = None
+libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce.argtypes = [PlainNotifyCallbackFunction]
+libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce.restype = None
 
 # ==== Errors ====
 libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -702,6 +729,60 @@ class Notified:
 
     def __repr__(self):
         return f"{self.__class__.__name__}()"
+
+
+class PlainStored:
+    """A handle that invokes a callback during construction and stores it for later calls."""
+
+    __slots__ = ('ptr', '_func')
+
+    def __init__(self, func: Callable[[int], None], times: int) -> None:
+        """Invokes the callback with indices 0 to times-1 before returning the handle, and
+        keeps it for every later call to fire(), so it has to stay alive for as long as
+        the handle does.
+
+        Args:
+            func: Any callable is accepted. The object owns the resulting
+                PlainIndexCallbackFunction and keeps it alive for as long as it exists.
+            times:
+
+        Returns:
+            A handle that invokes a callback during construction and stores it for later calls.
+
+        Raises:
+            Exception: on internal errors
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        self._func = func
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_PlainStored_create(byref(error_), func, times))
+        if not ptr_:
+            raise RuntimeError('Failed to create PlainStored in PlainStored::__init__')
+        self.ptr = ptr_
+
+    def __del__(self):
+        if self.ptr is not None:
+            libbindings_tests.bindings_tests_PlainStored_release(self.ptr)
+        self.ptr = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    def fire(self, index: int) -> None:
+        """Invokes the stored callback once with the given index, on the calling thread.
+
+        Args:
+            index:
+        """
+        libbindings_tests.bindings_tests_PlainStored_fire(self.ptr, index)
+
+    @classmethod
+    def get_closed_count(cls) -> int:
+        """Total number of handles of this type that have been released so far in this
+        isolate. Increments exactly once per released handle.
+        """
+        return libbindings_tests.bindings_tests_PlainStored_getClosedCount()
 
 
 class Shape:
@@ -1176,6 +1257,91 @@ class Callbacks:
         if func is not None and not isinstance(func, ScaleCallbackFunction):
             func = ScaleCallbackFunction(func)
         return libbindings_tests.bindings_tests_Callbacks_applyScaled(func, user_data, value)
+
+    @classmethod
+    def transform_once(cls, func: Callable[[Any, Sequence[float], Sequence[float]], None], user_data: Any | bytes | None, input: Sequence[float], output: Sequence[float]) -> None:
+        """Invokes the callback once with the two buffers and returns after it completes.
+        Both buffers stay owned by the caller, and how many elements they hold is
+        between the caller and the callback, since a raw pointer carries no length.
+        The input is not verified! A null function pointer leaves output untouched.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                TransformCallbackFunction per call. Build the prototype once for a hot loop.
+            user_data:
+            input:
+            output:
+        """
+        np = _require_numpy()
+        if func is not None and not isinstance(func, TransformCallbackFunction):
+            func = TransformCallbackFunction(func)
+        if input is not None and not isinstance(input, POINTER(c_double)):
+            input = np.ascontiguousarray(input, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        if output is not None and not isinstance(output, POINTER(c_double)):
+            output = np.ascontiguousarray(output, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        libbindings_tests.bindings_tests_Callbacks_transformOnce(func, user_data, input, output)
+
+    @classmethod
+    def invoke_plain_times(cls, func: Callable[[int], None], times: int) -> None:
+        """Invokes the callback exactly 'times' times with indices 0 to times-1, then
+        returns. A null function pointer is ignored, and a non-positive count does
+        nothing.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
+            times:
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_invokePlainTimes(func, times)
+
+    @classmethod
+    def invoke_plain_checked(cls, func: Callable[[int], None], index: int) -> None:
+        """Invokes the callback once with the given index, then throws if the index is
+        negative. The invocation happens before the validation on purpose, so that a
+        caller can observe both failures in one call.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
+            index:
+
+        Raises:
+            Exception: index is negative
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        error_ = _ErrorInfo()
+        _checked(error_, libbindings_tests.bindings_tests_Callbacks_invokePlainChecked(byref(error_), func, index))
+
+    @classmethod
+    def invoke_plain_on_worker_thread(cls, func: Callable[[int], None], index: int) -> None:
+        """Invokes the callback once with the given index on a worker thread, and joins that
+        thread before returning. The invocation therefore completes within the call but not
+        on the calling thread, which is the shape a solver has when it fans an objective
+        out to workers. The callback must be thread safe.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
+            index:
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread(func, index)
+
+    @classmethod
+    def notify_plain_once(cls, func: Callable[[], None]) -> None:
+        """Invokes the callback once. Returns after it completes.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainNotifyCallbackFunction per call. Build the prototype once for a hot loop.
+        """
+        if func is not None and not isinstance(func, PlainNotifyCallbackFunction):
+            func = PlainNotifyCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce(func)
 
 
 class Errors:

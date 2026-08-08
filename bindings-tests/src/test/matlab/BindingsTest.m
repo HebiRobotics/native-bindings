@@ -425,79 +425,71 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Indices.echoSize(4), 4);
         end
 
-        function testCallbacks(testCase)
-            % The MATLAB face takes a function handle and hides the void* the C ABI
-            % carries the handle through, so the argument lists are one shorter here.
+        function testContextCarryingCallbacksAreNotSupported(testCase)
+            % Nothing may cross the ABI as context, because the gateway would have to hand
+            % the void* to the function handle as an mxArray and an address is not one. Every
+            % callback in the test API that carries userData therefore gets a stub, and the
+            % raw pointer shape below is rejected for its own reason on top of that.
+            noop = @(varargin) [];
+
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(noop, 4), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnce(noop, 7), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(noop, 3), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnWorkerThread(noop, 5), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.notifyOnce(noop), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.transformOnce(noop), 'bindings_tests:NotSupported');
+
+            % A constructor taking one of the same typedefs gets the same stub, so the class
+            % exists and only its construction is closed off.
+            testCase.verifyError(@() bindings_tests.Notified(noop), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Counted(noop, 3), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Stored(noop), 'bindings_tests:NotSupported');
+        end
+
+        function testValueReturningCallback(testCase)
+            % TODO: applyScaled is a NotSupported stub until the trampoline marshals
+            % the feval result back, mexCallMATLABWithTrap with one output.
+            testCase.assumeFail('applyScaled waits on feval return marshaling, plans item 1');
+            testCase.verifyEqual(bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 42);
+        end
+
+        function testPlainCallbacks(testCase)
+            % The supported shape: no void* anywhere, so the thunk the library was handed is
+            % the whole channel and its identity is what names the record.
             collected = [];
             outer = [];
             inner = [];
 
-            bindings_tests.Callbacks.invokeTimes(@collect, 4);
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 4);
             testCase.verifyEqual(collected, [0 1 2 3]);
-
-            collected = [];
-            bindings_tests.Callbacks.invokeOnce(@collect, 7);
-            testCase.verifyEqual(collected, 7);
 
             % A non-positive count never reaches the callback
             collected = [];
-            bindings_tests.Callbacks.invokeTimes(@collect, 0);
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 0);
             testCase.verifyTrue(isempty(collected));
 
-            % The null function pointer the other suites pass is not representable
-            % here, the wrapper only accepts a function handle.
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes([], 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(42, 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
+            % The null function pointer the other suites pass is not representable here,
+            % the wrapper only accepts a function handle.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes([], 1), ...
+                'MATLAB:Callbacks:invokePlainTimes:invalidType');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(42, 1), ...
+                'MATLAB:Callbacks:invokePlainTimes:invalidType');
 
-            % A constructor keeps its callback in a per-object record rather than on the
-            % handle stack, so Counted runs that path and hands back a usable handle.
-            collected = [];
-            counted = bindings_tests.Counted(@collect, 3);
-            testCase.verifyEqual(collected, [0 1 2]);
-            testCase.verifyNotEmpty(counted.c_ptr());
-            delete(counted);
-
-            % An error inside a constructor's callback is raised at the call site, after
-            % the library has returned. The object it created is unreachable by then, so
-            % the dispatch case releases it before raising rather than leaking it.
-            released = bindings_tests.Counted.getClosedCount();
-            testCase.verifyError(@() bindings_tests.Counted(@fail, 1), 'bindings_tests:CallbackFailed');
-            testCase.verifyEqual(bindings_tests.Counted.getClosedCount(), released + 1);
-
-            % The pending error slot is cleared by the raise, so the next construction works
-            collected = [];
-            counted = bindings_tests.Counted(@collect, 2);
-            testCase.verifyEqual(collected, [0 1]);
-            delete(counted);
-
-            % The callback calls back into a method that takes a callback, which is what
-            % the handle stack in the gateway exists for. Nesting level n collects
-            % 0..n-1, so the inner indices are 0, 0 1, 0 1 2.
-            bindings_tests.Callbacks.invokeTimes(@nest, 3);
+            % The callback calls back into a method that takes a callback, which is what the
+            % per-slot thunks exist for: each registration gets an id of its own and therefore
+            % a distinct function pointer. Nesting level n collects 0..n-1.
+            bindings_tests.Callbacks.invokePlainTimes(@nest, 3);
             testCase.verifyEqual(outer, [0 1 2]);
             testCase.verifyEqual(inner, [0 0 1 0 1 2]);
 
-            % An error raised inside the callback is trapped by the trampoline and
-            % rethrown at the call site once the library call has returned.
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnce(@fail, 1), 'bindings_tests:CallbackFailed');
+            % An error raised inside the callback is trapped by the thunk and rethrown at the
+            % call site once the library call has returned.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(@fail, 1), ...
+                'bindings_tests:CallbackFailed');
 
-            % A throwing method invokes the callback before it validates, so the call
-            % below records the index and then raises the library error.
+            % The registry recovers from that error, so the next call still works
             collected = [];
-            bindings_tests.Callbacks.invokeChecked(@collect, 3);
-            testCase.verifyEqual(collected, 3);
-
-            collected = [];
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(@collect, -1), 'bindings_tests:IllegalArgumentException');
-            testCase.verifyEqual(collected, -1);
-
-            % Both fail in the same call. The callback error is the root cause of the
-            % library one, so the gateway has to raise it first.
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(@fail, -1), 'bindings_tests:CallbackFailed');
-
-            % The stack recovers from that error, so the next call still works
-            collected = [];
-            bindings_tests.Callbacks.invokeTimes(@collect, 2);
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
             testCase.verifyEqual(collected, [0 1]);
 
             function collect(index)
@@ -506,7 +498,7 @@ classdef BindingsTest < matlab.unittest.TestCase
 
             function nest(index)
                 outer(end + 1) = index;
-                bindings_tests.Callbacks.invokeTimes(@collectInner, index + 1);
+                bindings_tests.Callbacks.invokePlainTimes(@collectInner, index + 1);
             end
 
             function collectInner(index)
@@ -518,18 +510,45 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testCallbackOnWorkerThread(testCase)
-            % Only the MATLAB thread may enter the Matrix API, so a trampoline that finds
-            % itself anywhere else skips the invocation and the call reports the count.
+        function testPlainCallbackErrorOrdering(testCase)
+            % A throwing method invokes the callback before it validates, so the call below
+            % records the index and then raises the library error.
+            collected = [];
+            bindings_tests.Callbacks.invokePlainChecked(@collect, 3);
+            testCase.verifyEqual(collected, 3);
+
+            collected = [];
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainChecked(@collect, -1), ...
+                'bindings_tests:IllegalArgumentException');
+            testCase.verifyEqual(collected, -1);
+
+            % Both fail in the same call. The callback error is the root cause of the library
+            % one, so the gateway has to raise it first.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainChecked(@fail, -1), ...
+                'bindings_tests:CallbackFailed');
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
+        end
+
+        function testPlainCallbackOnWorkerThread(testCase)
+            % Only the MATLAB thread may enter the Matrix API, so a thunk that finds itself
+            % anywhere else skips the invocation and the call reports the count.
             collected = [];
 
-            [message, identifier] = testCase.captureError(@() bindings_tests.Callbacks.invokeOnWorkerThread(@collect, 5));
+            [message, identifier] = testCase.captureError( ...
+                @() bindings_tests.Callbacks.invokePlainOnWorkerThread(@collect, 5));
             testCase.verifyEqual(identifier, 'bindings_tests:NotSupported');
             testCase.verifyTrue(contains(message, '1 callback invocation'));
             testCase.verifyTrue(isempty(collected));
 
-            % The slot stack recovers from that raise, so the next call still works
-            bindings_tests.Callbacks.invokeTimes(@collect, 2);
+            % The registry recovers from that raise, so the next call still works
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
             testCase.verifyEqual(collected, [0 1]);
 
             function collect(index)
@@ -537,11 +556,11 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testArgumentlessCallback(testCase)
-            % The callback carries nothing but its userData, which the wrapper hides, so
-            % the function handle takes no arguments and feval gets the handle alone.
+        function testArgumentlessPlainCallback(testCase)
+            % Nothing crosses the ABI at all, so the function handle takes no arguments and
+            % feval gets the handle alone. This is the pair the old rule rejected outright.
             called = false;
-            bindings_tests.Callbacks.notifyOnce(@() note());
+            bindings_tests.Callbacks.notifyPlainOnce(@() note());
             testCase.verifyTrue(called);
 
             function note()
@@ -549,53 +568,33 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testValueReturningCallback(testCase)
-            % TODO: applyScaled is a NotSupported stub until the trampoline marshals
-            % the feval result back, mexCallMATLABWithTrap with one output.
-            testCase.assumeFail('applyScaled waits on feval return marshaling, plans item 1');
-            testCase.verifyEqual(bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 42);
-        end
-
-        function testNotifiedCallbackConstructor(testCase)
-            % The same typedef a method takes, here owned by the object the constructor
-            % creates, so it goes through the per-object record instead of the slot stack.
-            called = false;
-            notified = bindings_tests.Notified(@() note());
-            testCase.verifyTrue(called);
-            testCase.verifyNotEmpty(notified.c_ptr());
-            delete(notified);
-
-            function note()
-                called = true;
-            end
-        end
-
-        function testStoredCallbackConstructor(testCase)
-            % A stored callback outlives the call that registered it, which is what the
-            % per-object record exists for. The handle stays valid across later calls.
+        function testPlainStoredLifecycle(testCase)
+            % The constructor fires the callback and keeps it, so the fires below reach the
+            % same record the creation registered, and the release destroys it.
             collected = [];
+            released = bindings_tests.PlainStored.getClosedCount();
 
-            stored = bindings_tests.Stored(@collect);
-            stored.fire(3);
-            stored.fire(7);
-            testCase.verifyEqual(collected, [3 7]);
+            stored = bindings_tests.PlainStored(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+            testCase.verifyNotEmpty(stored.c_ptr());
 
-            % The record dies with the object, and the release reaches the library
-            released = bindings_tests.Stored.getClosedCount();
+            stored.fire(9);
+            stored.fire(4);
+            testCase.verifyEqual(collected, [0 1 9 4]);
+
             delete(stored);
-            testCase.verifyEqual(bindings_tests.Stored.getClosedCount(), released + 1);
+            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + 1);
 
-            % An error inside a stored callback is raised on the fire that ran it, since
-            % that is the call the user was making at the time.
-            failing = bindings_tests.Stored(@fail);
+            % An error inside a stored callback is raised on the fire that ran it, since that
+            % is the call the user was making at the time.
+            failing = bindings_tests.PlainStored(@fail, 0);
             testCase.verifyError(@() failing.fire(1), 'bindings_tests:CallbackFailed');
             delete(failing);
 
             % The pending error slot is cleared by the raise, so a later object still works
             collected = [];
-            stored = bindings_tests.Stored(@collect);
-            stored.fire(5);
-            testCase.verifyEqual(collected, 5);
+            stored = bindings_tests.PlainStored(@collect, 1);
+            testCase.verifyEqual(collected, 0);
             delete(stored);
 
             function collect(index)
@@ -605,6 +604,51 @@ classdef BindingsTest < matlab.unittest.TestCase
             function fail(~)
                 error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
             end
+        end
+
+        function testPlainStoredConstructorCallbackFailure(testCase)
+            % The error is raised at the call site, after the library has returned. The object
+            % it created is unreachable by then, so the dispatch case releases it before
+            % raising rather than leaking it.
+            released = bindings_tests.PlainStored.getClosedCount();
+            testCase.verifyError(@() bindings_tests.PlainStored(@fail, 1), 'bindings_tests:CallbackFailed');
+            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + 1);
+
+            % The pending error slot is cleared by the raise, so the next construction works
+            collected = [];
+            stored = bindings_tests.PlainStored(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+            delete(stored);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
+        end
+
+        function testCallbackRegistryExhaustion(testCase)
+            % One record per live owned handle out of a fixed table, so the seventeenth object
+            % of this type has nowhere to go. The slot is acquired before the library is
+            % called, so the raise leaves nothing behind to release.
+            maxCallbacks = 16;
+            released = bindings_tests.PlainStored.getClosedCount();
+
+            handles = cell(1, maxCallbacks);
+            for i = 1:maxCallbacks
+                handles{i} = bindings_tests.PlainStored(@(index) [], 0);
+            end
+
+            testCase.verifyError(@() bindings_tests.PlainStored(@(index) [], 0), ...
+                'bindings_tests:TooManyCallbacks');
+            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released);
+
+            for i = 1:maxCallbacks
+                delete(handles{i});
+            end
+            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + maxCallbacks);
         end
 
         function testIsolated(testCase)

@@ -24,8 +24,11 @@ extern "C" {
 
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
+typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
+typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
 typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
 typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
@@ -90,6 +93,7 @@ typedef struct bindings_tests_Counted_* bindings_tests_CountedPtr;
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
 typedef struct bindings_tests_Notified_* bindings_tests_NotifiedPtr;
+typedef struct bindings_tests_PlainStored_* bindings_tests_PlainStoredPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
@@ -154,6 +158,12 @@ DLL_PUBLIC void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
 DLL_PUBLIC bindings_tests_NotifiedPtr bindings_tests_Notified_create(bindings_tests_ErrorInfo* _error, bindings_tests_NotifyCallbackFunction func, void* userData);
 DLL_PUBLIC void bindings_tests_Notified_release(bindings_tests_NotifiedPtr obj);
 
+// ==== PlainStored ====
+DLL_PUBLIC bindings_tests_PlainStoredPtr bindings_tests_PlainStored_create(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, size_t times);
+DLL_PUBLIC void bindings_tests_PlainStored_fire(bindings_tests_PlainStoredPtr obj, int index);
+DLL_PUBLIC int bindings_tests_PlainStored_getClosedCount();
+DLL_PUBLIC void bindings_tests_PlainStored_release(bindings_tests_PlainStoredPtr obj);
+
 // ==== Shape ====
 DLL_PUBLIC const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj);
 DLL_PUBLIC void bindings_tests_Shape_setName(bindings_tests_ShapePtr obj, const char* name);
@@ -203,6 +213,11 @@ DLL_PUBLIC void bindings_tests_Callbacks_invokeChecked(bindings_tests_ErrorInfo*
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnWorkerThread(bindings_tests_IndexCallbackFunction func, void* userData, int index);
 DLL_PUBLIC void bindings_tests_Callbacks_notifyOnce(bindings_tests_NotifyCallbackFunction func, void* userData);
 DLL_PUBLIC double bindings_tests_Callbacks_applyScaled(bindings_tests_ScaleCallbackFunction func, void* userData, double value);
+DLL_PUBLIC void bindings_tests_Callbacks_transformOnce(bindings_tests_TransformCallbackFunction func, void* userData, const double* input, double* output);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainTimes(bindings_tests_PlainIndexCallbackFunction func, size_t times);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainChecked(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainOnWorkerThread(bindings_tests_PlainIndexCallbackFunction func, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_notifyPlainOnce(bindings_tests_PlainNotifyCallbackFunction func);
 
 // ==== Errors ====
 DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);
