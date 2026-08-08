@@ -65,8 +65,8 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
             throw error("@CLibStruct requires a name in either @CLibStruct or @CStruct: %s", getQualifiedName());
         }
         AnnotationUtil.checkIsCIdentifier(this.element, getName());
-        if (!annotation.prefix().isEmpty()) {
-            AnnotationUtil.checkIsCIdentifier(this.element, annotation.prefix());
+        if (!annotation.cPrefix().isEmpty()) {
+            AnnotationUtil.checkIsCIdentifier(this.element, annotation.cPrefix());
         }
 
         fields = parseFields();
@@ -337,7 +337,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
     }
 
     public static String getCPrefix(EnvProcessor.GeneratorOptions options, CLibStruct annotation) {
-        return AnnotationUtil.getCPrefix(options, annotation.prefix()) + "_";
+        return AnnotationUtil.getCPrefix(options, annotation.cPrefix()) + "_";
     }
 
     public String getCName() {

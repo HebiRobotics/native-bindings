@@ -31,8 +31,8 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
 
         var qualifiedName = String.valueOf(this.element.getQualifiedName());
         AnnotationUtil.checkIsCIdentifier(element, annotation.value());
-        if (!annotation.prefix().isEmpty()) {
-            AnnotationUtil.checkIsCIdentifier(element, annotation.prefix());
+        if (!annotation.cPrefix().isEmpty()) {
+            AnnotationUtil.checkIsCIdentifier(element, annotation.cPrefix());
         }
     }
 
@@ -53,15 +53,15 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
     }
 
     public static String getCName(EnvProcessor.GeneratorOptions options, CLibEnum annotation) {
-        return AnnotationUtil.getCPrefix(options, annotation.prefix()) + "_" + annotation.value();
+        return AnnotationUtil.getCPrefix(options, annotation.cPrefix()) + "_" + annotation.value();
     }
 
     public static String getCPrefix(EnvProcessor.GeneratorOptions options, CLibEnum annotation) {
-        return AnnotationUtil.getCPrefix(options, annotation.prefix()) + "_";
+        return AnnotationUtil.getCPrefix(options, annotation.cPrefix()) + "_";
     }
 
     public String getCPrefix() {
-        return AnnotationUtil.getCPrefix(getOptions(), annotation.prefix());
+        return AnnotationUtil.getCPrefix(getOptions(), annotation.cPrefix());
     }
 
     public String getName() {
