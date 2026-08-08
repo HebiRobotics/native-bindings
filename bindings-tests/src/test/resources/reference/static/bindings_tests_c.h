@@ -22,8 +22,9 @@
 extern "C" {
 #endif
 
-typedef void (*IndexCallbackFunction)(void* userData, int index);
-typedef void (*NotifyCallbackFunction)(void* userData);
+typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
+typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
 
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
@@ -84,8 +85,10 @@ typedef struct {
     int32_t enabled;
 } bindings_tests_StatusInfo;
 
+typedef struct bindings_tests_Counted_* bindings_tests_CountedPtr;
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
+typedef struct bindings_tests_Notified_* bindings_tests_NotifiedPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
@@ -123,6 +126,11 @@ _Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for b
 #endif
 
 
+// ==== Counted ====
+DLL_PUBLIC bindings_tests_CountedPtr bindings_tests_Counted_create(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int times);
+DLL_PUBLIC int bindings_tests_Counted_getClosedCount();
+DLL_PUBLIC void bindings_tests_Counted_release(bindings_tests_CountedPtr obj);
+
 // ==== Counter ====
 DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start);
 DLL_PUBLIC int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj);
@@ -139,6 +147,10 @@ DLL_PUBLIC custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_Er
 DLL_PUBLIC int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
 DLL_PUBLIC int custom_prefix_Naming_add_two_numbers(int first, int second);
 DLL_PUBLIC void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
+
+// ==== Notified ====
+DLL_PUBLIC bindings_tests_NotifiedPtr bindings_tests_Notified_create(bindings_tests_ErrorInfo* _error, bindings_tests_NotifyCallbackFunction func, void* userData);
+DLL_PUBLIC void bindings_tests_Notified_release(bindings_tests_NotifiedPtr obj);
 
 // ==== Shape ====
 DLL_PUBLIC const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj);
@@ -177,9 +189,12 @@ DLL_PUBLIC bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings
 DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
-DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
-DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
-DLL_PUBLIC void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction func, void* userData);
+DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times);
+DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(bindings_tests_IndexCallbackFunction func, void* userData, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_invokeChecked(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_invokeOnWorkerThread(bindings_tests_IndexCallbackFunction func, void* userData, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_notifyOnce(bindings_tests_NotifyCallbackFunction func, void* userData);
+DLL_PUBLIC double bindings_tests_Callbacks_applyScaled(bindings_tests_ScaleCallbackFunction func, void* userData, double value);
 
 // ==== Errors ====
 DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);

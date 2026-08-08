@@ -136,6 +136,28 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Callbacks.invokeChecked": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokeOnWorkerThread": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Callbacks.invokeOnce": {
     "inputs": [{
         "kind": "required",
@@ -194,6 +216,24 @@
         "name": "this",
         "type": "bindings_tests.Circle"
       }]
+  },
+  "bindings_tests.Counted": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "times",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Counted"]
+      }]
+  },
+  "bindings_tests.Counted.getClosedCount": {
+    "inputs": []
   },
   "bindings_tests.Counter": {
     "inputs": [{

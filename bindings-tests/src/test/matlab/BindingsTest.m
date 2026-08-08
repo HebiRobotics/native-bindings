@@ -449,9 +449,26 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes([], 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(42, 1), 'MATLAB:Callbacks:invokeTimes:invalidType');
 
-            % An asynchronous callback cannot run through mexCallMATLAB, so notifyOnce
-            % has no MATLAB face at all.
-            testCase.verifyFalse(ismember('notifyOnce', methods('bindings_tests.Callbacks')));
+            % A synchronous callback is legal in a constructor, so Counted runs the slot
+            % mechanics through the construction path and hands back a usable handle.
+            collected = [];
+            counted = bindings_tests.Counted(@collect, 3);
+            testCase.verifyEqual(collected, [0 1 2]);
+            testCase.verifyNotEmpty(counted.c_ptr());
+            delete(counted);
+
+            % An error inside a constructor's callback is raised at the call site, after
+            % the library has returned. The object it created is unreachable by then, so
+            % the dispatch case releases it before raising rather than leaking it.
+            released = bindings_tests.Counted.getClosedCount();
+            testCase.verifyError(@() bindings_tests.Counted(@fail, 1), 'bindings_tests:CallbackFailed');
+            testCase.verifyEqual(bindings_tests.Counted.getClosedCount(), released + 1);
+
+            % The slot stack recovers from it, so the next construction still works
+            collected = [];
+            counted = bindings_tests.Counted(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+            delete(counted);
 
             % The callback calls back into a method that takes a callback, which is what
             % the handle stack in the gateway exists for. Nesting level n collects
@@ -463,6 +480,20 @@ classdef BindingsTest < matlab.unittest.TestCase
             % An error raised inside the callback is trapped by the trampoline and
             % rethrown at the call site once the library call has returned.
             testCase.verifyError(@() bindings_tests.Callbacks.invokeOnce(@fail, 1), 'bindings_tests:CallbackFailed');
+
+            % A throwing method invokes the callback before it validates, so the call
+            % below records the index and then raises the library error.
+            collected = [];
+            bindings_tests.Callbacks.invokeChecked(@collect, 3);
+            testCase.verifyEqual(collected, 3);
+
+            collected = [];
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(@collect, -1), 'bindings_tests:IllegalArgumentException');
+            testCase.verifyEqual(collected, -1);
+
+            % Both fail in the same call. The callback error is the root cause of the
+            % library one, so the gateway has to raise it first.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(@fail, -1), 'bindings_tests:CallbackFailed');
 
             % The stack recovers from that error, so the next call still works
             collected = [];
@@ -485,6 +516,56 @@ classdef BindingsTest < matlab.unittest.TestCase
             function fail(~)
                 error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
             end
+        end
+
+        function testCallbackOnWorkerThread(testCase)
+            % Only the MATLAB thread may enter the Matrix API, so a trampoline that finds
+            % itself anywhere else skips the invocation and the call reports the count.
+            collected = [];
+
+            [message, identifier] = testCase.captureError(@() bindings_tests.Callbacks.invokeOnWorkerThread(@collect, 5));
+            testCase.verifyEqual(identifier, 'bindings_tests:NotSupported');
+            testCase.verifyTrue(contains(message, '1 callback invocation'));
+            testCase.verifyTrue(isempty(collected));
+
+            % The slot stack recovers from that raise, so the next call still works
+            bindings_tests.Callbacks.invokeTimes(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+        end
+
+        function testAsynchronousCallback(testCase)
+            % TODO: notifyOnce stays a NotSupported stub past the thread gate. Its slot
+            % is reused after the call returns, so a later invocation on the MATLAB
+            % thread passes the check and reaches the wrong handle. Retired by the
+            % callback objects in plans item 1b.
+            testCase.assumeFail('notifyOnce waits on the callback objects, plans item 1b');
+            called = false;
+            bindings_tests.Callbacks.notifyOnce(@() note());
+            testCase.verifyTrue(called);
+
+            function note()
+                called = true;
+            end
+        end
+
+        function testValueReturningCallback(testCase)
+            % TODO: applyScaled is a NotSupported stub until the trampoline marshals
+            % the feval result back, mexCallMATLABWithTrap with one output.
+            testCase.assumeFail('applyScaled waits on feval return marshaling, plans item 1');
+            testCase.verifyEqual(bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 42);
+        end
+
+        function testAsynchronousCallbackConstructor(testCase)
+            % TODO: Notified is a NotSupported stub until callback objects own the
+            % persistent handle, plans item 1b.
+            testCase.assumeFail('Notified waits on the owning callback objects, plans item 1b');
+            notified = bindings_tests.Notified(@() []);
+            testCase.verifyNotEmpty(notified.c_ptr());
+            delete(notified);
         end
 
         function testIsolated(testCase)

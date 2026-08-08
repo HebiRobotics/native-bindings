@@ -1,8 +1,10 @@
 #include "mex.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
   #include <windows.h>

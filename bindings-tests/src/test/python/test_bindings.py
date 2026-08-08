@@ -547,6 +547,26 @@ class CallbacksTest(unittest.TestCase):
         self.assertEqual(1, state.count)
         self.assertEqual(7, state.indices[0])
 
+    def test_invoke_checked(self):
+        state = CallbacksTest._State()
+        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
+        callback = self._make_callback()
+
+        bindings_tests.Callbacks.invoke_checked(callback, user_data, 3)
+
+        self.assertEqual(1, state.count)
+        self.assertEqual(3, state.indices[0])
+
+        # The callback fires before the validation, so a failing call still records it
+        state = CallbacksTest._State()
+        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
+        with self.assertRaises(bindings_tests.Error) as caught:
+            bindings_tests.Callbacks.invoke_checked(callback, user_data, -1)
+        self.assertIn("must not be negative", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+        self.assertEqual(1, state.count)
+        self.assertEqual(-1, state.indices[0])
+
     def test_null_callback_is_a_noop(self):
         state = CallbacksTest._State()
         user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
@@ -576,6 +596,24 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual([7], seen)
 
+    def test_callback_on_worker_thread(self):
+        seen = []
+
+        # ctypes attaches the foreign thread and takes the GIL, so the callback runs
+        # there like any other one, and the join makes the result visible here
+        bindings_tests.Callbacks.invoke_on_worker_thread(lambda user_data, index: seen.append(index), None, 4)
+
+        self.assertEqual([4], seen)
+
+    def test_value_returning_callback(self):
+        # The wrapper's restype carries the value back, which is the solver-objective shape
+        self.assertEqual(ctypes.c_double, bindings_tests.ScaleCallbackFunction._restype_)
+
+        result = bindings_tests.Callbacks.apply_scaled(lambda user_data, value: value * 2.0, None, 21.0)
+
+        self.assertIsInstance(result, float)
+        self.assertEqual(42.0, result)
+
     def test_notify_once(self):
         seen = []
 
@@ -583,6 +621,29 @@ class CallbacksTest(unittest.TestCase):
         bindings_tests.Callbacks.notify_once(lambda user_data: seen.append(1), None)
 
         self.assertEqual([1], seen)
+
+    def test_constructor_takes_a_callback(self):
+        seen = []
+
+        # The callback fires while the handle is being created, before __init__ returns
+        notified = bindings_tests.Notified(lambda user_data: seen.append(1), None)
+        self.assertEqual([1], seen)
+
+        del notified
+        gc.collect()
+
+    def test_synchronous_constructor_callback(self):
+        seen = []
+        before = len(bindings_tests._callback_wrappers)
+
+        # The indices arrive during construction, and the synchronous contract lets the
+        # trampoline live in a local, so a fresh lambda must not grow the cache
+        counted = bindings_tests.Counted(lambda user_data, index: seen.append(index), None, 3)
+        self.assertEqual([0, 1, 2], seen)
+        self.assertEqual(before, len(bindings_tests._callback_wrappers))
+
+        del counted
+        gc.collect()
 
     def test_asynchronous_wrapper_is_cached_per_callable(self):
         def handler(user_data):

@@ -159,6 +159,10 @@ class _StatusInfo(Structure):
     # Layout of the by-value struct in the C ABI, mirroring StatusInfo
     _fields_ = [("voltage", c_double), ("state", c_int32), ("enabled", c_int32)]
 
+class struct_Counted_(Structure):
+    pass
+CountedPtr = POINTER(struct_Counted_)
+
 class struct_Counter_(Structure):
     pass
 CounterPtr = POINTER(struct_Counter_)
@@ -166,6 +170,10 @@ CounterPtr = POINTER(struct_Counter_)
 class struct_Naming_(Structure):
     pass
 NamingPtr = POINTER(struct_Naming_)
+
+class struct_Notified_(Structure):
+    pass
+NotifiedPtr = POINTER(struct_Notified_)
 
 class struct_Shape_(Structure):
     pass
@@ -221,6 +229,15 @@ StructsPtr = POINTER(struct_Structs_)
 
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
+ScaleCallbackFunction = CFUNCTYPE(c_double, c_void_p, c_double)
+
+# ==== Counted ====
+libbindings_tests.bindings_tests_Counted_create.argtypes = [POINTER(_ErrorInfo), IndexCallbackFunction, c_void_p, c_int]
+libbindings_tests.bindings_tests_Counted_create.restype = CountedPtr
+libbindings_tests.bindings_tests_Counted_getClosedCount.argtypes = []
+libbindings_tests.bindings_tests_Counted_getClosedCount.restype = c_int
+libbindings_tests.bindings_tests_Counted_release.argtypes = [CountedPtr]
+libbindings_tests.bindings_tests_Counted_release.restype = None
 
 # ==== Counter ====
 libbindings_tests.bindings_tests_Counter_create.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -251,6 +268,12 @@ libbindings_tests.custom_prefix_Naming_add_two_numbers.argtypes = [c_int, c_int]
 libbindings_tests.custom_prefix_Naming_add_two_numbers.restype = c_int
 libbindings_tests.custom_prefix_Naming_release.argtypes = [NamingPtr]
 libbindings_tests.custom_prefix_Naming_release.restype = None
+
+# ==== Notified ====
+libbindings_tests.bindings_tests_Notified_create.argtypes = [POINTER(_ErrorInfo), NotifyCallbackFunction, c_void_p]
+libbindings_tests.bindings_tests_Notified_create.restype = NotifiedPtr
+libbindings_tests.bindings_tests_Notified_release.argtypes = [NotifiedPtr]
+libbindings_tests.bindings_tests_Notified_release.restype = None
 
 # ==== Shape ====
 libbindings_tests.bindings_tests_Shape_getName.argtypes = [ShapePtr]
@@ -321,8 +344,14 @@ libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallback
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackFunction, c_void_p, c_int]
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokeChecked.argtypes = [POINTER(_ErrorInfo), IndexCallbackFunction, c_void_p, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokeChecked.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokeOnWorkerThread.argtypes = [IndexCallbackFunction, c_void_p, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokeOnWorkerThread.restype = None
 libbindings_tests.bindings_tests_Callbacks_notifyOnce.argtypes = [NotifyCallbackFunction, c_void_p]
 libbindings_tests.bindings_tests_Callbacks_notifyOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_applyScaled.argtypes = [ScaleCallbackFunction, c_void_p, c_double]
+libbindings_tests.bindings_tests_Callbacks_applyScaled.restype = c_double
 
 # ==== Errors ====
 libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -478,6 +507,50 @@ class Marker(IntEnum):
 
 
 # ==== Class Wrappers ====
+class Counted:
+    """A handle whose construction invokes a callback once per index."""
+
+    __slots__ = ('ptr',)
+
+    def __init__(self, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:
+        """Creates the handle, invoking the callback with indices 0 to times-1 before returning it.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
+            user_data:
+            times:
+
+        Returns:
+            A handle whose construction invokes a callback once per index.
+
+        Raises:
+            Exception: on internal errors
+        """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counted_create(byref(error_), func, user_data, times))
+        if not ptr_:
+            raise RuntimeError('Failed to create Counted in Counted::__init__')
+        self.ptr = ptr_
+
+    def __del__(self):
+        if self.ptr is not None:
+            libbindings_tests.bindings_tests_Counted_release(self.ptr)
+        self.ptr = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    @classmethod
+    def get_closed_count(cls) -> int:
+        """Total number of handles of this type that have been released so far in this
+        isolate. Increments exactly once per released handle.
+        """
+        return libbindings_tests.bindings_tests_Counted_getClosedCount()
+
+
 class Counter:
     """A mutable counter, used to check handle creation and release."""
 
@@ -586,6 +659,41 @@ class Naming:
             second:
         """
         return libbindings_tests.custom_prefix_Naming_add_two_numbers(first, second)
+
+
+class Notified:
+    """A handle whose construction invokes a callback."""
+
+    __slots__ = ('ptr',)
+
+    def __init__(self, func: Callable[[Any], None], user_data: Any | bytes | None) -> None:
+        """Creates the handle and invokes the callback once before returning it.
+
+        Args:
+            func:
+            user_data:
+
+        Returns:
+            A handle whose construction invokes a callback.
+
+        Raises:
+            Exception: on internal errors
+        """
+        if func is not None and not isinstance(func, NotifyCallbackFunction):
+            func = _wrap_callback(NotifyCallbackFunction, func)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Notified_create(byref(error_), func, user_data))
+        if not ptr_:
+            raise RuntimeError('Failed to create Notified in Notified::__init__')
+        self.ptr = ptr_
+
+    def __del__(self):
+        if self.ptr is not None:
+            libbindings_tests.bindings_tests_Notified_release(self.ptr)
+        self.ptr = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
 
 
 class Shape:
@@ -919,7 +1027,8 @@ class Callbacks:
         nothing.
 
         Args:
-            func:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
             user_data:
             times:
         """
@@ -932,13 +1041,51 @@ class Callbacks:
         """Invokes the callback once with the given index. Returns after it completes.
 
         Args:
-            func:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
             user_data:
             index:
         """
         if func is not None and not isinstance(func, IndexCallbackFunction):
             func = IndexCallbackFunction(func)
         libbindings_tests.bindings_tests_Callbacks_invokeOnce(func, user_data, index)
+
+    @classmethod
+    def invoke_checked(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, index: int) -> None:
+        """Invokes the callback once with the given index, then throws if the index is
+        negative. The invocation happens before the validation on purpose, so that a
+        caller can observe both failures in one call.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
+            user_data:
+            index:
+
+        Raises:
+            Exception: index is negative
+        """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
+        error_ = _ErrorInfo()
+        _checked(error_, libbindings_tests.bindings_tests_Callbacks_invokeChecked(byref(error_), func, user_data, index))
+
+    @classmethod
+    def invoke_on_worker_thread(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, index: int) -> None:
+        """Invokes the callback once with the given index on a worker thread, and joins that
+        thread before returning. The invocation therefore completes within the call but not
+        on the calling thread, which is the shape a solver has when it fans an objective
+        out to workers. The callback must be thread safe.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
+            user_data:
+            index:
+        """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_invokeOnWorkerThread(func, user_data, index)
 
     @classmethod
     def notify_once(cls, func: Callable[[Any], None], user_data: Any | bytes | None) -> None:
@@ -951,6 +1098,21 @@ class Callbacks:
         if func is not None and not isinstance(func, NotifyCallbackFunction):
             func = _wrap_callback(NotifyCallbackFunction, func)
         libbindings_tests.bindings_tests_Callbacks_notifyOnce(func, user_data)
+
+    @classmethod
+    def apply_scaled(cls, func: Callable[[Any, float], float], user_data: Any | bytes | None, value: float) -> float:
+        """Passes the value to the callback and returns what the callback produced. A null
+        function pointer leaves the value unchanged.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                ScaleCallbackFunction per call. Build the prototype once for a hot loop.
+            user_data:
+            value:
+        """
+        if func is not None and not isinstance(func, ScaleCallbackFunction):
+            func = ScaleCallbackFunction(func)
+        return libbindings_tests.bindings_tests_Callbacks_applyScaled(func, user_data, value)
 
 
 class Errors:

@@ -793,6 +793,34 @@ public class ProcessorValidationTest {
                 """))).hadErrorContaining("is not supported in a callback signature: Callback.invoke");
     }
 
+    /**
+     * The annotated API declares plain Java enums, and native-image rejects those in an
+     * {@code @InvokeCFunctionPointer} signature ("parameter types are restricted to primitive
+     * types, word types and enumerations (@CEnum)"). Only stage 1 sees that, so the processor
+     * has to say it first. See plans item 1 for what admitting them would take.
+     */
+    @Test
+    public void rejectsCallbackWithJavaEnumParameter() {
+        assertThat(compile(source("EnumCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("EnumCallback")
+                public class EnumCallback {
+                    @CLibEnum("Color")
+                    public enum Color { Red, Green }
+
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(Color value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("@InvokeCFunctionPointer parameter type 'validation.EnumCallback.Color'"
+                                          + " is a Java enum, which a callback signature cannot use because GraalVM"
+                                          + " only accepts @CEnum types there: Callback.invoke");
+    }
+
     @Test
     public void rejectsCallbackAnnotationOnNonFunctionPointer() {
         assertThat(compile(source("NotAPointer", """

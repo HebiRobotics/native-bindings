@@ -513,6 +513,11 @@ void onNotify(void* userData) {
   ++static_cast<CallbackState*>(userData)->count;
 }
 
+double onScale(void* userData, double value) {
+  ++static_cast<CallbackState*>(userData)->count;
+  return value * 2.0;
+}
+
 void onIndex(void* userData, int index) {
   CallbackState* state = static_cast<CallbackState*>(userData);
   if (state->count < kMaxCallbacks) {
@@ -563,6 +568,18 @@ static void testCallbacks() {
   bt::callbacks::invokeOnce(counter, 1);
   CHECK(calls == 4);
 
+  CallbackState checked = {};
+  bt::callbacks::invokeChecked(&onIndex, &checked, 3);
+  CHECK(checked.count == 1);
+  CHECK(checked.indices[0] == 3);
+
+  // The callback fires before the validation, so a throwing call still records it.
+  CallbackState failed = {};
+  CHECK(throwsWithMessage([&failed] { bt::callbacks::invokeChecked(&onIndex, &failed, -1); },
+                          "must not be negative"));
+  CHECK(failed.count == 1);
+  CHECK(failed.indices[0] == -1);
+
   // The asynchronous default changes nothing on the C++ side, the same overloads apply
   CallbackState notified = {};
   bt::callbacks::notifyOnce(&onNotify, &notified);
@@ -571,6 +588,49 @@ static void testCallbacks() {
   bool called = false;
   bt::callbacks::notifyOnce([&called] { called = true; });
   CHECK(called);
+
+  // A value-returning callback travels back out through the trampoline, in all three forms.
+  CallbackState scaled = {};
+  CHECK(bt::callbacks::applyScaled(&onScale, &scaled, 21.0) == 42.0);
+  CHECK(scaled.count == 1);
+  CHECK(bt::callbacks::applyScaled(nullptr, &scaled, 21.0) == 21.0);
+  CHECK(scaled.count == 1);
+
+  CHECK(bt::callbacks::applyScaled([](double value) { return value * 3.0; }, 14.0) == 42.0);
+
+  const std::function<double(double)> halve = [](double value) { return value / 2.0; };
+  CHECK(bt::callbacks::applyScaled(halve, 84.0) == 42.0);
+
+  // Fires on a worker thread the method joins before returning. The callable has to be
+  // thread safe in this shape, which the ergonomic overloads cannot enforce for the user.
+  CallbackState worker = {};
+  bt::callbacks::invokeOnWorkerThread(&onIndex, &worker, 4);
+  CHECK(worker.count == 1);
+  CHECK(worker.indices[0] == 4);
+
+  int workerIndex = -1;
+  bt::callbacks::invokeOnWorkerThread([&workerIndex](int index) { workerIndex = index; }, 6);
+  CHECK(workerIndex == 6);
+
+  // A constructor takes the raw form only. The ergonomic overloads keep the closure on
+  // the caller's stack, which a handle that stores its callback would outlive.
+  CallbackState constructed = {};
+  {
+    bt::Notified notified(&onNotify, &constructed);
+    CHECK(constructed.count == 1);
+  }
+
+  // A synchronous callback constructor takes the same raw form, for the same reason.
+  // The owning form that could carry a closure belongs to the callback objects in
+  // plans item 1b.
+  CallbackState counted = {};
+  {
+    bt::Counted handle(&onIndex, &counted, 3);
+    CHECK(counted.count == 3);
+    for (int i = 0; i < 3; ++i) {
+      CHECK(counted.indices[i] == i);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

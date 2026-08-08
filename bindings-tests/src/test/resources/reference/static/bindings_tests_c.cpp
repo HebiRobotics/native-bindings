@@ -63,6 +63,20 @@ extern "C" {
 #endif
 
 
+// ==== Counted ====
+bindings_tests_CountedPtr __bindings_tests_Counted_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int times);
+bindings_tests_CountedPtr bindings_tests_Counted_create(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int times) {
+    return __bindings_tests_Counted_create(isolate::global(), _error, func, userData, times);
+}
+int __bindings_tests_Counted_getClosedCount(bindings_tests_IsolateThread* isolate);
+int bindings_tests_Counted_getClosedCount() {
+    return __bindings_tests_Counted_getClosedCount(isolate::global());
+}
+void __bindings_tests_Counted_release(bindings_tests_IsolateThread* isolate, bindings_tests_CountedPtr obj);
+void bindings_tests_Counted_release(bindings_tests_CountedPtr obj) {
+    __bindings_tests_Counted_release(isolate::global(), obj);
+}
+
 // ==== Counter ====
 bindings_tests_CounterPtr __bindings_tests_Counter_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, int start);
 bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start) {
@@ -117,6 +131,16 @@ int custom_prefix_Naming_add_two_numbers(int first, int second) {
 void __custom_prefix_Naming_release(bindings_tests_IsolateThread* isolate, custom_prefix_NamingPtr obj);
 void custom_prefix_Naming_release(custom_prefix_NamingPtr obj) {
     __custom_prefix_Naming_release(isolate::global(), obj);
+}
+
+// ==== Notified ====
+bindings_tests_NotifiedPtr __bindings_tests_Notified_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_NotifyCallbackFunction func, void* userData);
+bindings_tests_NotifiedPtr bindings_tests_Notified_create(bindings_tests_ErrorInfo* _error, bindings_tests_NotifyCallbackFunction func, void* userData) {
+    return __bindings_tests_Notified_create(isolate::global(), _error, func, userData);
+}
+void __bindings_tests_Notified_release(bindings_tests_IsolateThread* isolate, bindings_tests_NotifiedPtr obj);
+void bindings_tests_Notified_release(bindings_tests_NotifiedPtr obj) {
+    __bindings_tests_Notified_release(isolate::global(), obj);
 }
 
 // ==== Shape ====
@@ -248,17 +272,29 @@ bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count) {
 }
 
 // ==== Callbacks ====
-void __bindings_tests_Callbacks_invokeTimes(bindings_tests_IsolateThread* isolate, IndexCallbackFunction func, void* userData, long long times);
-void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times) {
+void __bindings_tests_Callbacks_invokeTimes(bindings_tests_IsolateThread* isolate, bindings_tests_IndexCallbackFunction func, void* userData, long long times);
+void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times) {
     __bindings_tests_Callbacks_invokeTimes(isolate::global(), func, userData, static_cast<long long>(times));
 }
-void __bindings_tests_Callbacks_invokeOnce(bindings_tests_IsolateThread* isolate, IndexCallbackFunction func, void* userData, int index);
-void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index) {
+void __bindings_tests_Callbacks_invokeOnce(bindings_tests_IsolateThread* isolate, bindings_tests_IndexCallbackFunction func, void* userData, int index);
+void bindings_tests_Callbacks_invokeOnce(bindings_tests_IndexCallbackFunction func, void* userData, int index) {
     __bindings_tests_Callbacks_invokeOnce(isolate::global(), func, userData, index);
 }
-void __bindings_tests_Callbacks_notifyOnce(bindings_tests_IsolateThread* isolate, NotifyCallbackFunction func, void* userData);
-void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction func, void* userData) {
+void __bindings_tests_Callbacks_invokeChecked(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int index);
+void bindings_tests_Callbacks_invokeChecked(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int index) {
+    __bindings_tests_Callbacks_invokeChecked(isolate::global(), _error, func, userData, index);
+}
+void __bindings_tests_Callbacks_invokeOnWorkerThread(bindings_tests_IsolateThread* isolate, bindings_tests_IndexCallbackFunction func, void* userData, int index);
+void bindings_tests_Callbacks_invokeOnWorkerThread(bindings_tests_IndexCallbackFunction func, void* userData, int index) {
+    __bindings_tests_Callbacks_invokeOnWorkerThread(isolate::global(), func, userData, index);
+}
+void __bindings_tests_Callbacks_notifyOnce(bindings_tests_IsolateThread* isolate, bindings_tests_NotifyCallbackFunction func, void* userData);
+void bindings_tests_Callbacks_notifyOnce(bindings_tests_NotifyCallbackFunction func, void* userData) {
     __bindings_tests_Callbacks_notifyOnce(isolate::global(), func, userData);
+}
+double __bindings_tests_Callbacks_applyScaled(bindings_tests_IsolateThread* isolate, bindings_tests_ScaleCallbackFunction func, void* userData, double value);
+double bindings_tests_Callbacks_applyScaled(bindings_tests_ScaleCallbackFunction func, void* userData, double value) {
+    return __bindings_tests_Callbacks_applyScaled(isolate::global(), func, userData, value);
 }
 
 // ==== Errors ====

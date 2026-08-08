@@ -44,17 +44,22 @@ struct StatusInfo {
 };
 
 // ==== Forward Declarations ====
+class Counted;
 class Counter;
 class Naming;
+class Notified;
 class Shape;
 class Circle;
 class Square;
 using IndexCallbackFunction = void (*)(void* userData, int index);
 using NotifyCallbackFunction = void (*)(void* userData);
+using ScaleCallbackFunction = double (*)(void* userData, double value);
 
 namespace internal {
+using CountedPtr = struct Counted_*;
 using CounterPtr = struct Counter_*;
 using NamingPtr = struct Naming_*;
+using NotifiedPtr = struct Notified_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
@@ -92,6 +97,12 @@ template <typename F>
 void invokeNotifyCallbackFunction(void* userData) {
   (*static_cast<F*>(userData))();
 }
+// Calls the closure that arrived through ScaleCallbackFunction's userData channel. It lives on
+// the caller's stack and stays valid because the callback runs before the call returns.
+template <typename F>
+double invokeScaleCallbackFunction(void* userData, double value) {
+  return (*static_cast<F*>(userData))(value);
+}
 struct ErrorInfo {
   const char* message;
   const char* id;
@@ -124,6 +135,38 @@ inline void checkNotNull(const void* ptr, const char* message) {
 }
 
 // ==== Class Wrappers ====
+
+/**
+ * @brief A handle whose construction invokes a callback once per index.
+ */
+class Counted {
+public:
+
+  /**
+   * @brief Creates the handle, invoking the callback with indices 0 to times-1 before returning it.
+   *
+   * @param func 
+   * @param userData 
+   * @param times 
+   * @return A handle whose construction invokes a callback once per index.
+   * @throw on internal errors
+   */
+  Counted(IndexCallbackFunction func, void* userData, int times);
+
+  /**
+   * @details 
+   * Total number of handles of this type that have been released so far in this
+   * isolate. Increments exactly once per released handle.
+   */
+  static int getClosedCount() noexcept;
+  Counted(Counted&& from) noexcept;
+  Counted& operator=(Counted&& from) noexcept;
+  ~Counted() noexcept;
+private:
+  void cleanup() noexcept;
+  internal::CountedPtr ptr_{};
+};
+
 
 /**
  * @brief A mutable counter, used to check handle creation and release.
@@ -203,6 +246,30 @@ public:
 private:
   void cleanup() noexcept;
   internal::NamingPtr ptr_{};
+};
+
+
+/**
+ * @brief A handle whose construction invokes a callback.
+ */
+class Notified {
+public:
+
+  /**
+   * @brief Creates the handle and invokes the callback once before returning it.
+   *
+   * @param func 
+   * @param userData 
+   * @return A handle whose construction invokes a callback.
+   * @throw on internal errors
+   */
+  Notified(NotifyCallbackFunction func, void* userData);
+  Notified(Notified&& from) noexcept;
+  Notified& operator=(Notified&& from) noexcept;
+  ~Notified() noexcept;
+private:
+  void cleanup() noexcept;
+  internal::NotifiedPtr ptr_{};
 };
 
 
@@ -416,6 +483,8 @@ namespace callbacks {
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
 // The callable holds the state, so these two need no userData argument. The closure
 // stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
 template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
 void invokeTimes(F&& func, size_t times) noexcept {
   invokeTimes(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), times);
@@ -432,11 +501,57 @@ void invokeTimes(const std::function<void(int)>& func, size_t times) noexcept;
 void invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept;
 // The callable holds the state, so these two need no userData argument. The closure
 // stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
 template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
 void invokeOnce(F&& func, int index) noexcept {
   invokeOnce(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
 }
 void invokeOnce(const std::function<void(int)>& func, int index) noexcept;
+
+/**
+ * @details 
+ * Invokes the callback once with the given index, then throws if the index is
+ * negative. The invocation happens before the validation on purpose, so that a
+ * caller can observe both failures in one call.
+ *
+ * @param func 
+ * @param userData 
+ * @param index 
+ * @throw index is negative
+ */
+void invokeChecked(IndexCallbackFunction func, void* userData, int index);
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
+void invokeChecked(F&& func, int index) {
+  invokeChecked(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
+}
+void invokeChecked(const std::function<void(int)>& func, int index);
+
+/**
+ * @details 
+ * Invokes the callback once with the given index on a worker thread, and joins that
+ * thread before returning. The invocation therefore completes within the call but not
+ * on the calling thread, which is the shape a solver has when it fans an objective
+ * out to workers. The callback must be thread safe.
+ *
+ * @param func 
+ * @param userData 
+ * @param index 
+ */
+void invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept;
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
+void invokeOnWorkerThread(F&& func, int index) noexcept {
+  invokeOnWorkerThread(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
+}
+void invokeOnWorkerThread(const std::function<void(int)>& func, int index) noexcept;
 
 /**
  * @brief Invokes the callback once. Returns after it completes.
@@ -447,11 +562,33 @@ void invokeOnce(const std::function<void(int)>& func, int index) noexcept;
 void notifyOnce(NotifyCallbackFunction func, void* userData) noexcept;
 // The callable holds the state, so these two need no userData argument. The closure
 // stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
 template <typename F, typename = typename std::enable_if<!std::is_convertible<F, NotifyCallbackFunction>::value>::type>
 void notifyOnce(F&& func) noexcept {
   notifyOnce(&internal::invokeNotifyCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func));
 }
 void notifyOnce(const std::function<void()>& func) noexcept;
+
+/**
+ * @details 
+ * Passes the value to the callback and returns what the callback produced. A null
+ * function pointer leaves the value unchanged.
+ *
+ * @param func 
+ * @param userData 
+ * @param value 
+ */
+double applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept;
+// The callable holds the state, so these two need no userData argument. The closure
+// stays on the caller's stack for the duration of the call and neither one allocates.
+// It must not throw: the call crosses a C ABI that no exception may unwind, so a
+// throw terminates.
+template <typename F, typename = typename std::enable_if<!std::is_convertible<F, ScaleCallbackFunction>::value>::type>
+double applyScaled(F&& func, double value) noexcept {
+  return applyScaled(&internal::invokeScaleCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), value);
+}
+double applyScaled(const std::function<double(double)>& func, double value) noexcept;
 } // namespace callbacks
 
 
@@ -860,6 +997,9 @@ StatusInfo getCheckedStatus(int index);
 
 // ==== C Library Functions ====
 extern "C" {
+  internal::CountedPtr bindings_tests_Counted_create(internal::ErrorInfo*, IndexCallbackFunction, void*, int);
+  int bindings_tests_Counted_getClosedCount();
+  void bindings_tests_Counted_release(internal::CountedPtr);
   internal::CounterPtr bindings_tests_Counter_create(internal::ErrorInfo*, int);
   int bindings_tests_Counter_getValue(internal::CounterPtr);
   void bindings_tests_Counter_setValue(internal::CounterPtr, int);
@@ -873,6 +1013,8 @@ extern "C" {
   int custom_prefix_Naming_get_start_value(internal::NamingPtr);
   int custom_prefix_Naming_add_two_numbers(int, int);
   void custom_prefix_Naming_release(internal::NamingPtr);
+  internal::NotifiedPtr bindings_tests_Notified_create(internal::ErrorInfo*, NotifyCallbackFunction, void*);
+  void bindings_tests_Notified_release(internal::NotifiedPtr);
   const char* bindings_tests_Shape_getName(internal::ShapePtr);
   void bindings_tests_Shape_setName(internal::ShapePtr, const char*);
   double bindings_tests_Shape_area(internal::ShapePtr);
@@ -903,7 +1045,10 @@ extern "C" {
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
+  void bindings_tests_Callbacks_invokeChecked(internal::ErrorInfo*, IndexCallbackFunction, void*, int);
+  void bindings_tests_Callbacks_invokeOnWorkerThread(IndexCallbackFunction, void*, int);
   void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction, void*);
+  double bindings_tests_Callbacks_applyScaled(ScaleCallbackFunction, void*, double);
   void bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
   int bindings_tests_Errors_divideInt32(internal::ErrorInfo*, int, int);
   double bindings_tests_Errors_failingFloat64(internal::ErrorInfo*, int);
@@ -962,6 +1107,34 @@ extern "C" {
 }
 
 // ==== C++ Implementations ====
+// Counted
+inline Counted::Counted(IndexCallbackFunction func, void* userData, int times) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counted_create(&error_, func, userData, times);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Counted");
+}
+inline int Counted::getClosedCount() noexcept {
+  return bindings_tests_Counted_getClosedCount();
+}
+inline void Counted::cleanup() noexcept {
+  if (ptr_ != nullptr) {
+    bindings_tests_Counted_release(ptr_);
+  }
+}
+inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_) {
+  from.ptr_ = nullptr;
+};
+inline Counted& Counted::operator=(Counted&& from) noexcept {
+  cleanup();
+  ptr_ = from.ptr_;
+  from.ptr_ = nullptr;
+  return *this;
+};
+inline Counted::~Counted() noexcept {
+  cleanup();
+}
+
 // Counter
 inline Counter::Counter(int start) {
   internal::ErrorInfo error_ = {};
@@ -1036,6 +1209,31 @@ inline Naming& Naming::operator=(Naming&& from) noexcept {
   return *this;
 };
 inline Naming::~Naming() noexcept {
+  cleanup();
+}
+
+// Notified
+inline Notified::Notified(NotifyCallbackFunction func, void* userData) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Notified_create(&error_, func, userData);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Notified");
+}
+inline void Notified::cleanup() noexcept {
+  if (ptr_ != nullptr) {
+    bindings_tests_Notified_release(ptr_);
+  }
+}
+inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_) {
+  from.ptr_ = nullptr;
+};
+inline Notified& Notified::operator=(Notified&& from) noexcept {
+  cleanup();
+  ptr_ = from.ptr_;
+  from.ptr_ = nullptr;
+  return *this;
+};
+inline Notified::~Notified() noexcept {
   cleanup();
 }
 
@@ -1227,11 +1425,31 @@ inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, in
 inline void callbacks::invokeOnce(const std::function<void(int)>& func, int index) noexcept {
   invokeOnce(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
 }
+inline void callbacks::invokeChecked(IndexCallbackFunction func, void* userData, int index) {
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Callbacks_invokeChecked(&error_, func, userData, index);
+  checkError(error_);
+}
+inline void callbacks::invokeChecked(const std::function<void(int)>& func, int index) {
+  invokeChecked(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
+}
+inline void callbacks::invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept {
+  bindings_tests_Callbacks_invokeOnWorkerThread(func, userData, index);
+}
+inline void callbacks::invokeOnWorkerThread(const std::function<void(int)>& func, int index) noexcept {
+  invokeOnWorkerThread(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
+}
 inline void callbacks::notifyOnce(NotifyCallbackFunction func, void* userData) noexcept {
   bindings_tests_Callbacks_notifyOnce(func, userData);
 }
 inline void callbacks::notifyOnce(const std::function<void()>& func) noexcept {
   notifyOnce(&internal::invokeNotifyCallbackFunction<const std::function<void()>>, internal::toUserData(func));
+}
+inline double callbacks::applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept {
+  return bindings_tests_Callbacks_applyScaled(func, userData, value);
+}
+inline double callbacks::applyScaled(const std::function<double(double)>& func, double value) noexcept {
+  return applyScaled(&internal::invokeScaleCallbackFunction<const std::function<double(double)>>, internal::toUserData(func), value);
 }
 
 // Errors

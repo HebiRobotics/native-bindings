@@ -670,8 +670,16 @@ static void on_notify(void* userData) {
     ((CallbackState*) userData)->count++;
 }
 
+static double on_scale(void* userData, double value) {
+    ((CallbackState*) userData)->count++;
+    return value * 2.0;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
+    bindings_tests_ErrorInfo error;
+    bindings_tests_NotifiedPtr notified;
+    bindings_tests_CountedPtr counted;
     int i;
 
     /* Fires synchronously, five times, with indices 0..4, before returning. */
@@ -694,8 +702,56 @@ static void test_callbacks(void) {
     assert(state.count == 0);
 
     memset(&state, 0, sizeof(state));
+    bindings_tests_Callbacks_invokeChecked(&error, &on_index, &state, 3);
+    assert(error.code == 0);
+    assert(state.count == 1);
+    assert(state.indices[0] == 3);
+
+    /* The callback fires before the validation, so a failing call still records it. */
+    memset(&state, 0, sizeof(state));
+    bindings_tests_Callbacks_invokeChecked(&error, &on_index, &state, -1);
+    assert(error.code != 0);
+    assert(error.message != NULL && strstr(error.message, "must not be negative") != NULL);
+    assert(state.count == 1);
+    assert(state.indices[0] == -1);
+
+    memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_notifyOnce(&on_notify, &state);
     assert(state.count == 1);
+
+    /* The value the callback produces is what the method hands back. */
+    memset(&state, 0, sizeof(state));
+    assert(bindings_tests_Callbacks_applyScaled(&on_scale, &state, 21.0) == 42.0);
+    assert(state.count == 1);
+    assert(bindings_tests_Callbacks_applyScaled(NULL, &state, 21.0) == 21.0);
+    assert(state.count == 1);
+
+    /* Fires on a worker thread the method joins before returning, so the recorded index
+       is visible here without any synchronization of our own. */
+    memset(&state, 0, sizeof(state));
+    bindings_tests_Callbacks_invokeOnWorkerThread(&on_index, &state, 4);
+    assert(state.count == 1);
+    assert(state.indices[0] == 4);
+
+    /* A constructor takes a callback like any other method, and this one fires during
+       construction. */
+    memset(&state, 0, sizeof(state));
+    notified = bindings_tests_Notified_create(&error, &on_notify, &state);
+    assert(error.code == 0);
+    assert(notified != NULL);
+    assert(state.count == 1);
+    bindings_tests_Notified_release(notified);
+
+    /* A synchronous callback in a constructor fires once per index, in order. */
+    memset(&state, 0, sizeof(state));
+    counted = bindings_tests_Counted_create(&error, &on_index, &state, 3);
+    assert(error.code == 0);
+    assert(counted != NULL);
+    assert(state.count == 3);
+    for (i = 0; i < 3; i++) {
+        assert(state.indices[i] == i);
+    }
+    bindings_tests_Counted_release(counted);
 
     printf("callbacks ok\n");
 }
