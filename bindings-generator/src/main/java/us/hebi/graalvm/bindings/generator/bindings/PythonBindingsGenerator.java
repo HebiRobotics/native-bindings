@@ -123,7 +123,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                                 except ImportError:
                                     raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
                             return _numpy
-                        %%CALLBACK_SUPPORT%%
+
                         # API definitions
                         """)
                 .set("LIB_NAME", lib.getName())
@@ -131,7 +131,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .set("LIB_BUILD_NUMBER", lib.getBuild())
                 .set("LIB_FIELD", libField)
                 .set("DOWNLOAD_BLOCK", createDownloadBlock())
-                .set("CALLBACK_SUPPORT", createCallbackSupportBlock())
                 .set("STRUCT_IMPORT", hasDataclassStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
                 .render());
     }
@@ -185,45 +184,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         """)
                 .set("DOWNLOAD_URL", lib.getDownloadUrl())
                 .render();
-    }
-
-    /**
-     * The cache is what makes an asynchronous callable usable as a callback at all. ctypes
-     * keeps no reference to the trampoline it builds, so an inline prototype call can be
-     * collected while the library still holds its address. Keying on the callable also means
-     * a build-once-call-many loop pays for the wrapper once. A synchronous callback never
-     * enters the cache, it keeps its trampoline in a call-scoped local instead.
-     */
-    private String createCallbackSupportBlock() {
-        if (!hasAsynchronousCallback()) {
-            return "";
-        }
-        return """
-
-                # Asynchronous callbacks are held for the process lifetime. ctypes does not keep the
-                # trampoline alive by itself, and such a callback may fire long after the call returns.
-                _callback_wrappers = {}
-                def _wrap_callback(prototype, func):
-                    wrapper = _callback_wrappers.get((prototype, func))
-                    if wrapper is None:
-                        wrapper = prototype(func)
-                        _callback_wrappers[(prototype, func)] = wrapper
-                    return wrapper
-                """;
-    }
-
-    private boolean hasAsynchronousCallback() {
-        for (var callback : lib.getCallbacks()) {
-            if (!callback.getIsSynchronous()) return true;
-        }
-        return false;
-    }
-
-    private static boolean isSynchronousCallback(LibraryDescription lib, TypeDescription type) {
-        for (var callback : lib.getCallbacks()) {
-            if (callback.getName().equals(type.getTypeName())) return callback.getIsSynchronous();
-        }
-        return false;
     }
 
     private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
@@ -426,7 +386,12 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         // Fixed slots (fields) to prevent dynamic fields and dictionary overhead
         if (apiClass.getInstantiable()) {
-            content.append("    __slots__ = ('%s',)\n\n".formatted(refField));
+            var slots = new ArrayList<String>();
+            slots.add(refField);
+            slots.addAll(getCallbackFieldNames(apiClass));
+            var quoted = slots.stream().map(slot -> "'" + slot + "'").toList();
+            content.append("    __slots__ = (%s)\n\n".formatted(
+                    quoted.size() == 1 ? quoted.get(0) + "," : String.join(", ", quoted)));
         } else if (apiClass.hasChildren() || apiClass.hasParent()) {
             content.append("    __slots__ = ()\n\n"); // dummy to prevent __dict__ creation
         }
@@ -534,6 +499,23 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .render();
     }
 
+    /** The instance attribute that keeps a constructor's callback trampoline alive */
+    private static String getCallbackFieldName(TypeDescription param) {
+        return "_" + param.getLowerUnderscoreParamName();
+    }
+
+    private static List<String> getCallbackFieldNames(ClassDescription apiClass) {
+        var fields = new ArrayList<String>();
+        GeneratorUtil.getConstructor(apiClass).ifPresent(constructor -> {
+            for (var param : constructor.getParameters()) {
+                if (param.getDataType() == DataType.CALLBACK) {
+                    fields.add(getCallbackFieldName(param));
+                }
+            }
+        });
+        return fields;
+    }
+
     private static String getPropertyName(MethodDescription method) {
         return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getPropertyName());
     }
@@ -551,7 +533,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         // Documentation
         String docs = method.hasDocumentation()
-                ? escapeBackslashes(indent.apply("\n" + generatePydoc("", method, param -> isSynchronousCallback(lib, param))))
+                ? escapeBackslashes(indent.apply("\n" + generatePydoc("", method)))
                 : "";
 
         String funcName;
@@ -871,7 +853,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // Conversions and C call
             for (var parameter : desc.getParameters()) {
                 // Convert from input to C type
-                appendInputConversion(lib, parameter, conversions);
+                appendInputConversion(lib, parameter, isConstructor, conversions);
 
                 // Call the C method
                 if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
@@ -890,7 +872,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
             this.inputConversions = conversions.toString();
         }
 
-        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc, StringBuilder out) {
+        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc,
+                                                  boolean isConstructor, StringBuilder out) {
             String pyType = getCPythonType(desc);
             String name = desc.getLowerUnderscoreParamName();
 
@@ -920,17 +903,26 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("ARGS", joiner.join(args))
                         .render());
 
-            } else if (desc.getDataType() == DataType.CALLBACK) {
-                // Anything callable is accepted, a prebuilt prototype passes straight through.
-                // A synchronous callback is done by the time the call returns, so its trampoline
-                // stays a local and a fresh lambda per call gets collected like any other object.
+            } else if (desc.getDataType() == DataType.CALLBACK && isConstructor) {
+                // The library holds the pointer for as long as the handle lives, so the instance
+                // owns the trampoline. That keeps it out of the process-wide cache, which a fresh
+                // callable per instance would grow without bound.
                 out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
-                            %%NAME%% = %%WRAP%%
+                            %%NAME%% = %%CTYPE%%(%%NAME%%)
+                        self.%%FIELD%% = %%NAME%%
                         """).set("NAME", name).set("CTYPE", pyType)
-                        .set("WRAP", isSynchronousCallback(lib, desc)
-                                ? "%s(%s)".formatted(pyType, name)
-                                : "_wrap_callback(%s, %s)".formatted(pyType, name))
+                        .set("FIELD", getCallbackFieldName(desc))
+                        .render());
+
+            } else if (desc.getDataType() == DataType.CALLBACK) {
+                // Anything callable is accepted, a prebuilt prototype passes straight through. A
+                // raw callback parameter is call-scoped, so its trampoline stays a local and a
+                // fresh lambda per call gets collected like any other object.
+                out.append(IndentingTextRenderer.of("""
+                        if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
+                            %%NAME%% = %%CTYPE%%(%%NAME%%)
+                        """).set("NAME", name).set("CTYPE", pyType)
                         .render());
 
             } else if (pyType.equals("c_char_p")) {
