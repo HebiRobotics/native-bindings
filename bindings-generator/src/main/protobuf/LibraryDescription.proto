@@ -48,9 +48,7 @@ message CallbackDescription {
   optional string name = 1; // typedef name, the interface's simple name
   optional TypeDescription return_type = 2;
   repeated TypeDescription parameters = 3;
-  // Fires on the calling thread and completes before the library method returns. Only
-  // such a callback can be exposed to MATLAB, where re-entry runs through mexCallMATLAB.
-  optional bool is_synchronous = 4 [default = false];
+  reserved 4;                 // was is_synchronous, the lifetime axis is structural
 }
 
 // A user-defined struct that crosses the public C ABI by value. The field order is

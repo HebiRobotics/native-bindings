@@ -5,7 +5,6 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
@@ -27,18 +26,25 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 @CLibClass(value = "Callbacks", enableInstancing = false)
 public class TestCallbacks {
 
-    @CLibCallback(synchronous = true)
     public interface IndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, int index);
     }
 
+    // The plain unannotated shape, taken by a method and by a constructor, so it is the one
+    // that pins a callback needing both a stack slot and a per-object record in MATLAB.
     public interface NotifyCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData);
     }
 
-    @CLibCallback(synchronous = true)
+    // Same shape as IndexCallbackFunction, kept separate so that a callback only a
+    // constructor takes has its own typedef. TestStored is the only user.
+    public interface StoredCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
+        void invoke(VoidPointer userData, int index);
+    }
+
     public interface ScaleCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         double invoke(VoidPointer userData, double value);
@@ -112,9 +118,8 @@ public class TestCallbacks {
         }
     }
 
-    // NotifyCallbackFunction is deliberately left unannotated, so this method is what pins
-    // the asynchronous-default wrapper shape. It still invokes immediately, because the
-    // language suites assert the effect without sleeping.
+    // Pins the shape of a callback that carries nothing but its userData, which is the one
+    // whose MATLAB function handle takes no arguments at all.
     @CLibMethod(flags = Noexcept)
     @CLibComment("Invokes the callback once. Returns after it completes.")
     public static void notifyOnce(NotifyCallbackFunction func, VoidPointer userData) {
@@ -143,8 +148,8 @@ public class TestCallbacks {
     public static class TestNotified {
 
         /**
-         * Exists to pin the generation shape of a constructor taking an asynchronous
-         * callback, which every face other than MATLAB generates like any other one.
+         * Pins a constructor whose callback interface a method also takes, so the two
+         * lifetimes coexist and MATLAB needs both trampoline forms for one typedef.
          */
         @CLibMethod(constructor = true)
         @CLibComment("Creates the handle and invokes the callback once before returning it.")
@@ -170,9 +175,8 @@ public class TestCallbacks {
     public static class TestCounted implements AutoCloseable {
 
         /**
-         * Pins the shape of a constructor taking a synchronous callback, which is legal on
-         * every face including MATLAB, where it is the only path that runs the callback
-         * slot mechanics through a constructor.
+         * Pins a constructor whose callback fires during construction and never again, so
+         * the per-object record it needs is released without the handle ever being reused.
          */
         @CLibMethod(constructor = true)
         @CLibComment("Creates the handle, invoking the callback with indices 0 to times-1 before returning it.")
@@ -206,6 +210,70 @@ public class TestCallbacks {
             }
         }
 
+        private boolean closed = false;
+
+        // Single threaded by contract: the tests only ever touch this from the calling thread.
+        private static int closedCount = 0;
+
+    }
+
+    /**
+     * Pins the registered shape: the constructor keeps the pair and every later {@link #fire}
+     * runs it, on the calling thread. That is what the wrappers need owning constructor sugar
+     * for, since a call-scoped closure would be gone by the time the first fire arrives.
+     * <p>
+     * {@link #close()} follows {@link TestCounted}, so the suites can see the release.
+     */
+    @CLibComment("A handle that stores a callback and invokes it during later calls.")
+    @CLibClass("Stored")
+    public static class TestStored implements AutoCloseable {
+
+        @CLibMethod(constructor = true)
+        @CLibComment("""
+                Stores the callback and returns without invoking it. Every later call to
+                fire() runs it on the calling thread, so it has to stay alive for as long
+                as the handle does.
+                """)
+        public static TestStored create(StoredCallbackFunction func, VoidPointer userData) {
+            return new TestStored(func, userData);
+        }
+
+        @CLibMethod(flags = Noexcept)
+        @CLibComment("Invokes the stored callback once with the given index, on the calling thread.")
+        public void fire(int index) {
+            StoredCallbackFunction func = WordFactory.pointer(function);
+            if (func.isNull()) {
+                return;
+            }
+            func.invoke(WordFactory.pointer(context), index);
+        }
+
+        @CLibMethod(flags = Noexcept)
+        @CLibComment("""
+                Total number of handles of this type that have been released so far in this
+                isolate. Increments exactly once per released handle.
+                """)
+        public static int getClosedCount() {
+            return closedCount;
+        }
+
+        @Override
+        public void close() {
+            if (!closed) {
+                closed = true;
+                closedCount++;
+            }
+        }
+
+        private TestStored(StoredCallbackFunction func, VoidPointer userData) {
+            // A word type may not be stored in an object field, so the pair is kept as raw
+            // addresses and rebuilt on every fire.
+            this.function = func.rawValue();
+            this.context = userData.rawValue();
+        }
+
+        private final long function;
+        private final long context;
         private boolean closed = false;
 
         // Single threaded by contract: the tests only ever touch this from the calling thread.

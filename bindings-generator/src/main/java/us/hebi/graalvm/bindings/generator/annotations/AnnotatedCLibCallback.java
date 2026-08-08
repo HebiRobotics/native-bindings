@@ -43,11 +43,6 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
                     .copyFrom(toCallbackType(type, false))
                     .setParamName(type.getName());
         }
-
-        var annotation = element.getAnnotation(CLibCallback.class);
-        if (annotation != null && annotation.synchronous()) {
-            description.setIsSynchronous(true);
-        }
     }
 
     /**

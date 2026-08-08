@@ -180,6 +180,14 @@ return type gets a type specific default on failure (`false`, `0`, or a null poi
 `flags = Const` marks an instance method that does not mutate state and becomes a
 `const` member function in C++.
 
+Function pointer callbacks need no annotation. A parameter declared as a GraalVM
+`CFunctionPointer` interface is derived from its `@InvokeCFunctionPointer` method, and
+every language face declares the matching typedef under the interface's simple name.
+`@CLibCallback` is optional and only overrides that name. The lifetime is structural: a
+raw callback parameter is call-scoped, so the wrappers keep its trampoline on the stack
+for the duration of the call, while a constructor's callback is stored on the object it
+creates and lives as long as that object does.
+
 ## Building and testing
 
 The build has two tiers.
