@@ -211,6 +211,24 @@ bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr 
   return reinterpret_cast<bindings_tests_ShapePtr>(ptr);
 }
 
+// ==== Stored ====
+bindings_tests_StoredPtr __bindings_tests_Stored_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_StoredCallbackFunction func, void* userData);
+bindings_tests_StoredPtr bindings_tests_Stored_create(bindings_tests_ErrorInfo* _error, bindings_tests_StoredCallbackFunction func, void* userData) {
+    return __bindings_tests_Stored_create(isolate::global(), _error, func, userData);
+}
+void __bindings_tests_Stored_fire(bindings_tests_IsolateThread* isolate, bindings_tests_StoredPtr obj, int index);
+void bindings_tests_Stored_fire(bindings_tests_StoredPtr obj, int index) {
+    __bindings_tests_Stored_fire(isolate::global(), obj, index);
+}
+int __bindings_tests_Stored_getClosedCount(bindings_tests_IsolateThread* isolate);
+int bindings_tests_Stored_getClosedCount() {
+    return __bindings_tests_Stored_getClosedCount(isolate::global());
+}
+void __bindings_tests_Stored_release(bindings_tests_IsolateThread* isolate, bindings_tests_StoredPtr obj);
+void bindings_tests_Stored_release(bindings_tests_StoredPtr obj) {
+    __bindings_tests_Stored_release(isolate::global(), obj);
+}
+
 // ==== Arrays ====
 double __bindings_tests_Arrays_sumFloat64(bindings_tests_IsolateThread* isolate, const double* values, long long count);
 double bindings_tests_Arrays_sumFloat64(const double* values, size_t count) {

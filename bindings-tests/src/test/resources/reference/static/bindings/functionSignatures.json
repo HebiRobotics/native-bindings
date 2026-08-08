@@ -180,6 +180,13 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Callbacks.notifyOnce": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }]
+  },
   "bindings_tests.Circle": {
     "inputs": [{
         "kind": "required",
@@ -533,6 +540,17 @@
         "type": "bindings_tests.Naming"
       }]
   },
+  "bindings_tests.Notified": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Notified"]
+      }]
+  },
   "bindings_tests.Overloads.answer": {
     "inputs": [{
         "kind": "required",
@@ -691,6 +709,30 @@
         "name": "this",
         "type": "bindings_tests.Square"
       }]
+  },
+  "bindings_tests.Stored": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Stored"]
+      }]
+  },
+  "bindings_tests.Stored.fire": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Stored"
+      }, {
+        "kind": "required",
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Stored.getClosedCount": {
+    "inputs": []
   },
   "bindings_tests.Strings.concat": {
     "inputs": [{

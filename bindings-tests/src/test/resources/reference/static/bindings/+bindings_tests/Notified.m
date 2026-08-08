@@ -2,11 +2,23 @@ classdef (Sealed) Notified < handle & matlab.mixin.SetGet
 % A handle whose construction invokes a callback.
 
     methods(Access = public)
-        function this = Notified(varargin)
+        function this = Notified(func)
             % Creates the handle and invokes the callback once before returning it.
             %
-            %   Not supported from MATLAB: its callback may fire after the call returns.
-            error('bindings_tests:NotSupported', "'Notified' is not supported from MATLAB: its callback may fire after the call returns.");
+            %   Inputs:
+            %       func
+            %
+            %   Outputs:
+            %       A handle whose construction invokes a callback.
+            %
+            %   Throws:
+            %       Error on internal errors
+            validateattributes(func, {'function_handle'}, {'scalar'}, 'Notified.Notified', 'func');
+            ptr_ = bindings_tests_native('bindings_tests_Notified_create', func);
+            if isempty(ptr_)
+                error('Failed to create bindings_tests.Notified in Notified.Notified');
+            end
+            this.ptr = ptr_;
         end
     end
     properties (SetAccess = private, GetAccess = private, Hidden = true)

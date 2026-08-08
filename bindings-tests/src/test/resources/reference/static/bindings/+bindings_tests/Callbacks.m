@@ -53,11 +53,13 @@ classdef (Sealed) Callbacks
             bindings_tests_native('bindings_tests_Callbacks_invokeOnWorkerThread', func, index);
         end
 
-        function varargout = notifyOnce(varargin)
+        function notifyOnce(func)
             % Invokes the callback once. Returns after it completes.
             %
-            %   Not supported from MATLAB: its callback may fire after the call returns.
-            error('bindings_tests:NotSupported', "'notifyOnce' is not supported from MATLAB: its callback may fire after the call returns.");
+            %   Inputs:
+            %       func
+            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.notifyOnce', 'func');
+            bindings_tests_native('bindings_tests_Callbacks_notifyOnce', func);
         end
 
         function varargout = applyScaled(varargin)

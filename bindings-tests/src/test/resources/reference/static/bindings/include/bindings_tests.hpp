@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace bindings {
@@ -51,9 +53,11 @@ class Notified;
 class Shape;
 class Circle;
 class Square;
+class Stored;
 using IndexCallbackFunction = void (*)(void* userData, int index);
 using NotifyCallbackFunction = void (*)(void* userData);
 using ScaleCallbackFunction = double (*)(void* userData, double value);
+using StoredCallbackFunction = void (*)(void* userData, int index);
 
 namespace internal {
 using CountedPtr = struct Counted_*;
@@ -63,6 +67,7 @@ using NotifiedPtr = struct Notified_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
+using StoredPtr = struct Stored_*;
 struct ByteSpan {
   const uint8_t* data;
   size_t length;
@@ -85,23 +90,29 @@ template <typename F>
 void* toUserData(F& fn) {
   return const_cast<void*>(static_cast<const void*>(&fn));
 }
-// Calls the closure that arrived through IndexCallbackFunction's userData channel. It lives on
-// the caller's stack and stays valid because the callback runs before the call returns.
+// Calls the closure that arrived through IndexCallbackFunction's userData channel. The caller owns
+// it, on the stack for a call, on the heap for a handle that stores it past the call.
 template <typename F>
 void invokeIndexCallbackFunction(void* userData, int index) {
   (*static_cast<F*>(userData))(index);
 }
-// Calls the closure that arrived through NotifyCallbackFunction's userData channel. It lives on
-// the caller's stack and stays valid because the callback runs before the call returns.
+// Calls the closure that arrived through NotifyCallbackFunction's userData channel. The caller owns
+// it, on the stack for a call, on the heap for a handle that stores it past the call.
 template <typename F>
 void invokeNotifyCallbackFunction(void* userData) {
   (*static_cast<F*>(userData))();
 }
-// Calls the closure that arrived through ScaleCallbackFunction's userData channel. It lives on
-// the caller's stack and stays valid because the callback runs before the call returns.
+// Calls the closure that arrived through ScaleCallbackFunction's userData channel. The caller owns
+// it, on the stack for a call, on the heap for a handle that stores it past the call.
 template <typename F>
 double invokeScaleCallbackFunction(void* userData, double value) {
   return (*static_cast<F*>(userData))(value);
+}
+// Calls the closure that arrived through StoredCallbackFunction's userData channel. The caller owns
+// it, on the stack for a call, on the heap for a handle that stores it past the call.
+template <typename F>
+void invokeStoredCallbackFunction(void* userData, int index) {
+  (*static_cast<F*>(userData))(index);
 }
 struct ErrorInfo {
   const char* message;
@@ -152,6 +163,13 @@ public:
    * @throw on internal errors
    */
   Counted(IndexCallbackFunction func, void* userData, int times);
+  // Takes ownership of the callable, so the userData argument disappears from the
+  // signature. It lives on the heap because the library keeps its address for as long
+  // as this handle exists, and that has to survive the wrapper being moved. It must
+  // not throw: the call crosses a C ABI that no exception may unwind.
+  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value
+      && !std::is_same<typename std::decay<F>::type, Counted>::value>::type>
+  Counted(F&& func, int times);
 
   /**
    * @details 
@@ -165,6 +183,7 @@ public:
 private:
   void cleanup() noexcept;
   internal::CountedPtr ptr_{};
+  std::unique_ptr<std::function<void(int)>> callback_{};
 };
 
 
@@ -264,12 +283,20 @@ public:
    * @throw on internal errors
    */
   Notified(NotifyCallbackFunction func, void* userData);
+  // Takes ownership of the callable, so the userData argument disappears from the
+  // signature. It lives on the heap because the library keeps its address for as long
+  // as this handle exists, and that has to survive the wrapper being moved. It must
+  // not throw: the call crosses a C ABI that no exception may unwind.
+  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, NotifyCallbackFunction>::value
+      && !std::is_same<typename std::decay<F>::type, Notified>::value>::type>
+  Notified(F&& func);
   Notified(Notified&& from) noexcept;
   Notified& operator=(Notified&& from) noexcept;
   ~Notified() noexcept;
 private:
   void cleanup() noexcept;
   internal::NotifiedPtr ptr_{};
+  std::unique_ptr<std::function<void()>> callback_{};
 };
 
 
@@ -342,6 +369,55 @@ private:
   explicit Square(internal::SquarePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::SquarePtr cPointer) noexcept;
   internal::SquarePtr ptr_{};
+};
+
+
+/**
+ * @brief A handle that stores a callback and invokes it during later calls.
+ */
+class Stored {
+public:
+
+  /**
+   * @details 
+   * Stores the callback and returns without invoking it. Every later call to
+   * fire() runs it on the calling thread, so it has to stay alive for as long
+   * as the handle does.
+   *
+   * @param func 
+   * @param userData 
+   * @return A handle that stores a callback and invokes it during later calls.
+   * @throw on internal errors
+   */
+  Stored(StoredCallbackFunction func, void* userData);
+  // Takes ownership of the callable, so the userData argument disappears from the
+  // signature. It lives on the heap because the library keeps its address for as long
+  // as this handle exists, and that has to survive the wrapper being moved. It must
+  // not throw: the call crosses a C ABI that no exception may unwind.
+  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, StoredCallbackFunction>::value
+      && !std::is_same<typename std::decay<F>::type, Stored>::value>::type>
+  Stored(F&& func);
+
+  /**
+   * @brief Invokes the stored callback once with the given index, on the calling thread.
+   *
+   * @param index 
+   */
+  void fire(int index) noexcept;
+
+  /**
+   * @details 
+   * Total number of handles of this type that have been released so far in this
+   * isolate. Increments exactly once per released handle.
+   */
+  static int getClosedCount() noexcept;
+  Stored(Stored&& from) noexcept;
+  Stored& operator=(Stored&& from) noexcept;
+  ~Stored() noexcept;
+private:
+  void cleanup() noexcept;
+  internal::StoredPtr ptr_{};
+  std::unique_ptr<std::function<void(int)>> callback_{};
 };
 
 
@@ -1031,6 +1107,10 @@ extern "C" {
   double bindings_tests_Square_area(internal::SquarePtr);
   int bindings_tests_Square_sideCount(internal::SquarePtr);
   internal::ShapePtr bindings_tests_Square_to_Shape(internal::SquarePtr);
+  internal::StoredPtr bindings_tests_Stored_create(internal::ErrorInfo*, StoredCallbackFunction, void*);
+  void bindings_tests_Stored_fire(internal::StoredPtr, int);
+  int bindings_tests_Stored_getClosedCount();
+  void bindings_tests_Stored_release(internal::StoredPtr);
   double bindings_tests_Arrays_sumFloat64(const double*, size_t);
   int bindings_tests_Arrays_sumInt32(const int*, size_t);
   void bindings_tests_Arrays_fillFloat64(double*, size_t, double);
@@ -1114,6 +1194,14 @@ inline Counted::Counted(IndexCallbackFunction func, void* userData, int times) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Counted");
 }
+template <typename F, typename Enable>
+inline Counted::Counted(F&& func, int times)
+    : callback_(new std::function<void(int)>(std::forward<F>(func))) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counted_create(&error_, &internal::invokeIndexCallbackFunction<std::function<void(int)>>, callback_.get(), times);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Counted");
+}
 inline int Counted::getClosedCount() noexcept {
   return bindings_tests_Counted_getClosedCount();
 }
@@ -1122,13 +1210,14 @@ inline void Counted::cleanup() noexcept {
     bindings_tests_Counted_release(ptr_);
   }
 }
-inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_) {
+inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
   from.ptr_ = nullptr;
 };
 inline Counted& Counted::operator=(Counted&& from) noexcept {
   cleanup();
   ptr_ = from.ptr_;
   from.ptr_ = nullptr;
+  callback_ = std::move(from.callback_);
   return *this;
 };
 inline Counted::~Counted() noexcept {
@@ -1219,18 +1308,27 @@ inline Notified::Notified(NotifyCallbackFunction func, void* userData) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Notified");
 }
+template <typename F, typename Enable>
+inline Notified::Notified(F&& func)
+    : callback_(new std::function<void()>(std::forward<F>(func))) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Notified_create(&error_, &internal::invokeNotifyCallbackFunction<std::function<void()>>, callback_.get());
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Notified");
+}
 inline void Notified::cleanup() noexcept {
   if (ptr_ != nullptr) {
     bindings_tests_Notified_release(ptr_);
   }
 }
-inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_) {
+inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
   from.ptr_ = nullptr;
 };
 inline Notified& Notified::operator=(Notified&& from) noexcept {
   cleanup();
   ptr_ = from.ptr_;
   from.ptr_ = nullptr;
+  callback_ = std::move(from.callback_);
   return *this;
 };
 inline Notified::~Notified() noexcept {
@@ -1344,6 +1442,46 @@ inline Square& Square::operator=(Square&& from) noexcept {
   from.ptr_ = nullptr;
   return *this;
 };
+
+// Stored
+inline Stored::Stored(StoredCallbackFunction func, void* userData) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Stored_create(&error_, func, userData);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Stored");
+}
+template <typename F, typename Enable>
+inline Stored::Stored(F&& func)
+    : callback_(new std::function<void(int)>(std::forward<F>(func))) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Stored_create(&error_, &internal::invokeStoredCallbackFunction<std::function<void(int)>>, callback_.get());
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Stored");
+}
+inline void Stored::fire(int index) noexcept {
+  bindings_tests_Stored_fire(ptr_, index);
+}
+inline int Stored::getClosedCount() noexcept {
+  return bindings_tests_Stored_getClosedCount();
+}
+inline void Stored::cleanup() noexcept {
+  if (ptr_ != nullptr) {
+    bindings_tests_Stored_release(ptr_);
+  }
+}
+inline Stored::Stored(Stored&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
+  from.ptr_ = nullptr;
+};
+inline Stored& Stored::operator=(Stored&& from) noexcept {
+  cleanup();
+  ptr_ = from.ptr_;
+  from.ptr_ = nullptr;
+  callback_ = std::move(from.callback_);
+  return *this;
+};
+inline Stored::~Stored() noexcept {
+  cleanup();
+}
 
 // Arrays
 inline double arrays::sumFloat64(const double* values, size_t count) noexcept {

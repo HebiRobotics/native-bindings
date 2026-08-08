@@ -477,6 +477,64 @@
   }, {
     "type": {
       "cPrefix": "bindings_tests_",
+      "typeName": "Stored",
+      "comment": "A handle that stores a callback and invokes it during later calls.",
+      "dataType": "OBJECT_HANDLE"
+    },
+    "instantiable": true,
+    "cDestructorName": "bindings_tests_Stored_release",
+    "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_Stored_create",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "Stored",
+        "comment": "A handle that stores a callback and invokes it during later calls.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "StoredCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "userData",
+        "lowerUnderscoreParamName": "user_data",
+        "dataType": "VOID_POINTER"
+      }],
+      "isConstructor": true,
+      "documentation": "Stores the callback and returns without invoking it. Every later call to\nfire() runs it on the calling thread, so it has to stay alive for as long\nas the handle does.\n"
+    }, {
+      "name": "fire",
+      "lowerUnderscoreName": "fire",
+      "cName": "bindings_tests_Stored_fire",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Invokes the stored callback once with the given index, on the calling thread.",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "getClosedCount",
+      "lowerUnderscoreName": "get_closed_count",
+      "isStatic": true,
+      "cName": "bindings_tests_Stored_getClosedCount",
+      "returnType": {
+        "dataType": "INT32"
+      },
+      "documentation": "Total number of handles of this type that have been released so far in this\nisolate. Increments exactly once per released handle.\n",
+      "flags": ["Noexcept"]
+    }]
+  }, {
+    "type": {
+      "cPrefix": "bindings_tests_",
       "typeName": "Arrays",
       "comment": "Bulk array operations over caller-owned buffers.",
       "dataType": "OBJECT_HANDLE"
@@ -2057,8 +2115,7 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
-    }],
-    "isSynchronous": true
+    }]
   }, {
     "name": "NotifyCallbackFunction",
     "returnType": {
@@ -2079,7 +2136,18 @@
     }, {
       "paramName": "value",
       "dataType": "FLOAT64"
-    }],
-    "isSynchronous": true
+    }]
+  }, {
+    "name": "StoredCallbackFunction",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
+    }, {
+      "paramName": "index",
+      "dataType": "INT32"
+    }]
   }]
 }

@@ -25,6 +25,7 @@ extern "C" {
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
 typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
+typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
 
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
@@ -92,6 +93,7 @@ typedef struct bindings_tests_Notified_* bindings_tests_NotifiedPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
+typedef struct bindings_tests_Stored_* bindings_tests_StoredPtr;
 
 typedef enum bindings_tests_CircleColor {
   bindings_tests_CircleColor_Red = 0,
@@ -173,6 +175,12 @@ DLL_PUBLIC double bindings_tests_Square_getSide(bindings_tests_SquarePtr obj);
 DLL_PUBLIC double bindings_tests_Square_area(bindings_tests_SquarePtr obj);
 DLL_PUBLIC int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj);
 DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr ptr);
+
+// ==== Stored ====
+DLL_PUBLIC bindings_tests_StoredPtr bindings_tests_Stored_create(bindings_tests_ErrorInfo* _error, bindings_tests_StoredCallbackFunction func, void* userData);
+DLL_PUBLIC void bindings_tests_Stored_fire(bindings_tests_StoredPtr obj, int index);
+DLL_PUBLIC int bindings_tests_Stored_getClosedCount();
+DLL_PUBLIC void bindings_tests_Stored_release(bindings_tests_StoredPtr obj);
 
 // ==== Arrays ====
 DLL_PUBLIC double bindings_tests_Arrays_sumFloat64(const double* values, size_t count);

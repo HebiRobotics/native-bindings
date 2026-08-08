@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -55,6 +56,7 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
 typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
+typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
 
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.
@@ -166,7 +168,17 @@ struct MatlabStringArray {
     MatlabStringArray(const MatlabStringArray&) = delete;
 };
 
-// A synchronous callback may re-enter the library and trigger another callback, so the
+// The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
+// may enter the Matrix API. Any other thread has to skip rather than corrupt it.
+static const std::thread::id matlabThread = std::this_thread::get_id();
+
+inline void checkFunctionHandle(const mxArray* arg) {
+    if (!mxIsClass(arg, "function_handle")) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Expected a function handle.");
+    }
+}
+
+// A call-scoped callback may re-enter the library and trigger another callback, so the
 // handles live on a stack rather than in a single slot, which a nested registration would
 // clobber. The gateway passes the slot address through the method's void* userData
 // parameter, so a trampoline finds its own handle without relying on top of stack.
@@ -176,19 +188,13 @@ struct CallbackSlot {
     std::atomic<int> dropped; // invocations that never reached MATLAB, reported after the call
 };
 
-// The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
-// may enter the Matrix API. Any other thread has to skip rather than corrupt it.
-static const std::thread::id matlabThread = std::this_thread::get_id();
-
 static const int MAX_CALLBACK_DEPTH = 32;
 static CallbackSlot callbackStack[MAX_CALLBACK_DEPTH];
 static int callbackDepth = 0;     // slots in use
 static int activeTrampolines = 0; // nonzero while a callback is running MATLAB code
 
 inline int pushCallbackHandle(const mxArray* arg) {
-    if (!mxIsClass(arg, "function_handle")) {
-        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Expected a function handle.");
-    }
+    checkFunctionHandle(arg);
     // mexErrMsgIdAndTxt longjmps to MATLAB's prompt, so a pop can be skipped and its slot
     // left behind. A trampoline traps its own errors and therefore always balances
     // activeTrampolines, so a zero count means nothing is running and the stack is stale.
@@ -215,14 +221,6 @@ struct MatlabCallback {
     MatlabCallback(const MatlabCallback&) = delete;
 };
 
-// True while a trampoline outcome is still waiting to be raised, either a trapped error
-// or a skipped invocation. A case that returns a handle asks before raising, because
-// the raise discards its outputs.
-inline bool willRaiseCallbackError(const MatlabCallback& callback) {
-    const CallbackSlot& slot = callbackStack[callback.index];
-    return slot.error != nullptr || slot.dropped.load(std::memory_order_relaxed) != 0;
-}
-
 // Raises what a trampoline trapped, once the library has unwound its own frames. Throwing
 // the MException keeps the original identifier and message, and it longjmps like any
 // other error. rethrow is the wrong verb here, it rejects an exception that was never
@@ -237,6 +235,90 @@ inline void checkCallbackError(const MatlabCallback& callback) {
     if (dropped != 0) {
         mexErrMsgIdAndTxt("bindings_tests:NotSupported",
                           "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
+    }
+}
+
+// A constructor's callback is invoked by later calls, so its handle outlives the call that
+// registered it and cannot live on the stack above. Each created object owns a heap record
+// instead, which the release case finds again through the map below.
+struct CallbackRecord {
+    mxArray* handle;          // persistent copy of the caller's function handle
+    std::atomic<int> dropped; // invocations that never reached MATLAB, warned about at the next entry
+};
+
+// prhs is caller-owned, so the handle is duplicated before it is taken off MATLAB's
+// allocation list. Persisting the caller's array hands over memory MATLAB still owns.
+inline CallbackRecord* createCallbackRecord(const mxArray* arg) {
+    checkFunctionHandle(arg);
+    auto* record = new CallbackRecord();
+    record->handle = mxDuplicateArray(arg);
+    mexMakeArrayPersistent(record->handle);
+    record->dropped.store(0, std::memory_order_relaxed);
+    return record;
+}
+
+// Never fevals the handle. Teardown is not a place to run user code, and a released
+// object has nothing left to notify.
+inline void destroyCallbackRecord(CallbackRecord* record) {
+    mxDestroyArray(record->handle);
+    delete record;
+}
+
+// Keyed on the handle the library returned, which is all the release case has. Objects
+// carrying a callback are rare, so the lookup cost never shows up next to the feval.
+static std::unordered_map<const void*, CallbackRecord*> callbackRecords;
+
+// 'clear mex' arrives here, with whatever the user never released
+static void destroyRemainingCallbackRecords() {
+    for (auto& entry : callbackRecords) {
+        destroyCallbackRecord(entry.second);
+    }
+    callbackRecords.clear();
+}
+
+inline void registerCallbackRecord(const void* handle, CallbackRecord* record) {
+    // The first construction is the earliest point at which the sweep has anything to do
+    static const int atExitStatus = mexAtExit(destroyRemainingCallbackRecords);
+    (void) atExitStatus;
+    callbackRecords[handle] = record;
+}
+
+inline void releaseCallbackRecord(const void* handle) {
+    auto entry = callbackRecords.find(handle);
+    if (entry != callbackRecords.end()) {
+        destroyCallbackRecord(entry->second);
+        callbackRecords.erase(entry);
+    }
+}
+
+// An owned callback has no call of its own to report into, so a trapped error waits here
+// until the end of the mexFunction it fired in. That is the call the user was making while
+// the callback ran, which is where the error belongs.
+static mxArray* pendingCallbackError = nullptr;
+
+inline bool hasPendingCallbackError() {
+    return pendingCallbackError != nullptr;
+}
+
+// Cleared before the throw, because mexCallMATLAB longjmps past everything after it. A case
+// that raises on its own skips this, so its stashed error surfaces one call later.
+inline void checkPendingCallbackError() {
+    if (pendingCallbackError != nullptr) {
+        mxArray* error = pendingCallbackError;
+        pendingCallbackError = nullptr;
+        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+    }
+}
+
+// A skipped invocation belongs to a thread nobody is waiting on, so it is reported at the
+// next entry rather than raised on a call that did not cause it.
+inline void warnAboutDroppedCallbacks() {
+    for (auto& entry : callbackRecords) {
+        const int dropped = entry.second->dropped.exchange(0, std::memory_order_relaxed);
+        if (dropped != 0) {
+            mexWarnMsgIdAndTxt("bindings_tests:NotSupported",
+                               "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
+        }
     }
 }
 
@@ -498,6 +580,77 @@ static void invokeIndexCallbackFunction(void* userData, int index) {
     mxDestroyArray(args[1]);
 }
 
+// Invokes the function handle a constructed object owns for IndexCallbackFunction. The object
+// outlives the call that created it, so the trapped error goes to the slot that the
+// mexFunction it fired in raises, and a skipped invocation only bumps the count.
+static void invokeIndexCallbackFunctionOwned(void* userData, int index) {
+    auto* record = static_cast<CallbackRecord*>(userData);
+    if (std::this_thread::get_id() != matlabThread) {
+        record->dropped.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (pendingCallbackError != nullptr) {
+        return; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[2] = {record->handle, createMexScalar(index)};
+    pendingCallbackError = mexCallMATLABWithTrap(0, nullptr, 2, args, "feval");
+    mxDestroyArray(args[1]);
+}
+
+// Invokes the function handle a MATLAB caller registered for NotifyCallbackFunction. An error
+// is trapped rather than raised, because a longjmp from here would tear down the
+// library's own frames. One mxArray per argument per call is inherent to MATLAB.
+static void invokeNotifyCallbackFunction(void* userData) {
+    auto* slot = static_cast<CallbackSlot*>(userData);
+    // The thread comes first, because everything below reaches into MATLAB. The
+    // count is read after the library call has joined its threads, so relaxed is
+    // enough, and checkCallbackError turns it into an error the caller sees.
+    if (std::this_thread::get_id() != matlabThread) {
+        slot->dropped.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (slot->error != nullptr) {
+        return; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[1] = {const_cast<mxArray*>(slot->handle)};
+    activeTrampolines++;
+    slot->error = mexCallMATLABWithTrap(0, nullptr, 1, args, "feval");
+    activeTrampolines--;
+}
+
+// Invokes the function handle a constructed object owns for NotifyCallbackFunction. The object
+// outlives the call that created it, so the trapped error goes to the slot that the
+// mexFunction it fired in raises, and a skipped invocation only bumps the count.
+static void invokeNotifyCallbackFunctionOwned(void* userData) {
+    auto* record = static_cast<CallbackRecord*>(userData);
+    if (std::this_thread::get_id() != matlabThread) {
+        record->dropped.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (pendingCallbackError != nullptr) {
+        return; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[1] = {record->handle};
+    pendingCallbackError = mexCallMATLABWithTrap(0, nullptr, 1, args, "feval");
+}
+
+// Invokes the function handle a constructed object owns for StoredCallbackFunction. The object
+// outlives the call that created it, so the trapped error goes to the slot that the
+// mexFunction it fired in raises, and a skipped invocation only bumps the count.
+static void invokeStoredCallbackFunctionOwned(void* userData, int index) {
+    auto* record = static_cast<CallbackRecord*>(userData);
+    if (std::this_thread::get_id() != matlabThread) {
+        record->dropped.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (pendingCallbackError != nullptr) {
+        return; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[2] = {record->handle, createMexScalar(index)};
+    pendingCallbackError = mexCallMATLABWithTrap(0, nullptr, 2, args, "feval");
+    mxDestroyArray(args[1]);
+}
+
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {
     mxArray* infoStruct = nullptr;
@@ -583,6 +736,10 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
     static std::string binPath = getLibraryPath();
     static LibLoader libLoader(binPath);
 
+    // An owned callback skipped on another thread has no call of its own to report on,
+    // so the count is warned about here instead
+    warnAboutDroppedCallbacks();
+
     // Switch on a Perfect Hash (seeds are chosen until there are no collisions)
     switch (funcHash) {
 
@@ -592,13 +749,18 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto bindings_tests_Counted_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Counted_release");
             checkArgCount(nrhs, 2, "bindings_tests_Counted_create");
             ErrorInfo _error = {};
-            MatlabCallback func(prhs[1]);
             int times = getScalar<int>(prhs[2], "times");
-            void* _value = bindings_tests_Counted_create(&_error, invokeIndexCallbackFunction, func, times);
-            // A raising mexFunction discards plhs, so a handle created before the
-            // callback failed or was skipped would never reach an owner that releases it
-            if (willRaiseCallbackError(func) && _value != nullptr) bindings_tests_Counted_release(_value);
-            checkCallbackError(func);
+            CallbackRecord* func = createCallbackRecord(prhs[1]);
+            void* _value = bindings_tests_Counted_create(&_error, invokeIndexCallbackFunctionOwned, func, times);
+            // The object owns the record from here on. A failed creation has no owner,
+            // and a raising mexFunction discards plhs, so both go away instead.
+            if (_value != nullptr && !hasPendingCallbackError()) {
+                registerCallbackRecord(_value, func);
+            } else {
+                destroyCallbackRecord(func);
+                if (_value != nullptr) bindings_tests_Counted_release(_value);
+            }
+            checkPendingCallbackError();
             checkError(_error);
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
@@ -613,7 +775,9 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         case /* hash32_fnv1a("bindings_tests_Counted_release") */ 1636176438: {
             static auto bindings_tests_Counted_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Counted_release");
             checkArgCount(nrhs, 1, "bindings_tests_Counted_release");
-            bindings_tests_Counted_release(getPtr<void*>(prhs[1]));
+            void* _handle = getPtr<void*>(prhs[1]);
+            bindings_tests_Counted_release(_handle);
+            releaseCallbackRecord(_handle);
             break;
         }
 
@@ -717,10 +881,32 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         }
 
         // Notified
+        case /* hash32_fnv1a("bindings_tests_Notified_create") */ 1417934739: {
+            static auto bindings_tests_Notified_create = libLoader.getFunc<void*(*)(ErrorInfo*, bindings_tests_NotifyCallbackFunction, void*)>("bindings_tests_Notified_create");
+            static auto bindings_tests_Notified_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Notified_release");
+            checkArgCount(nrhs, 1, "bindings_tests_Notified_create");
+            ErrorInfo _error = {};
+            CallbackRecord* func = createCallbackRecord(prhs[1]);
+            void* _value = bindings_tests_Notified_create(&_error, invokeNotifyCallbackFunctionOwned, func);
+            // The object owns the record from here on. A failed creation has no owner,
+            // and a raising mexFunction discards plhs, so both go away instead.
+            if (_value != nullptr && !hasPendingCallbackError()) {
+                registerCallbackRecord(_value, func);
+            } else {
+                destroyCallbackRecord(func);
+                if (_value != nullptr) bindings_tests_Notified_release(_value);
+            }
+            checkPendingCallbackError();
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Notified_release") */ 2875289296: {
             static auto bindings_tests_Notified_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Notified_release");
             checkArgCount(nrhs, 1, "bindings_tests_Notified_release");
-            bindings_tests_Notified_release(getPtr<void*>(prhs[1]));
+            void* _handle = getPtr<void*>(prhs[1]);
+            bindings_tests_Notified_release(_handle);
+            releaseCallbackRecord(_handle);
             break;
         }
 
@@ -842,6 +1028,50 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto bindings_tests_Square_to_Shape = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Square_to_Shape");
             checkArgCount(nrhs, 1, "bindings_tests_Square_to_Shape");
             if (nlhs > 0) plhs[0] = createMexPointer(bindings_tests_Square_to_Shape(getPtr<void*>(prhs[1])));
+            break;
+        }
+
+        // Stored
+        case /* hash32_fnv1a("bindings_tests_Stored_create") */ 329790650: {
+            static auto bindings_tests_Stored_create = libLoader.getFunc<void*(*)(ErrorInfo*, bindings_tests_StoredCallbackFunction, void*)>("bindings_tests_Stored_create");
+            static auto bindings_tests_Stored_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Stored_release");
+            checkArgCount(nrhs, 1, "bindings_tests_Stored_create");
+            ErrorInfo _error = {};
+            CallbackRecord* func = createCallbackRecord(prhs[1]);
+            void* _value = bindings_tests_Stored_create(&_error, invokeStoredCallbackFunctionOwned, func);
+            // The object owns the record from here on. A failed creation has no owner,
+            // and a raising mexFunction discards plhs, so both go away instead.
+            if (_value != nullptr && !hasPendingCallbackError()) {
+                registerCallbackRecord(_value, func);
+            } else {
+                destroyCallbackRecord(func);
+                if (_value != nullptr) bindings_tests_Stored_release(_value);
+            }
+            checkPendingCallbackError();
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Stored_fire") */ 44693218: {
+            static auto bindings_tests_Stored_fire = libLoader.getFunc<void(*)(void*, int)>("bindings_tests_Stored_fire");
+            checkArgCount(nrhs, 2, "bindings_tests_Stored_fire");
+            int index = getScalar<int>(prhs[2], "index");
+            bindings_tests_Stored_fire(getPtr<void*>(prhs[1]), index);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Stored_getClosedCount") */ 2692990085: {
+            static auto bindings_tests_Stored_getClosedCount = libLoader.getFunc<int(*)()>("bindings_tests_Stored_getClosedCount");
+            checkArgCount(nrhs, 0, "bindings_tests_Stored_getClosedCount");
+            int _value = bindings_tests_Stored_getClosedCount();
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Stored_release") */ 3208332647: {
+            static auto bindings_tests_Stored_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Stored_release");
+            checkArgCount(nrhs, 1, "bindings_tests_Stored_release");
+            void* _handle = getPtr<void*>(prhs[1]);
+            bindings_tests_Stored_release(_handle);
+            releaseCallbackRecord(_handle);
             break;
         }
 
@@ -997,6 +1227,14 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             MatlabCallback func(prhs[1]);
             int index = getScalar<int>(prhs[2], "index");
             bindings_tests_Callbacks_invokeOnWorkerThread(invokeIndexCallbackFunction, func, index);
+            checkCallbackError(func);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_notifyOnce") */ 4271263447: {
+            static auto bindings_tests_Callbacks_notifyOnce = libLoader.getFunc<void(*)(bindings_tests_NotifyCallbackFunction, void*)>("bindings_tests_Callbacks_notifyOnce");
+            checkArgCount(nrhs, 1, "bindings_tests_Callbacks_notifyOnce");
+            MatlabCallback func(prhs[1]);
+            bindings_tests_Callbacks_notifyOnce(invokeNotifyCallbackFunction, func);
             checkCallbackError(func);
             break;
         }
@@ -1477,6 +1715,8 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         default:
             mexErrMsgIdAndTxt("bindings_tests:NotFound", "Function hash %08X not found.", funcHash);
     }
+
+    checkPendingCallbackError();
 
 }
 

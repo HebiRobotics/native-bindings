@@ -104,16 +104,6 @@ def _require_numpy():
             raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
     return _numpy
 
-# Asynchronous callbacks are held for the process lifetime. ctypes does not keep the
-# trampoline alive by itself, and such a callback may fire long after the call returns.
-_callback_wrappers = {}
-def _wrap_callback(prototype, func):
-    wrapper = _callback_wrappers.get((prototype, func))
-    if wrapper is None:
-        wrapper = prototype(func)
-        _callback_wrappers[(prototype, func)] = wrapper
-    return wrapper
-
 # API definitions
 class _ErrorInfo(Structure):
     # Filled by every method that can throw. The strings stay valid only until
@@ -187,6 +177,10 @@ class struct_Square_(Structure):
     pass
 SquarePtr = POINTER(struct_Square_)
 
+class struct_Stored_(Structure):
+    pass
+StoredPtr = POINTER(struct_Stored_)
+
 class struct_Arrays_(Structure):
     pass
 ArraysPtr = POINTER(struct_Arrays_)
@@ -230,6 +224,7 @@ StructsPtr = POINTER(struct_Structs_)
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
 ScaleCallbackFunction = CFUNCTYPE(c_double, c_void_p, c_double)
+StoredCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 
 # ==== Counted ====
 libbindings_tests.bindings_tests_Counted_create.argtypes = [POINTER(_ErrorInfo), IndexCallbackFunction, c_void_p, c_int]
@@ -312,6 +307,16 @@ libbindings_tests.bindings_tests_Square_sideCount.argtypes = [SquarePtr]
 libbindings_tests.bindings_tests_Square_sideCount.restype = c_int
 libbindings_tests.bindings_tests_Square_to_Shape.argtypes = [SquarePtr]
 libbindings_tests.bindings_tests_Square_to_Shape.restype = ShapePtr
+
+# ==== Stored ====
+libbindings_tests.bindings_tests_Stored_create.argtypes = [POINTER(_ErrorInfo), StoredCallbackFunction, c_void_p]
+libbindings_tests.bindings_tests_Stored_create.restype = StoredPtr
+libbindings_tests.bindings_tests_Stored_fire.argtypes = [StoredPtr, c_int]
+libbindings_tests.bindings_tests_Stored_fire.restype = None
+libbindings_tests.bindings_tests_Stored_getClosedCount.argtypes = []
+libbindings_tests.bindings_tests_Stored_getClosedCount.restype = c_int
+libbindings_tests.bindings_tests_Stored_release.argtypes = [StoredPtr]
+libbindings_tests.bindings_tests_Stored_release.restype = None
 
 # ==== Arrays ====
 libbindings_tests.bindings_tests_Arrays_sumFloat64.argtypes = [POINTER(c_double), c_size_t]
@@ -510,14 +515,14 @@ class Marker(IntEnum):
 class Counted:
     """A handle whose construction invokes a callback once per index."""
 
-    __slots__ = ('ptr',)
+    __slots__ = ('ptr', '_func')
 
     def __init__(self, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:
         """Creates the handle, invoking the callback with indices 0 to times-1 before returning it.
 
         Args:
-            func: Any callable is accepted, and a plain one is wrapped into a fresh
-                IndexCallbackFunction per call. Build the prototype once for a hot loop.
+            func: Any callable is accepted. The object owns the resulting
+                IndexCallbackFunction and keeps it alive for as long as it exists.
             user_data:
             times:
 
@@ -529,6 +534,7 @@ class Counted:
         """
         if func is not None and not isinstance(func, IndexCallbackFunction):
             func = IndexCallbackFunction(func)
+        self._func = func
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counted_create(byref(error_), func, user_data, times))
         if not ptr_:
@@ -664,13 +670,14 @@ class Naming:
 class Notified:
     """A handle whose construction invokes a callback."""
 
-    __slots__ = ('ptr',)
+    __slots__ = ('ptr', '_func')
 
     def __init__(self, func: Callable[[Any], None], user_data: Any | bytes | None) -> None:
         """Creates the handle and invokes the callback once before returning it.
 
         Args:
-            func:
+            func: Any callable is accepted. The object owns the resulting
+                NotifyCallbackFunction and keeps it alive for as long as it exists.
             user_data:
 
         Returns:
@@ -680,7 +687,8 @@ class Notified:
             Exception: on internal errors
         """
         if func is not None and not isinstance(func, NotifyCallbackFunction):
-            func = _wrap_callback(NotifyCallbackFunction, func)
+            func = NotifyCallbackFunction(func)
+        self._func = func
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Notified_create(byref(error_), func, user_data))
         if not ptr_:
@@ -804,6 +812,60 @@ class Square(Shape):
 
     def side_count(self) -> int:
         return libbindings_tests.bindings_tests_Square_sideCount(self.ref_Square)
+
+
+class Stored:
+    """A handle that stores a callback and invokes it during later calls."""
+
+    __slots__ = ('ptr', '_func')
+
+    def __init__(self, func: Callable[[Any, int], None], user_data: Any | bytes | None) -> None:
+        """Stores the callback and returns without invoking it. Every later call to
+        fire() runs it on the calling thread, so it has to stay alive for as long
+        as the handle does.
+
+        Args:
+            func: Any callable is accepted. The object owns the resulting
+                StoredCallbackFunction and keeps it alive for as long as it exists.
+            user_data:
+
+        Returns:
+            A handle that stores a callback and invokes it during later calls.
+
+        Raises:
+            Exception: on internal errors
+        """
+        if func is not None and not isinstance(func, StoredCallbackFunction):
+            func = StoredCallbackFunction(func)
+        self._func = func
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Stored_create(byref(error_), func, user_data))
+        if not ptr_:
+            raise RuntimeError('Failed to create Stored in Stored::__init__')
+        self.ptr = ptr_
+
+    def __del__(self):
+        if self.ptr is not None:
+            libbindings_tests.bindings_tests_Stored_release(self.ptr)
+        self.ptr = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    def fire(self, index: int) -> None:
+        """Invokes the stored callback once with the given index, on the calling thread.
+
+        Args:
+            index:
+        """
+        libbindings_tests.bindings_tests_Stored_fire(self.ptr, index)
+
+    @classmethod
+    def get_closed_count(cls) -> int:
+        """Total number of handles of this type that have been released so far in this
+        isolate. Increments exactly once per released handle.
+        """
+        return libbindings_tests.bindings_tests_Stored_getClosedCount()
 
 
 class Arrays:
@@ -1092,11 +1154,12 @@ class Callbacks:
         """Invokes the callback once. Returns after it completes.
 
         Args:
-            func:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                NotifyCallbackFunction per call. Build the prototype once for a hot loop.
             user_data:
         """
         if func is not None and not isinstance(func, NotifyCallbackFunction):
-            func = _wrap_callback(NotifyCallbackFunction, func)
+            func = NotifyCallbackFunction(func)
         libbindings_tests.bindings_tests_Callbacks_notifyOnce(func, user_data)
 
     @classmethod
