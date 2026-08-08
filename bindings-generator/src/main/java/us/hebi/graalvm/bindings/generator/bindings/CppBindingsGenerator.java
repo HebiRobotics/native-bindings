@@ -99,6 +99,10 @@ public class CppBindingsGenerator extends BindingGenerator {
             headers.add("functional");
             headers.add("type_traits");
         }
+        if (hasOwningConstructor()) {
+            headers.add("memory");
+            headers.add("utility");
+        }
         headers.addAll(getMarshallerIncludes());
         for (String header : headers) {
             out.write("#include <" + header + ">\n");
@@ -389,21 +393,91 @@ public class CppBindingsGenerator extends BindingGenerator {
                     cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, joiner.join(params.paramNames)));
         } else {
             impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, joiner.join(cppParams)));
-            if (useDynamicLookup) {
-                impl.write(getDynamicFunctionLookup(apiClass, method));
-            }
-            if (isThrowing(method)) {
-                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
-            }
-            impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
-            if (isThrowing(method)) {
-                impl.write(getErrorCheck());
-                impl.write("""
-                          checkNotNull(ptr_, "Could not create %s");
-                        """.formatted(getCppClassName(apiClass.getType())));
-            }
-            impl.write("}\n");
+            writeConstructorBody(scope, method, cParams, impl, useDynamicLookup);
         }
+        if (scope.owningConstructor.isPresent()) {
+            writeOwningConstructor(scope, method, scope.owningConstructor.get(), out, impl, useDynamicLookup);
+        }
+    }
+
+    /** Everything after the signature, shared by the raw constructor and the owning one */
+    private void writeConstructorBody(ClassScope scope, MethodDescription method, List<String> cParams,
+                                      Writer impl, boolean useDynamicLookup) throws IOException {
+        if (useDynamicLookup) {
+            impl.write(getDynamicFunctionLookup(scope.apiClass, method));
+        }
+        if (isThrowing(method)) {
+            impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
+        }
+        impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
+        if (isThrowing(method)) {
+            impl.write(getErrorCheck());
+            impl.write("""
+                      checkNotNull(ptr_, "Could not create %s");
+                    """.formatted(getCppClassName(scope.apiClass.getType())));
+        }
+        impl.write("}\n");
+    }
+
+    /**
+     * The constructor that takes the callable itself, so the userData argument disappears
+     * from the signature. It is the owning counterpart of the call-scoped method overloads:
+     * the closure is copied to the heap and released with the handle.
+     */
+    private void writeOwningConstructor(ClassScope scope, MethodDescription method, CallbackOverload overload,
+                                        Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
+        String functorType = "std::function<%s>".formatted(getCallbackFunctorType(overload.callback));
+        var headerParams = new StringJoiner(", ");
+        var params = new StringJoiner(", ");
+        var cParams = new ArrayList<String>();
+        if (isThrowing(method)) {
+            cParams.add("&" + ERROR_LOCAL_NAME);
+        }
+        for (TypeDescription parameter : method.getParameters()) {
+            String name = parameter.getParamName();
+            if (name.equals(overload.callbackParam.getParamName())) {
+                headerParams.add("F&& " + name);
+                params.add("F&& " + name);
+                cParams.add("&%s::%s<%s>".formatted(INTERNAL_POINTER_NAMESPACE,
+                        getCallbackTrampolineName(overload.callback), functorType));
+            } else if (name.equals(overload.userDataParam.getParamName())) {
+                cParams.add(CALLBACK_FIELD_NAME + ".get()");
+            } else {
+                headerParams.add(getCppType(parameter) + " " + name + getDefaultParamInit(parameter));
+                params.add(getCppType(parameter) + " " + name);
+                cParams.add(name);
+            }
+        }
+
+        out.write(GeneratorUtil.indent(IndentingTextRenderer.of("""
+                        // Takes ownership of the callable, so the userData argument disappears from the
+                        // signature. It lives on the heap because the library keeps its address for as long
+                        // as this handle exists, and that has to survive the wrapper being moved. It must
+                        // not throw: the call crosses a C ABI that no exception may unwind.
+                        template <typename F, typename = typename std::enable_if<!std::is_convertible<F, %%CALLBACK%%>::value
+                            && !std::is_same<typename std::decay<F>::type, %%CLASS%%>::value>::type>
+                        %%CLASS%%(%%PARAMS%%);
+                        """)
+                .set("CALLBACK", overload.callback.getName())
+                .set("CLASS", scope.cppClassName)
+                .set("PARAMS", headerParams.toString())
+                .render(), "  ").stripTrailing());
+        out.write("\n");
+
+        // The second template parameter carries the constraint as a default argument, which
+        // may only appear on the declaration above.
+        impl.write(IndentingTextRenderer.of("""
+                        template <typename F, typename Enable>
+                        inline %%CLASS%%::%%CLASS%%(%%PARAMS%%)
+                            : %%FIELD%%(new %%FUNCTOR%%(std::forward<F>(%%CLOSURE%%))) {
+                        """)
+                .set("CLASS", scope.cppClassName)
+                .set("PARAMS", params.toString())
+                .set("FIELD", CALLBACK_FIELD_NAME)
+                .set("FUNCTOR", functorType)
+                .set("CLOSURE", overload.callbackParam.getParamName())
+                .render());
+        writeConstructorBody(scope, method, cParams, impl, useDynamicLookup);
     }
 
     private void writeFunction(ClassScope scope, MethodDescription method, MethodParams params,
@@ -527,6 +601,20 @@ public class CppBindingsGenerator extends BindingGenerator {
         tokens.put("CTYPE", getCppType(apiClass.getType()));
         tokens.put("VIRTUAL_DESTRUCTOR", apiClass.hasChildren() ? "virtual " : "");
 
+        // The stored callable has to travel with the handle, or the library would keep the
+        // address of a closure the moved-from wrapper releases. The unique_ptr moves the
+        // ownership without moving the closure, so the address the library holds stays valid.
+        tokens.put("CALLBACK_MEMBER", scope.owningConstructor
+                .map(overload -> "\n  std::unique_ptr<std::function<%s>> %s{};".formatted(
+                        getCallbackFunctorType(overload.callback), CALLBACK_FIELD_NAME))
+                .orElse(""));
+        tokens.put("CALLBACK_MOVE_INIT", scope.owningConstructor
+                .map(overload -> ", %s(std::move(from.%s))".formatted(CALLBACK_FIELD_NAME, CALLBACK_FIELD_NAME))
+                .orElse(""));
+        tokens.put("CALLBACK_MOVE_ASSIGN", scope.owningConstructor
+                .map(overload -> "\n  %s = std::move(from.%s);".formatted(CALLBACK_FIELD_NAME, CALLBACK_FIELD_NAME))
+                .orElse(""));
+
         Function<String, String> replace = input -> {
             var renderer = IndentingTextRenderer.of(input);
             tokens.forEach(renderer::set);
@@ -559,7 +647,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                         """;
             }
             classDef += """
-                      %%CTYPE%% ptr_{};
+                      %%CTYPE%% ptr_{};%%CALLBACK_MEMBER%%
                     """;
             classImpl = """
                     inline void %%CLASS%%::cleanup() noexcept {
@@ -567,13 +655,13 @@ public class CppBindingsGenerator extends BindingGenerator {
                         %%C_DESTRUCTOR%%(ptr_);
                       }
                     }
-                    inline %%CLASS%%::%%CLASS%%(%%CLASS%%&& from) noexcept : ptr_(from.ptr_) {
+                    inline %%CLASS%%::%%CLASS%%(%%CLASS%%&& from) noexcept : ptr_(from.ptr_)%%CALLBACK_MOVE_INIT%% {
                       from.ptr_ = nullptr;
                     };
                     inline %%CLASS%%& %%CLASS%%::operator=(%%CLASS%%&& from) noexcept {
                       cleanup();
                       ptr_ = from.ptr_;
-                      from.ptr_ = nullptr;
+                      from.ptr_ = nullptr;%%CALLBACK_MOVE_ASSIGN%%
                       return *this;
                     };
                     inline %%CLASS%%::~%%CLASS%%() noexcept {
@@ -677,6 +765,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                     .sorted(Comparator.comparing(MethodDescription::getIsConstructor).reversed())
                     .toList();
             this.hasDedicatedConstructor = methods.stream().anyMatch(MethodDescription::getIsConstructor);
+            this.owningConstructor = tryGetOwningConstructor(apiClass);
         }
 
         final ClassDescription apiClass;
@@ -687,6 +776,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         final String indent;
         final List<MethodDescription> methods;
         final boolean hasDedicatedConstructor;
+        final Optional<CallbackOverload> owningConstructor;
 
     }
 
@@ -809,10 +899,34 @@ public class CppBindingsGenerator extends BindingGenerator {
         return count;
     }
 
-    /** Callback typedefs that at least one method exposes ergonomic overloads for, in declaration order */
+    /**
+     * The constructor that gets the owning callback sugar, if the class has one. A stored
+     * callback outlives the call that registered it, so the closure goes on the heap rather
+     * than on the caller's stack.
+     */
+    private Optional<CallbackOverload> tryGetOwningConstructor(ClassDescription apiClass) {
+        // A derived class initializes its base before its own members, so the stored callable
+        // has no address yet when the C call runs inside the base initializer.
+        // TODO: support a callback constructor on a subclass once a consumer declares one
+        if (apiClass.hasParent()) {
+            return Optional.empty();
+        }
+        for (MethodDescription method : apiClass.getMethods()) {
+            if (!method.getIsConstructor() || method.getCppOverloads().length() > 0) continue;
+            return tryGetCallbackOverload(method);
+        }
+        return Optional.empty();
+    }
+
+    private boolean hasOwningConstructor() {
+        return getApiClasses().stream().anyMatch(apiClass -> tryGetOwningConstructor(apiClass).isPresent());
+    }
+
+    /** Callback typedefs that at least one method or constructor takes a callable for, in declaration order */
     private Set<String> getCallbacksWithOverloads() {
         var names = new LinkedHashSet<String>();
         for (ClassDescription apiClass : getApiClasses()) {
+            tryGetOwningConstructor(apiClass).ifPresent(overload -> names.add(overload.callback.getName()));
             for (MethodDescription method : apiClass.getMethods()) {
                 if (method.getCppOverloads().length() > 0) continue;
                 // TODO: support constructor overloads
@@ -850,8 +964,8 @@ public class CppBindingsGenerator extends BindingGenerator {
                 }
             }
             out.write(IndentingTextRenderer.of("""
-                            // Calls the closure that arrived through %%CALLBACK%%'s userData channel. It lives on
-                            // the caller's stack and stays valid because the callback runs before the call returns.
+                            // Calls the closure that arrived through %%CALLBACK%%'s userData channel. The caller owns
+                            // it, on the stack for a call, on the heap for a handle that stores it past the call.
                             template <typename F>
                             %%RETURN_TYPE%% %%NAME%%(%%PARAMS%%) {
                               %%RETURN%%(*static_cast<F*>(%%CLOSURE%%))(%%ARGS%%);
@@ -915,6 +1029,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         return TypeMap.toStructCName("", structName);
     }
 
+    private static final String CALLBACK_FIELD_NAME = "callback_";
     private static final String INTERNAL_POINTER_NAMESPACE = "internal";
     private static final String ERROR_STRUCT_NAME = "ErrorInfo";
     private static final String ERROR_LOCAL_NAME = "error_";
