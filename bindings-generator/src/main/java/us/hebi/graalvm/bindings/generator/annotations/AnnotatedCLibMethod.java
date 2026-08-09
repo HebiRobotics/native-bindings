@@ -30,11 +30,12 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         this.returnType = AnnotatedClibType.fromType(executableElement.getReturnType(), processingEnvironment);
         this.annotation = element.getAnnotation(CLibMethod.class);
 
-        getAnnotation().map(CLibMethod::name).filter(not(Strings::isNullOrEmpty)).ifPresent(name ->
-                AnnotationUtil.checkIsCIdentifier(element, name));
+        getAnnotation().map(CLibMethod::name)
+                .filter(not(Strings::isNullOrEmpty))
+                .ifPresent(name -> AnnotationUtil.checkIsCIdentifier(element, name));
 
         // Flag validity checks
-        for (us.hebi.graalvm.bindings.annotations.MethodFlag flag : AnnotationUtil.getAnnotation(element, CLibMethod.class).map(CLibMethod::flags).orElseGet(() -> new us.hebi.graalvm.bindings.annotations.MethodFlag[0])) {
+        for (var flag : AnnotationUtil.getAnnotation(element, CLibMethod.class).map(CLibMethod::flags).orElseGet(() -> new us.hebi.graalvm.bindings.annotations.MethodFlag[0])) {
             switch (flag) {
                 case Const -> {
                     checkArgument(!isStatic() && parent.enableInstancing(), "only instance methods may be marked const: %s", executableElement.getSimpleName());

@@ -28,6 +28,11 @@ import static java.util.function.Predicate.*;
  */
 public class AnnotationUtil {
 
+    public static void checkIsCIdentifier(Element element, String prefix, String name) {
+        if (!Strings.isNullOrEmpty(prefix)) AnnotationUtil.checkIsCIdentifier(element, prefix);
+        if (!Strings.isNullOrEmpty(name)) AnnotationUtil.checkIsCIdentifier(element, name);
+    }
+
     /**
      * A user-chosen name goes into a C symbol or typedef unchanged, so anything javac accepts
      * as an annotation value would otherwise surface as a stage 2 C compile error in the

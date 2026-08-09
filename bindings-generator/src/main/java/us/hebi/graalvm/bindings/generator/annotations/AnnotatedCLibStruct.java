@@ -13,18 +13,14 @@ import org.graalvm.word.PointerBase;
 import us.hebi.graalvm.bindings.annotations.CLibComment;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
-import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
+import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.StructDescription;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -64,10 +60,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         if (getName().isEmpty()) {
             throw error("@CLibStruct requires a name in either @CLibStruct or @CStruct: %s", getQualifiedName());
         }
-        AnnotationUtil.checkIsCIdentifier(this.element, getName());
-        if (!annotation.cPrefix().isEmpty()) {
-            AnnotationUtil.checkIsCIdentifier(this.element, annotation.cPrefix());
-        }
+        AnnotationUtil.checkIsCIdentifier(this.element, annotation.cPrefix(), getName());
 
         fields = parseFields();
         registerMarshaller();
@@ -194,7 +187,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         var dataType = isSizeType(fieldName, javaType, method, isGetter) ? DataType.SIZE_T : TypeMap.getGraalDataType(javaType);
         if (dataType == null || !isSupportedFieldType(javaType, dataType)) {
             throw error("@CLibStruct fields may only be primitives, @CSizeType long, "
-                            + "or typed GraalVM pointers, got '%s %s': %s",
+                        + "or typed GraalVM pointers, got '%s %s': %s",
                     type, fieldName, getQualifiedName());
         }
         return dataType;
@@ -256,7 +249,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         }
         for (var candidate : view.getDeclaredMethods()) {
             if (candidate.getName().contentEquals(method.getSimpleName())
-                    && candidate.getParameterCount() == (isGetter ? 0 : 1)) {
+                && candidate.getParameterCount() == (isGetter ? 0 : 1)) {
                 var annotated = isGetter ? candidate.getAnnotatedReturnType() : candidate.getAnnotatedParameterTypes()[0];
                 return annotated.isAnnotationPresent(annotation);
             }
@@ -288,7 +281,7 @@ public class AnnotatedCLibStruct extends AnnotatedCLibElement<TypeElement> {
         }
         for (String prefix : ACCESSOR_PREFIXES) {
             if (methodName.length() > prefix.length() && methodName.startsWith(prefix)
-                    && Character.isUpperCase(methodName.charAt(prefix.length()))) {
+                && Character.isUpperCase(methodName.charAt(prefix.length()))) {
                 return Character.toLowerCase(methodName.charAt(prefix.length())) + methodName.substring(prefix.length() + 1);
             }
         }

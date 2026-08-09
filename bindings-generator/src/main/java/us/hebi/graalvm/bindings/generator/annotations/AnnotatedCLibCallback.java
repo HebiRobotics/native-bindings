@@ -32,8 +32,8 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
         super(element, env);
         AnnotationUtil.checkIsCIdentifier(element, getName());
         var annotation = element.getAnnotation(CLibCallback.class);
-        if (annotation != null && !annotation.cPrefix().isEmpty()) {
-            AnnotationUtil.checkIsCIdentifier(element, annotation.cPrefix());
+        if (annotation != null) {
+            AnnotationUtil.checkIsCIdentifier(element, annotation.cPrefix(), annotation.name());
         }
 
         invokeMethod = findInvokeMethod();

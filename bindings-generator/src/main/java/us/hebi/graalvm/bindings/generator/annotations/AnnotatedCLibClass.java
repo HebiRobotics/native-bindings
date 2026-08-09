@@ -10,7 +10,9 @@ import us.hebi.graalvm.bindings.model.MethodDescription;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
 import static java.util.function.Predicate.*;
@@ -26,12 +28,7 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     public AnnotatedCLibClass(TypeElement typeElement, ProcessingEnvironment processingEnvironment) {
         super(typeElement, processingEnvironment);
         annotation = checkNotNull(typeElement.getAnnotation(CLibClass.class), "Class %s is not annotated with @CApiClass");
-
-        var qualifiedName = String.valueOf(typeElement.getQualifiedName());
-        AnnotationUtil.checkIsCIdentifier(typeElement, annotation.value());
-        if (!annotation.cPrefix().isEmpty()) {
-            AnnotationUtil.checkIsCIdentifier(typeElement, annotation.cPrefix());
-        }
+        AnnotationUtil.checkIsCIdentifier(typeElement, annotation.cPrefix(), annotation.value());
 
         publicApiMethods = getPublicMethodsUpToAnnotatedParent(typeElement);
 
