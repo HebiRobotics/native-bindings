@@ -7,6 +7,7 @@ import us.hebi.graalvm.bindings.generator.generators.ProcessingException;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.*;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
@@ -116,13 +117,24 @@ public class AnnotationUtil {
     }
 
     public static boolean implementsInterface(TypeElement element, Class<?> targetInterface) {
-        // Class::toString prefixes "interface ", which never matches a mirror's name
         String qualifiedName = targetInterface.getCanonicalName();
+
+        // Check direct interfaces
         for (TypeMirror anInterface : element.getInterfaces()) {
             if (qualifiedName.equals(anInterface.toString())) {
                 return true;
             }
         }
+
+        // Check interfaces of parent classes (transitive implementation)
+        TypeMirror superclass = element.getSuperclass();
+        if (superclass.getKind() != TypeKind.NONE && !superclass.toString().equals("java.lang.Object")) {
+            Element superElement = ((javax.lang.model.type.DeclaredType) superclass).asElement();
+            if (superElement instanceof TypeElement superType) {
+                return implementsInterface(superType, targetInterface);
+            }
+        }
+
         return false;
     }
 
