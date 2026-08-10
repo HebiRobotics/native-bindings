@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
-#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -571,26 +570,6 @@ static void testCallbacks() {
   bt::callbacks::invokeOnce(nullptr, &none, 7);
   CHECK(none.count == 0);
 
-  // The template overload keeps the state in the closure, so there is no userData
-  // argument and nothing is allocated. A raw pointer still picks the ABI overload above.
-  int sum = 0;
-  bt::callbacks::invokeTimes([&sum](int index) { sum += index; }, 5);
-  CHECK(sum == 0 + 1 + 2 + 3 + 4);
-
-  int lastIndex = -1;
-  bt::callbacks::invokeOnce([&lastIndex](int index) { lastIndex = index; }, 9);
-  CHECK(lastIndex == 9);
-
-  // A const lvalue binds both overloads equally well, which is what makes the
-  // non-template std::function one win the tiebreak.
-  int calls = 0;
-  const std::function<void(int)> counter = [&calls](int) { ++calls; };
-  bt::callbacks::invokeTimes(counter, 3);
-  CHECK(calls == 3);
-
-  bt::callbacks::invokeOnce(counter, 1);
-  CHECK(calls == 4);
-
   CallbackState checked = {};
   bt::callbacks::invokeChecked(&onIndex, &checked, 3);
   CHECK(checked.count == 1);
@@ -603,30 +582,21 @@ static void testCallbacks() {
   CHECK(failed.count == 1);
   CHECK(failed.indices[0] == -1);
 
-  // A callback that carries only its userData gets the same overloads as any other
+  // A callback whose only argument is the pointer the caller passed in
   CallbackState notified = {};
   bt::callbacks::notifyOnce(&onNotify, &notified);
   CHECK(notified.count == 1);
 
-  bool called = false;
-  bt::callbacks::notifyOnce([&called] { called = true; });
-  CHECK(called);
-
-  // A value-returning callback travels back out through the trampoline, in all three forms.
+  // A value-returning callback hands its result back to the caller.
   CallbackState scaled = {};
   CHECK(bt::callbacks::applyScaled(&onScale, &scaled, 21.0) == 42.0);
   CHECK(scaled.count == 1);
   CHECK(bt::callbacks::applyScaled(nullptr, &scaled, 21.0) == 21.0);
   CHECK(scaled.count == 1);
 
-  CHECK(bt::callbacks::applyScaled([](double value) { return value * 3.0; }, 14.0) == 42.0);
-
-  const std::function<double(double)> halve = [](double value) { return value / 2.0; };
-  CHECK(bt::callbacks::applyScaled(halve, 84.0) == 42.0);
-
   // A callback whose own arguments are raw pointers, the shape a solver objective has.
   // Only the MATLAB face cannot express it, here the const input still gets its vector
-  // overload and the callback still gets the closure form.
+  // overload.
   CallbackState transformed = {};
   const double source[kTransformCount] = {1.0, 2.0, 3.0};
   double target[kTransformCount] = {};
@@ -639,40 +609,18 @@ static void testCallbacks() {
   CHECK(transformed.count == 2);
   CHECK(target[0] == 8.0 && target[1] == 10.0 && target[2] == 12.0);
 
-  int increments = 0;
-  bt::callbacks::transformOnce(
-      [&increments](const double* in, double* out) {
-        ++increments;
-        for (int i = 0; i < kTransformCount; ++i) {
-          out[i] = in[i] + 1.0;
-        }
-      },
-      source, target);
-  CHECK(increments == 1);
-  CHECK(target[0] == 2.0 && target[1] == 3.0 && target[2] == 4.0);
-
-  // Fires on a worker thread the method joins before returning. The callable has to be
-  // thread safe in this shape, which the ergonomic overloads cannot enforce for the user.
+  // Fires on a worker thread the method joins before returning. The callback has to be
+  // thread safe in this shape, which the wrapper cannot enforce for the user.
   CallbackState worker = {};
   bt::callbacks::invokeOnWorkerThread(&onIndex, &worker, 4);
   CHECK(worker.count == 1);
   CHECK(worker.indices[0] == 4);
 
-  int workerIndex = -1;
-  bt::callbacks::invokeOnWorkerThread([&workerIndex](int index) { workerIndex = index; }, 6);
-  CHECK(workerIndex == 6);
-
-  // A constructor takes the raw pair like any other method
+  // A constructor takes the callback like any other method
   CallbackState constructed = {};
   {
     bt::Notified notified(&onNotify, &constructed);
     CHECK(constructed.count == 1);
-  }
-
-  bool notifiedByClosure = false;
-  {
-    bt::Notified notified([&notifiedByClosure] { notifiedByClosure = true; });
-    CHECK(notifiedByClosure);
   }
 
   CallbackState counted = {};
@@ -698,37 +646,28 @@ static void testCallbacks() {
     CHECK(fired.indices[1] == 5);
   }
 
-  // The owning constructor copies the closure to the heap and releases it with the
-  // handle, which is the only way a stored callback can carry state.
-  std::vector<int> seen;
+  // The library keeps what the constructor handed it, so a moved wrapper still fires
+  // into the same callback and the same pointer.
+  CallbackState moving = {};
   {
-    bt::Stored handle([&seen](int index) { seen.push_back(index); });
-    handle.fire(3);
-    handle.fire(4);
-    CHECK(seen.size() == 2);
-    CHECK(seen[0] == 3);
-    CHECK(seen[1] == 4);
-
-    // The closure sits behind a unique_ptr, so the userData address the library holds
-    // survives the wrapper moving. Both moves keep firing into the same closure.
+    bt::Stored handle(&onIndex, &moving);
     bt::Stored moved(std::move(handle));
     moved.fire(5);
 
-    bt::Stored assigned([](int) {});
+    bt::Stored assigned(&onIndex, &moving);
     assigned = std::move(moved);
     assigned.fire(6);
 
-    CHECK(seen.size() == 4);
-    CHECK(seen[2] == 5);
-    CHECK(seen[3] == 6);
+    CHECK(moving.count == 2);
+    CHECK(moving.indices[0] == 5);
+    CHECK(moving.indices[1] == 6);
   }
 
   // Three constructions, three releases: a moved-from wrapper owns nothing
   CHECK(bt::Stored::getClosedCount() == closedBefore + 3);
 
-  // Without a userData there is nothing for a closure to be smuggled through, so these
-  // parameters are the raw function pointer and there is deliberately no std::function
-  // overload beside them. A captureless lambda still converts.
+  // A callback that takes no pointer of its own has nothing to carry state through, so
+  // the caller supplies a plain function pointer. A captureless lambda still converts.
   plainState = CallbackState();
   bt::callbacks::invokePlainTimes(&onPlainIndex, 4);
   CHECK(plainState.count == 4);

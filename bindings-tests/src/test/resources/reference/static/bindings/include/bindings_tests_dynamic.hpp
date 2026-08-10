@@ -3,13 +3,9 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 #ifdef WIN32
@@ -97,42 +93,6 @@ struct IntSpan {
   const int32_t* data;
   size_t length;
 };
-// The ABI channel is a non-const void*, so a const callable still has to lose its
-// constness on the way in. The trampoline below puts it back.
-template <typename F>
-void* toUserData(F& fn) {
-  return const_cast<void*>(static_cast<const void*>(&fn));
-}
-// Calls the closure that arrived through IndexCallbackFunction's userData channel. The caller owns
-// it, on the stack for a call, on the heap for a handle that stores it past the call.
-template <typename F>
-void invokeIndexCallbackFunction(void* userData, int index) {
-  (*static_cast<F*>(userData))(index);
-}
-// Calls the closure that arrived through NotifyCallbackFunction's userData channel. The caller owns
-// it, on the stack for a call, on the heap for a handle that stores it past the call.
-template <typename F>
-void invokeNotifyCallbackFunction(void* userData) {
-  (*static_cast<F*>(userData))();
-}
-// Calls the closure that arrived through ScaleCallbackFunction's userData channel. The caller owns
-// it, on the stack for a call, on the heap for a handle that stores it past the call.
-template <typename F>
-double invokeScaleCallbackFunction(void* userData, double value) {
-  return (*static_cast<F*>(userData))(value);
-}
-// Calls the closure that arrived through StoredCallbackFunction's userData channel. The caller owns
-// it, on the stack for a call, on the heap for a handle that stores it past the call.
-template <typename F>
-void invokeStoredCallbackFunction(void* userData, int index) {
-  (*static_cast<F*>(userData))(index);
-}
-// Calls the closure that arrived through TransformCallbackFunction's userData channel. The caller owns
-// it, on the stack for a call, on the heap for a handle that stores it past the call.
-template <typename F>
-void invokeTransformCallbackFunction(void* userData, const double* input, double* output) {
-  (*static_cast<F*>(userData))(input, output);
-}
 struct ErrorInfo {
   const char* message;
   const char* id;
@@ -182,13 +142,6 @@ public:
    * @throw on internal errors
    */
   Counted(IndexCallbackFunction func, void* userData, int times);
-  // Takes ownership of the callable, so the userData argument disappears from the
-  // signature. It lives on the heap because the library keeps its address for as long
-  // as this handle exists, and that has to survive the wrapper being moved. It must
-  // not throw: the call crosses a C ABI that no exception may unwind.
-  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value
-      && !std::is_same<typename std::decay<F>::type, Counted>::value>::type>
-  Counted(F&& func, int times);
 
   /**
    * @details 
@@ -202,7 +155,6 @@ public:
 private:
   void cleanup() noexcept;
   internal::CountedPtr ptr_{};
-  std::unique_ptr<std::function<void(int)>> callback_{};
 };
 
 
@@ -302,20 +254,12 @@ public:
    * @throw on internal errors
    */
   Notified(NotifyCallbackFunction func, void* userData);
-  // Takes ownership of the callable, so the userData argument disappears from the
-  // signature. It lives on the heap because the library keeps its address for as long
-  // as this handle exists, and that has to survive the wrapper being moved. It must
-  // not throw: the call crosses a C ABI that no exception may unwind.
-  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, NotifyCallbackFunction>::value
-      && !std::is_same<typename std::decay<F>::type, Notified>::value>::type>
-  Notified(F&& func);
   Notified(Notified&& from) noexcept;
   Notified& operator=(Notified&& from) noexcept;
   ~Notified() noexcept;
 private:
   void cleanup() noexcept;
   internal::NotifiedPtr ptr_{};
-  std::unique_ptr<std::function<void()>> callback_{};
 };
 
 
@@ -450,13 +394,6 @@ public:
    * @throw on internal errors
    */
   Stored(StoredCallbackFunction func, void* userData);
-  // Takes ownership of the callable, so the userData argument disappears from the
-  // signature. It lives on the heap because the library keeps its address for as long
-  // as this handle exists, and that has to survive the wrapper being moved. It must
-  // not throw: the call crosses a C ABI that no exception may unwind.
-  template <typename F, typename = typename std::enable_if<!std::is_convertible<F, StoredCallbackFunction>::value
-      && !std::is_same<typename std::decay<F>::type, Stored>::value>::type>
-  Stored(F&& func);
 
   /**
    * @brief Invokes the stored callback once with the given index, on the calling thread.
@@ -477,7 +414,6 @@ public:
 private:
   void cleanup() noexcept;
   internal::StoredPtr ptr_{};
-  std::unique_ptr<std::function<void(int)>> callback_{};
 };
 
 
@@ -617,15 +553,6 @@ namespace callbacks {
  * @param times 
  */
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
-void invokeTimes(F&& func, size_t times) noexcept {
-  invokeTimes(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), times);
-}
-void invokeTimes(const std::function<void(int)>& func, size_t times) noexcept;
 
 /**
  * @brief Invokes the callback once with the given index. Returns after it completes.
@@ -635,15 +562,6 @@ void invokeTimes(const std::function<void(int)>& func, size_t times) noexcept;
  * @param index 
  */
 void invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
-void invokeOnce(F&& func, int index) noexcept {
-  invokeOnce(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
-}
-void invokeOnce(const std::function<void(int)>& func, int index) noexcept;
 
 /**
  * @details 
@@ -657,15 +575,6 @@ void invokeOnce(const std::function<void(int)>& func, int index) noexcept;
  * @throw index is negative
  */
 void invokeChecked(IndexCallbackFunction func, void* userData, int index);
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
-void invokeChecked(F&& func, int index) {
-  invokeChecked(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
-}
-void invokeChecked(const std::function<void(int)>& func, int index);
 
 /**
  * @details 
@@ -679,15 +588,6 @@ void invokeChecked(const std::function<void(int)>& func, int index);
  * @param index 
  */
 void invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, IndexCallbackFunction>::value>::type>
-void invokeOnWorkerThread(F&& func, int index) noexcept {
-  invokeOnWorkerThread(&internal::invokeIndexCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), index);
-}
-void invokeOnWorkerThread(const std::function<void(int)>& func, int index) noexcept;
 
 /**
  * @brief Invokes the callback once. Returns after it completes.
@@ -696,15 +596,6 @@ void invokeOnWorkerThread(const std::function<void(int)>& func, int index) noexc
  * @param userData 
  */
 void notifyOnce(NotifyCallbackFunction func, void* userData) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, NotifyCallbackFunction>::value>::type>
-void notifyOnce(F&& func) noexcept {
-  notifyOnce(&internal::invokeNotifyCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func));
-}
-void notifyOnce(const std::function<void()>& func) noexcept;
 
 /**
  * @details 
@@ -716,15 +607,6 @@ void notifyOnce(const std::function<void()>& func) noexcept;
  * @param value 
  */
 double applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, ScaleCallbackFunction>::value>::type>
-double applyScaled(F&& func, double value) noexcept {
-  return applyScaled(&internal::invokeScaleCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), value);
-}
-double applyScaled(const std::function<double(double)>& func, double value) noexcept;
 
 /**
  * @details 
@@ -740,15 +622,6 @@ double applyScaled(const std::function<double(double)>& func, double value) noex
  */
 void transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept;
 void transformOnce(TransformCallbackFunction func, void* userData, const std::vector<double>& input, double* output) noexcept;
-// The callable holds the state, so these two need no userData argument. The closure
-// stays on the caller's stack for the duration of the call and neither one allocates.
-// It must not throw: the call crosses a C ABI that no exception may unwind, so a
-// throw terminates.
-template <typename F, typename = typename std::enable_if<!std::is_convertible<F, TransformCallbackFunction>::value>::type>
-void transformOnce(F&& func, const double* input, double* output) noexcept {
-  transformOnce(&internal::invokeTransformCallbackFunction<typename std::remove_reference<F>::type>, internal::toUserData(func), input, output);
-}
-void transformOnce(const std::function<void(const double*, double*)>& func, const double* input, double* output) noexcept;
 
 /**
  * @details 
@@ -1234,15 +1107,6 @@ inline Counted::Counted(IndexCallbackFunction func, void* userData, int times) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Counted");
 }
-template <typename F, typename Enable>
-inline Counted::Counted(F&& func, int times)
-    : callback_(new std::function<void(int)>(std::forward<F>(func))) {
-  static auto bindings_tests_Counted_create = DynamicLookup::instance().getFunc<internal::CountedPtr(*)(internal::ErrorInfo*, IndexCallbackFunction, void*, int)>("bindings_tests_Counted_create");
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Counted_create(&error_, &internal::invokeIndexCallbackFunction<std::function<void(int)>>, callback_.get(), times);
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Counted");
-}
 inline int Counted::getClosedCount() noexcept {
   static auto bindings_tests_Counted_getClosedCount = DynamicLookup::instance().getFunc<int(*)()>("bindings_tests_Counted_getClosedCount");
   return bindings_tests_Counted_getClosedCount();
@@ -1253,14 +1117,13 @@ inline void Counted::cleanup() noexcept {
     bindings_tests_Counted_release(ptr_);
   }
 }
-inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
+inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_) {
   from.ptr_ = nullptr;
 };
 inline Counted& Counted::operator=(Counted&& from) noexcept {
   cleanup();
   ptr_ = from.ptr_;
   from.ptr_ = nullptr;
-  callback_ = std::move(from.callback_);
   return *this;
 };
 inline Counted::~Counted() noexcept {
@@ -1365,29 +1228,19 @@ inline Notified::Notified(NotifyCallbackFunction func, void* userData) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Notified");
 }
-template <typename F, typename Enable>
-inline Notified::Notified(F&& func)
-    : callback_(new std::function<void()>(std::forward<F>(func))) {
-  static auto bindings_tests_Notified_create = DynamicLookup::instance().getFunc<internal::NotifiedPtr(*)(internal::ErrorInfo*, NotifyCallbackFunction, void*)>("bindings_tests_Notified_create");
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Notified_create(&error_, &internal::invokeNotifyCallbackFunction<std::function<void()>>, callback_.get());
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Notified");
-}
 inline void Notified::cleanup() noexcept {
   if (ptr_ != nullptr) {
     static auto bindings_tests_Notified_release = DynamicLookup::instance().getFunc<void(*)(internal::NotifiedPtr)>("bindings_tests_Notified_release");
     bindings_tests_Notified_release(ptr_);
   }
 }
-inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
+inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_) {
   from.ptr_ = nullptr;
 };
 inline Notified& Notified::operator=(Notified&& from) noexcept {
   cleanup();
   ptr_ = from.ptr_;
   from.ptr_ = nullptr;
-  callback_ = std::move(from.callback_);
   return *this;
 };
 inline Notified::~Notified() noexcept {
@@ -1561,15 +1414,6 @@ inline Stored::Stored(StoredCallbackFunction func, void* userData) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Stored");
 }
-template <typename F, typename Enable>
-inline Stored::Stored(F&& func)
-    : callback_(new std::function<void(int)>(std::forward<F>(func))) {
-  static auto bindings_tests_Stored_create = DynamicLookup::instance().getFunc<internal::StoredPtr(*)(internal::ErrorInfo*, StoredCallbackFunction, void*)>("bindings_tests_Stored_create");
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Stored_create(&error_, &internal::invokeStoredCallbackFunction<std::function<void(int)>>, callback_.get());
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Stored");
-}
 inline void Stored::fire(int index) noexcept {
   static auto bindings_tests_Stored_fire = DynamicLookup::instance().getFunc<void(*)(internal::StoredPtr, int)>("bindings_tests_Stored_fire");
   bindings_tests_Stored_fire(ptr_, index);
@@ -1584,14 +1428,13 @@ inline void Stored::cleanup() noexcept {
     bindings_tests_Stored_release(ptr_);
   }
 }
-inline Stored::Stored(Stored&& from) noexcept : ptr_(from.ptr_), callback_(std::move(from.callback_)) {
+inline Stored::Stored(Stored&& from) noexcept : ptr_(from.ptr_) {
   from.ptr_ = nullptr;
 };
 inline Stored& Stored::operator=(Stored&& from) noexcept {
   cleanup();
   ptr_ = from.ptr_;
   from.ptr_ = nullptr;
-  callback_ = std::move(from.callback_);
   return *this;
 };
 inline Stored::~Stored() noexcept {
@@ -1682,15 +1525,9 @@ inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, s
   static auto bindings_tests_Callbacks_invokeTimes = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
   bindings_tests_Callbacks_invokeTimes(func, userData, times);
 }
-inline void callbacks::invokeTimes(const std::function<void(int)>& func, size_t times) noexcept {
-  invokeTimes(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), times);
-}
 inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept {
   static auto bindings_tests_Callbacks_invokeOnce = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, int)>("bindings_tests_Callbacks_invokeOnce");
   bindings_tests_Callbacks_invokeOnce(func, userData, index);
-}
-inline void callbacks::invokeOnce(const std::function<void(int)>& func, int index) noexcept {
-  invokeOnce(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
 }
 inline void callbacks::invokeChecked(IndexCallbackFunction func, void* userData, int index) {
   static auto bindings_tests_Callbacks_invokeChecked = DynamicLookup::instance().getFunc<void(*)(internal::ErrorInfo*, IndexCallbackFunction, void*, int)>("bindings_tests_Callbacks_invokeChecked");
@@ -1698,29 +1535,17 @@ inline void callbacks::invokeChecked(IndexCallbackFunction func, void* userData,
   bindings_tests_Callbacks_invokeChecked(&error_, func, userData, index);
   checkError(error_);
 }
-inline void callbacks::invokeChecked(const std::function<void(int)>& func, int index) {
-  invokeChecked(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
-}
 inline void callbacks::invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept {
   static auto bindings_tests_Callbacks_invokeOnWorkerThread = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, int)>("bindings_tests_Callbacks_invokeOnWorkerThread");
   bindings_tests_Callbacks_invokeOnWorkerThread(func, userData, index);
-}
-inline void callbacks::invokeOnWorkerThread(const std::function<void(int)>& func, int index) noexcept {
-  invokeOnWorkerThread(&internal::invokeIndexCallbackFunction<const std::function<void(int)>>, internal::toUserData(func), index);
 }
 inline void callbacks::notifyOnce(NotifyCallbackFunction func, void* userData) noexcept {
   static auto bindings_tests_Callbacks_notifyOnce = DynamicLookup::instance().getFunc<void(*)(NotifyCallbackFunction, void*)>("bindings_tests_Callbacks_notifyOnce");
   bindings_tests_Callbacks_notifyOnce(func, userData);
 }
-inline void callbacks::notifyOnce(const std::function<void()>& func) noexcept {
-  notifyOnce(&internal::invokeNotifyCallbackFunction<const std::function<void()>>, internal::toUserData(func));
-}
 inline double callbacks::applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept {
   static auto bindings_tests_Callbacks_applyScaled = DynamicLookup::instance().getFunc<double(*)(ScaleCallbackFunction, void*, double)>("bindings_tests_Callbacks_applyScaled");
   return bindings_tests_Callbacks_applyScaled(func, userData, value);
-}
-inline double callbacks::applyScaled(const std::function<double(double)>& func, double value) noexcept {
-  return applyScaled(&internal::invokeScaleCallbackFunction<const std::function<double(double)>>, internal::toUserData(func), value);
 }
 inline void callbacks::transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept {
   static auto bindings_tests_Callbacks_transformOnce = DynamicLookup::instance().getFunc<void(*)(TransformCallbackFunction, void*, const double*, double*)>("bindings_tests_Callbacks_transformOnce");
@@ -1728,9 +1553,6 @@ inline void callbacks::transformOnce(TransformCallbackFunction func, void* userD
 }
 inline void callbacks::transformOnce(TransformCallbackFunction func, void* userData, const std::vector<double>& input, double* output) noexcept {
   transformOnce(func, userData, input.data(), output);
-}
-inline void callbacks::transformOnce(const std::function<void(const double*, double*)>& func, const double* input, double* output) noexcept {
-  transformOnce(&internal::invokeTransformCallbackFunction<const std::function<void(const double*, double*)>>, internal::toUserData(func), input, output);
 }
 inline void callbacks::invokePlainTimes(PlainIndexCallbackFunction func, size_t times) noexcept {
   static auto bindings_tests_Callbacks_invokePlainTimes = DynamicLookup::instance().getFunc<void(*)(PlainIndexCallbackFunction, size_t)>("bindings_tests_Callbacks_invokePlainTimes");
