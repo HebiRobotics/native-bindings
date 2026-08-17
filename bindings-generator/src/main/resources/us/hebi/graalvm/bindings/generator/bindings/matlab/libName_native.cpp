@@ -1,12 +1,10 @@
 #include "mex.h"
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <thread>
-#include <utility>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -264,7 +262,7 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
-}%%STRUCT_RETURN_HELPERS%%%%CALLBACK_TRAMPOLINES%%
+}%%STRUCT_RETURN_HELPERS%%%%CALLBACK_SCOPES%%
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {

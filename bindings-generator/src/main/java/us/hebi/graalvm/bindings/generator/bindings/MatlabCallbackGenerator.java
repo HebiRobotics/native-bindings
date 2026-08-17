@@ -10,10 +10,10 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Emits the callback mechanism of the MEX gateway: the registry every MATLAB-visible callback lives
- * in and the trampolines the library is handed. A callback is live for exactly the call that
- * passed it. The dispatch itself stays in {@link MatlabBindingsGenerator} and asks this class for
- * the names.
+ * Emits the callback mechanism of the MEX gateway: one scope class per callback typedef, whose
+ * static {@code invoke} the library is handed, and one static per call site through which that
+ * function finds the handle. A callback is live for exactly the call that passed it. The
+ * dispatch itself stays in {@link MatlabBindingsGenerator} and asks this class for the names.
  * <p>
  * TODO:
  *  callbacks in MATLAB are a huge mess. We don't have much of a use case for them yet, so
@@ -61,103 +61,42 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The registry that every MATLAB-visible callback lives in. The token it fills sits at the end
-     * of an existing line.
+     * What every callback scope shares, plus the enumeration of call sites. The token it fills
+     * sits at the end of an existing line.
      */
     String createCallbackSupport() {
-        var callbacks = getVisibleCallbacks();
-        if (callbacks.isEmpty()) {
+        var sites = getCallbackSites();
+        if (sites.isEmpty()) {
             return "";
         }
         var out = new IndentingTextRenderer().add("""
-                
-                
+
+
                 // The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
                 // may enter the Matrix API. Any other thread has to skip rather than corrupt it.
                 static const std::thread::id matlabThread = std::this_thread::get_id();
-                
-                inline void checkFunctionHandle(const mxArray* arg) {
-                    if (!mxIsClass(arg, "function_handle")) {
-                        mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Expected a function handle.");
-                    }
-                }
-                
-                // A library calls a plain function pointer and passes back only what its own signature
-                // declares, so the gateway hands out one distinct function per record and never reads
-                // anything that crossed the ABI. A record lives for the length of the one call that
-                // registered it.
-                struct CallbackRecord {
-                    const mxArray* handle;    // the function handle to invoke
-                    mxArray* error;           // what a failed invocation trapped, raised after the call
-                    std::atomic<int> dropped; // invocations that never reached MATLAB
-                    bool inUse;
-                };
-                
-                // Bounds how many callbacks of one type may be live at once, which is the nesting depth
-                // of callbacks re-entering the library. A slot costs one record.
-                static const size_t MAX_CALLBACKS = 16;
-                
-                struct CallbackRegistry {
-                    CallbackRecord records[MAX_CALLBACKS];
-                };
-                
-                """);
 
-        for (var callback : callbacks) {
-            out.addLine("static CallbackRegistry " + getCallbackRegistryName(callback) + ";");
-        }
-        out.add("""
-                
-                // The index selects which of the type's trampolines the library is handed, so a nested
-                // or repeated registration only needs a slot of its own rather than a lookup key.
-                inline size_t acquireCallbackSlot(CallbackRegistry& registry, const mxArray* arg) {
-                    checkFunctionHandle(arg);
-                    for (size_t i = 0; i < MAX_CALLBACKS; i++) {
-                        CallbackRecord& record = registry.records[i];
-                        if (record.inUse) {
-                            continue;
-                        }
-                        // std::atomic is not copyable, so the record is filled field by field
-                        record.handle = arg;
-                        record.error = nullptr;
-                        record.dropped.store(0, std::memory_order_relaxed);
-                        record.inUse = true;
-                        return i;
+                // An empty argument passes a null function pointer, like the other language faces
+                inline const mxArray* getFunctionHandle(const mxArray* arg, const char* name) {
+                    if (mxGetNumberOfElements(arg) == 0) {
+                        return nullptr;
                     }
-                    mexErrMsgIdAndTxt("%%LIB_NAME%%:TooManyCallbacks",
-                                      "More than %d callbacks of this type are live at once.", (int) MAX_CALLBACKS);
-                    return 0; // not reached, mexErrMsgIdAndTxt longjmps to MATLAB's prompt
+                    if (!mxIsClass(arg, "function_handle")) {
+                        mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Argument '%s' must be a function handle or empty.", name);
+                    }
+                    return arg;
                 }
-                
-                // What a record produced, copied out before its slot is released. The trapped
+
+                // What a callback scope produced, copied out before the scope closes. The trapped
                 // error is heap allocated by mexCallMATLABWithTrap and MATLAB owns it until the end of
-                // the mexFunction, so it stays valid once the record is gone.
+                // the mexFunction, so it stays valid once the scope is gone.
                 struct CallbackOutcome {
                     mxArray* error; // what a failed invocation trapped
                     int dropped;    // invocations that never reached MATLAB
                 };
-                
-                // RAII registration of the function handle one call passes. The record borrows the
-                // caller's prhs, which stays alive for exactly as long as the call does.
-                // mexErrMsgIdAndTxt longjmps to MATLAB's prompt without running C++ destructors, so no
-                // raise may happen while the slot is registered. The caller copies the outcome out and
-                // raises after the scope has closed.
-                struct MatlabCallback {
-                    CallbackRegistry& registry;
-                    const size_t index;
-                    MatlabCallback(CallbackRegistry& registry, const mxArray* arg)
-                            : registry(registry), index(acquireCallbackSlot(registry, arg)) {}
-                    ~MatlabCallback() { registry.records[index].inUse = false; }
-                    MatlabCallback(const MatlabCallback&) = delete;
-                    // The count is read after the library call has joined its threads, so relaxed is enough
-                    CallbackOutcome outcome() const {
-                        const CallbackRecord& record = registry.records[index];
-                        return {record.error, record.dropped.load(std::memory_order_relaxed)};
-                    }
-                };
-                
-                // Raises what a trampoline trapped, once the library has unwound its own frames and the
-                // record has been released. Throwing the MException keeps the original identifier and
+
+                // Raises what a callback trapped, once the library has unwound its own frames and the
+                // scope has closed. Throwing the MException keeps the original identifier and
                 // message, and it longjmps like any other error. rethrow is the wrong verb here, it
                 // rejects an exception that was never caught in MATLAB code. A trapped error wins over
                 // the skip count, it is the more specific failure.
@@ -185,16 +124,25 @@ class MatlabCallbackGenerator {
                     mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
                     for (mxArray* arg : args) mxDestroyArray(arg);
                     return error;
-                }""");
+                }
+
+                // One site per callback parameter of every method the gateway dispatches. A site owns
+                // the static its scope publishes itself through, so a method taking two callbacks of
+                // the same type needs no lookup key.
+                enum CallbackSite {
+                """).indent();
+        for (var site : sites) {
+            out.addLine(site + ",");
+        }
+        out.unindent().add("};");
         return out.render();
     }
 
     /**
-     * One thunk template and one table of instantiations per callback typedef that a MATLAB-visible
-     * method takes. The token they fill sits at the end of an existing line, and they come after
-     * the createMex helpers they call.
+     * One scope class per callback typedef that a MATLAB-visible method takes. The token they fill
+     * sits at the end of an existing line, and they come after the createMex helpers they call.
      */
-    String createCallbackTrampolines() {
+    String createCallbackScopes() {
         var visible = getVisibleCallbacks();
         var out = new IndentingTextRenderer();
         for (var callback : lib.getCallbacks()) {
@@ -203,7 +151,7 @@ class MatlabCallbackGenerator {
             boolean returnsValue = !TypeMap.isVoid(returnType.getDataType());
             var cReturnType = CBindingsGenerator.getQualifiedCType(returnType);
             if (returnsValue && !isScalar(returnType.getDataType())) {
-                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value that the MEX trampoline cannot hand back to the library");
+                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value that the MEX gateway cannot hand back to the library");
             }
             var params = new ArrayList<String>();
             var mexArgs = new ArrayList<String>();
@@ -221,42 +169,47 @@ class MatlabCallbackGenerator {
             // result wherever the handle was not reached, its error is raised after the call anyway.
             var content = out.snapshot()
                     .set("CALLBACK", callback.getName())
-                    .set("NAME", getCallbackTrampolineName(callback.getName()))
+                    .set("SCOPE", getCallbackScopeName(callback.getName()))
                     .set("TYPEDEF", callback.getCPrefix() + callback.getName())
-                    .set("REGISTRY", getCallbackRegistryName(callback.getName()))
-                    .set("TABLE", getCallbackTableName(callback.getName()))
-                    .set("MAKE_TABLE", "make" + callback.getName() + "Table")
                     .set("RETURN_TYPE", cReturnType)
                     .set("PARAMS", BindingGenerator.joiner.join(params))
                     .set("ARG_COUNT", String.valueOf(mexArgs.size() + 1))
                     .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + BindingGenerator.joiner.join(mexArgs))
                     .set("SKIP", returnsValue ? "return " + cReturnType + "{};" : "return;");
             content.add("""
-                    
-                    
-                    // Invokes the function handle registered in slot N for %%CALLBACK%%. Which of these
-                    // the library was handed is the whole channel, so nothing arriving back from it is
-                    // dereferenced. An error is trapped rather than raised, because a longjmp from here
-                    // would tear down the library's own frames. One mxArray per argument per call is
-                    // inherent to MATLAB.
-                    template <size_t N>
-                    static %%RETURN_TYPE%% %%NAME%%(%%PARAMS%%) {
-                        CallbackRecord& record = %%REGISTRY%%.records[N];
-                        // The thread comes first, because everything below reaches into MATLAB. The
-                        // count is read after the library call has joined its threads, so relaxed is
-                        // enough, and the caller sees it as an error or a warning afterwards.
-                        if (std::this_thread::get_id() != matlabThread) {
-                            record.dropped.fetch_add(1, std::memory_order_relaxed);
-                            %%SKIP%%
-                        }
-                        // A released slot means the library kept the pointer past the call that passed
-                        // it, which is not supported, and a slot whose earlier invocation failed has that
-                        // error waiting to be raised. Neither reaches MATLAB.
-                        if (!record.inUse || record.error != nullptr) {
-                            %%SKIP%%
-                        }
-                        mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(record.handle)%%MEX_ARGS%%};
-                    """).indent();
+
+
+                    // Wrapper handle for %%CALLBACK%% (alive for one call)
+                    template <CallbackSite Site>
+                    struct %%SCOPE%% {
+                        static %%SCOPE%%* current;
+                        const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+                        %%SCOPE%%* const previous;
+                        mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+                        std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+                        explicit %%SCOPE%%(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+                        ~%%SCOPE%%() { current = previous; }
+                        %%SCOPE%%(const %%SCOPE%%&) = delete;
+
+                        %%TYPEDEF%% function() const { return handle != nullptr ? &invoke : nullptr; }
+
+                        CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+                        // An error is trapped rather than raised, because a longjmp from here would tear down
+                        // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+                        static %%RETURN_TYPE%% invoke(%%PARAMS%%) {
+                            %%SCOPE%%* scope = current;
+                            // An unsupported fire after the scope closed means the library kept the pointer past the call
+                            if (scope == nullptr || scope->error != nullptr) {
+                                %%SKIP%%
+                            }
+                            if (std::this_thread::get_id() != matlabThread) {
+                                scope->dropped.fetch_add(1, std::memory_order_relaxed);
+                                %%SKIP%%
+                            }
+                            mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(scope->handle)%%MEX_ARGS%%};
+                    """).indentBy(2);
             if (returnsValue) {
                 content.add("""
                         %%RETURN_TYPE%% value{};
@@ -269,12 +222,12 @@ class MatlabCallbackGenerator {
                             }
                             mxDestroyArray(result);
                         }
-                        record.error = error;
+                        scope->error = error;
                         """);
             } else {
                 content.add("""
                         mxArray* error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
-                        record.error = error;
+                        scope->error = error;
                         """);
             }
             for (int i = 0; i < mexArgs.size(); i++) {
@@ -283,16 +236,11 @@ class MatlabCallbackGenerator {
             if (returnsValue) {
                 content.addLine("return value;");
             }
-            content.unindent().add("""
-                    }
-                    
-                    // Each entry is a separate instantiation, so the index cannot be a runtime value and
-                    // the table has to be expanded from a pack rather than filled in a loop.
-                    template <size_t... Is>
-                    static std::array<%%TYPEDEF%%, sizeof...(Is)> %%MAKE_TABLE%%(std::index_sequence<Is...>) {
-                        return {{&%%NAME%%<Is>...}};
-                    }
-                    static const auto %%TABLE%% = %%MAKE_TABLE%%(std::make_index_sequence<MAX_CALLBACKS>{});""");
+            content.unindentBy(2).add("""
+                        }
+                    };
+                    template <CallbackSite Site>
+                    %%SCOPE%%<Site>* %%SCOPE%%<Site>::current = nullptr;""");
         }
         return out.render();
     }
@@ -313,24 +261,32 @@ class MatlabCallbackGenerator {
         return names;
     }
 
-    private static String getCallbackTrampolineName(String callbackName) {
-        return "invoke" + callbackName;
+    /**
+     * Every callback parameter of every MATLAB-visible method, in dispatch order
+     */
+    private Set<String> getCallbackSites() {
+        var sites = new LinkedHashSet<String>();
+        for (var apiClass : lib.getClasses()) {
+            for (var method : apiClass.getMethods()) {
+                if (getMatlabExclusionReason(method).isPresent()) continue;
+                for (var param : method.getParameters()) {
+                    if (param.getDataType() == DataType.CALLBACK) sites.add(getCallbackSite(method, param));
+                }
+            }
+        }
+        return sites;
     }
 
-    static String getCallbackRegistryName(String callbackName) {
-        return toLowerCamel(callbackName) + "Registry";
+    /**
+     * The enumerator naming one callback parameter of one method, which is what selects the
+     * static its scope publishes itself through
+     */
+    static String getCallbackSite(MethodDescription method, TypeDescription param) {
+        return method.getCName() + "_" + param.getParamName();
     }
 
-    private static String getCallbackTableName(String callbackName) {
-        return toLowerCamel(callbackName) + "Table";
-    }
-
-    static String getCallbackTableEntry(String callbackName, String index) {
-        return getCallbackTableName(callbackName) + "[" + index + "]";
-    }
-
-    private static String toLowerCamel(String name) {
-        return Character.toLowerCase(name.charAt(0)) + name.substring(1);
+    static String getCallbackScopeName(String callbackName) {
+        return callbackName + "Scope";
     }
 
     /**
@@ -343,13 +299,13 @@ class MatlabCallbackGenerator {
     Optional<String> getMatlabExclusionReason(MethodDescription method) {
         for (var param : method.getParameters()) {
             if (param.getDataType() != DataType.CALLBACK) continue;
-            // The trampoline asks feval for one output and reads it as a scalar, so anything
+            // The scope asks feval for one output and reads it as a scalar, so anything
             // that is not one has no route back into the library.
             var returnType = getCallback(param).getReturnType().getDataType();
             if (!TypeMap.isVoid(returnType) && !isScalar(returnType)) {
                 return Optional.of("its callback returns a value that the gateway cannot hand back");
             }
-            // A raw pointer argument carries no length, so the trampoline has nothing to size
+            // A raw pointer argument carries no length, so the scope has nothing to size
             // the mxArray it would have to build. A span parameter would. A void* is rejected
             // here like any other pointer, since MATLAB cannot do anything with an address.
             for (var argument : getCallback(param).getParameters()) {
@@ -364,7 +320,7 @@ class MatlabCallbackGenerator {
 
     /**
      * Whether a callback argument can reach feval as an mxArray, which is the subset of
-     * {@link MatlabBindingsGenerator#getCToMex} that a trampoline actually converts.
+     * {@link MatlabBindingsGenerator#getCToMex} that a scope actually converts.
      */
     private static boolean isConvertibleToMex(DataType type) {
         return switch (type) {
@@ -376,7 +332,7 @@ class MatlabCallbackGenerator {
 
     /**
      * Whether a callback result can come back through mxGetScalar, the one read the
-     * trampoline does on the feval output.
+     * scope does on the feval output.
      */
     private static boolean isScalar(DataType type) {
         return switch (type) {

@@ -4,12 +4,10 @@ classdef (Sealed) Callbacks
     methods(Static)
 
         function result = invokeDoubleCallback(func, a, b)
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokeDoubleCallback', 'func');
             result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleCallback', func, a, b);
         end
 
         function result = invokeDoubleSpanToScalarCallback(func, a, b)
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokeDoubleSpanToScalarCallback', 'func');
             result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback', func, a, b);
         end
 
@@ -40,7 +38,6 @@ classdef (Sealed) Callbacks
             %   Inputs:
             %       func
             %       times
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokePlainTimes', 'func');
             bindings_tests_native('bindings_tests_Callbacks_invokePlainTimes', func, times);
         end
 
@@ -55,7 +52,6 @@ classdef (Sealed) Callbacks
             %
             %   Throws:
             %       Error index is negative
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokePlainChecked', 'func');
             bindings_tests_native('bindings_tests_Callbacks_invokePlainChecked', func, index);
         end
 
@@ -68,7 +64,6 @@ classdef (Sealed) Callbacks
             %   Inputs:
             %       func
             %       index
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokePlainOnWorkerThread', 'func');
             bindings_tests_native('bindings_tests_Callbacks_invokePlainOnWorkerThread', func, index);
         end
 
@@ -77,7 +72,6 @@ classdef (Sealed) Callbacks
             %
             %   Inputs:
             %       func
-            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.notifyPlainOnce', 'func');
             bindings_tests_native('bindings_tests_Callbacks_notifyPlainOnce', func);
         end
 

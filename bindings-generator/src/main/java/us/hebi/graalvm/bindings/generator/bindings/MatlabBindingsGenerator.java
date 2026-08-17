@@ -9,6 +9,7 @@ import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
+import java.lang.annotation.Inherited;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -156,8 +157,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexToC(TypeDescription param, int index) {
         return switch (param.getDataType()) {
-            case CALLBACK -> "MatlabCallback %s(%s, prhs[%d])".formatted(
-                    param.getParamName(), MatlabCallbackGenerator.getCallbackRegistryName(param.getTypeName()), index);
+            case CALLBACK -> "const mxArray* %1$sHandle = getFunctionHandle(prhs[%2$d], \"%1$s\")".formatted(
+                    param.getParamName(), index);
 
             case OBJECT_HANDLE, VOID_POINTER ->
                     (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
@@ -278,13 +279,15 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 }
                 for (var param : method.getParameters()) {
                     types.add(getMexCType(param));
+                    pre.append(getMexToC(param, index++)).append(";\n");
                     if (param.getDataType() == DataType.CALLBACK) {
-                        // A callback lives for exactly this call, so its acquisition and the library
-                        // call share a scope that nothing inside may raise out of
-                        callbackArgs.add(new CallbackArg(param.getParamName(), getMexToC(param, index++)));
-                        args.add(MatlabCallbackGenerator.getCallbackTableEntry(param.getTypeName(), param.getParamName() + ".index"));
+                        // A callback lives for exactly this call, so its scope and the library call
+                        // share a block that nothing inside may raise out of
+                        callbackArgs.add(new CallbackArg(param.getParamName(),
+                                MatlabCallbackGenerator.getCallbackScopeName(param.getTypeName())
+                                + "<" + MatlabCallbackGenerator.getCallbackSite(method, param) + ">"));
+                        args.add(param.getParamName() + ".function()");
                     } else {
-                        pre.append(getMexToC(param, index++)).append(";\n");
                         args.add(param.getParamName());
                     }
                 }
@@ -314,13 +317,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     for (var callback : callbackArgs) {
                         pre.append("CallbackOutcome ").append(callback.name()).append("Outcome;\n");
                     }
-                    var scope = new IndentingTextRenderer().add("""
-                            // mexErrMsgIdAndTxt longjmps without running destructors, so nothing inside
-                            // the scope may raise. The outcome is checked once the slot has been released.
-                            {
-                            """).indent();
+
+                    // mexErrMsgIdAndTxt longjmps without running destructors, so nothing inside
+                    // the block may raise. The outcome is checked once the scope has closed.
+                    var scope = new IndentingTextRenderer().addLine("{").indent();
                     for (var callback : callbackArgs) {
-                        scope.addLine(callback.conversion() + ";");
+                        scope.addLine(callback.scopeType() + " " + callback.name() + "(" + callback.name() + "Handle);");
                     }
                     scope.addLine((returnsValue ? "%%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
                     for (var callback : callbackArgs) {
@@ -366,7 +368,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("HASH_PRIME", String.format("0x%08X", prime))
                 .set("CALLBACK_TYPEDEFS", callbacks.createCallbackTypedefs())
                 .set("CALLBACK_SUPPORT", callbacks.createCallbackSupport())
-                .set("CALLBACK_TRAMPOLINES", callbacks.createCallbackTrampolines())
+                .set("CALLBACK_SCOPES", callbacks.createCallbackScopes())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
@@ -375,10 +377,10 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * A callback parameter of a dispatched call. The conversion acquires its registry slot, and
-     * the name is what the outcome is copied out under once the slot has been released.
+     * A callback parameter of a dispatched call. The scope type carries the parameter's site, and
+     * the name is what the outcome is copied out under once the scope has closed.
      */
-    private record CallbackArg(String name, String conversion) {
+    private record CallbackArg(String name, String scopeType) {
     }
 
     /**
@@ -944,17 +946,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             final boolean needsSelfRef = !method.getIsStatic() && !method.getIsConstructor();
             final boolean needsVarargin = method.getReturnType().getDataType() == DataType.OBJECT_HANDLE
                                           && !GeneratorUtil.getSetters(lib, method.getReturnType()).isEmpty();
-
-            // A function handle is the only thing the gateway can register, and MATLAB's own check
-            // reads better than the type error the MEX call would raise. Concatenated rather than
-            // formatted, because String::formatted would eat the %% around the tokens.
-            for (var param : method.getParameters()) {
-                if (param.getDataType() != DataType.CALLBACK) continue;
-                var name = param.getParamName();
-                preCallActions.append("validateattributes(").append(name)
-                        .append(", {'function_handle'}, {'scalar'}, '%%CLASS_NAME%%.%%FUNC_NAME%%', '")
-                        .append(name).append("');\n");
-            }
 
             // native dispatch always needs the library ref and function name
             internalInput.add(getDispatchIdentifier(method.getCName()));

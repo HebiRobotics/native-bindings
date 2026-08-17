@@ -467,8 +467,8 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testPlainCallbacks(testCase)
-            % The supported shape: no void* anywhere, so the thunk the library was handed is
-            % the whole channel and its identity is what names the record.
+            % The supported shape: no void* anywhere, so the function the library was handed
+            % is the whole channel and the static of its call site is what finds the handle.
             collected = [];
             outer = [];
             inner = [];
@@ -481,16 +481,15 @@ classdef BindingsTest < matlab.unittest.TestCase
             bindings_tests.Callbacks.invokePlainTimes(@collect, 0);
             testCase.verifyTrue(isempty(collected));
 
-            % The null function pointer the other suites pass is not representable here,
-            % the wrapper only accepts a function handle.
-            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes([], 1), ...
-                'MATLAB:Callbacks:invokePlainTimes:invalidType');
+            % An empty argument is the null function pointer the other suites pass, and the
+            % library ignores it. Anything else that is not a function handle is rejected.
+            bindings_tests.Callbacks.invokePlainTimes([], 1);
             testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(42, 1), ...
-                'MATLAB:Callbacks:invokePlainTimes:invalidType');
+                'bindings_tests:TypeError');
 
-            % The callback calls back into a method that takes a callback, which is what the
-            % per-slot thunks exist for: each registration gets an id of its own and therefore
-            % a distinct function pointer. Nesting level n collects 0..n-1.
+            % The callback calls back into the method that took it, so the nested call pushes
+            % its own handle over the site's static and restores it on the way out. Nesting
+            % level n collects 0..n-1.
             bindings_tests.Callbacks.invokePlainTimes(@nest, 3);
             testCase.verifyEqual(outer, [0 1 2]);
             testCase.verifyEqual(inner, [0 0 1 0 1 2]);
@@ -581,21 +580,22 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testCallbackRegistryExhaustion(testCase)
-            % One slot per callback of a type live at once, out of a fixed table. A callback
-            % is live for exactly the call that passed it, so the cap is nesting depth: the
-            % seventeenth call to hold one has nowhere to go. The slot is acquired before the
-            % library is called, so the raise leaves nothing behind.
+        function testDeeplyNestedCallbacks(testCase)
+            % A callback re-entering the library chains one scope per level, so there is no
+            % table to exhaust. Each level fires the next once and sees its own handle again
+            % once the nested call has unwound.
             depth = 0;
-            testCase.verifyError(@() nest(0), 'bindings_tests:TooManyCallbacks');
-            testCase.verifyEqual(depth, 17);
-
-            % Every slot was released on the way out, so the next call works again
-            bindings_tests.Callbacks.invokePlainTimes(@(index) [], 1);
+            unwound = 0;
+            nest(0);
+            testCase.verifyEqual(depth, 40);
+            testCase.verifyEqual(unwound, 40);
 
             function nest(~)
                 depth = depth + 1;
-                bindings_tests.Callbacks.invokePlainTimes(@nest, 1);
+                if depth < 40
+                    bindings_tests.Callbacks.invokePlainTimes(@nest, 1);
+                end
+                unwound = unwound + 1;
             end
         end
 
