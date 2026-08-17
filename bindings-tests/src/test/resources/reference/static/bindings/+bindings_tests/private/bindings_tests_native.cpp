@@ -180,28 +180,26 @@ inline void checkFunctionHandle(const mxArray* arg) {
 
 // A library calls a plain function pointer and passes back only what its own signature
 // declares, so the gateway hands out one distinct function per record and never reads
-// anything that crossed the ABI. A record is either borrowed for the length of one call
-// or owned by a constructed object, which is the only difference between the two.
+// anything that crossed the ABI. A record lives for the length of the one call that
+// registered it.
 struct CallbackRecord {
     const mxArray* handle;    // the function handle to invoke
-    const void* owner;        // the object an owned handle belongs to
     mxArray* error;           // what a failed invocation trapped, raised after the call
     std::atomic<int> dropped; // invocations that never reached MATLAB
-    bool owned;               // true while the handle is a persistent copy of the caller's
     bool inUse;
 };
 
-// Bounds how many callbacks of one type may be live at once, which is nesting depth for
-// a borrowed record and living objects for an owned one. A slot costs one record.
+// Bounds how many callbacks of one type may be live at once, which is the nesting depth
+// of callbacks re-entering the library. A slot costs one record.
 static const size_t MAX_CALLBACKS = 16;
 
 struct CallbackRegistry {
     CallbackRecord records[MAX_CALLBACKS];
 };
 
-static CallbackRegistry plainIndexCallbackFunctionRegistry;
 static CallbackRegistry doubleCallbackFuncRegistry;
 static CallbackRegistry doubleSpanToScalarCallbackFuncRegistry;
+static CallbackRegistry plainIndexCallbackFunctionRegistry;
 static CallbackRegistry plainNotifyCallbackFunctionRegistry;
 
 // The index selects which of the type's trampolines the library is handed, so a nested
@@ -215,10 +213,8 @@ inline size_t acquireCallbackSlot(CallbackRegistry& registry, const mxArray* arg
         }
         // std::atomic is not copyable, so the record is filled field by field
         record.handle = arg;
-        record.owner = nullptr;
         record.error = nullptr;
         record.dropped.store(0, std::memory_order_relaxed);
-        record.owned = false;
         record.inUse = true;
         return i;
     }
@@ -227,7 +223,7 @@ inline size_t acquireCallbackSlot(CallbackRegistry& registry, const mxArray* arg
     return 0; // not reached, mexErrMsgIdAndTxt longjmps to MATLAB's prompt
 }
 
-// What a borrowed record produced, copied out before its slot is released. The trapped
+// What a record produced, copied out before its slot is released. The trapped
 // error is heap allocated by mexCallMATLABWithTrap and MATLAB owns it until the end of
 // the mexFunction, so it stays valid once the record is gone.
 struct CallbackOutcome {
@@ -283,91 +279,6 @@ inline mxArray* checkCallbackResult(const mxArray* result, const char* callback)
     mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
     for (mxArray* arg : args) mxDestroyArray(arg);
     return error;
-}
-
-// Only the owned sweeps run over every registry, so they are listed once here
-static CallbackRegistry* const callbackRegistries[] = {&plainIndexCallbackFunctionRegistry, &doubleCallbackFuncRegistry, &doubleSpanToScalarCallbackFuncRegistry, &plainNotifyCallbackFunctionRegistry};
-
-
-// A constructor's callback is invoked by later calls, so its handle outlives the call
-// that registered it. prhs is caller-owned, so it is duplicated before being taken off
-// MATLAB's allocation list. Persisting the caller's array hands over memory MATLAB
-// still owns.
-inline size_t createCallbackRecord(CallbackRegistry& registry, const mxArray* arg) {
-    const size_t index = acquireCallbackSlot(registry, arg);
-    mxArray* persistent = mxDuplicateArray(arg);
-    mexMakeArrayPersistent(persistent);
-    registry.records[index].handle = persistent;
-    registry.records[index].owned = true;
-    return index;
-}
-
-// Never fevals the handle. Teardown is not a place to run user code, and a released
-// object has nothing left to notify.
-inline void destroyCallbackRecord(CallbackRecord& record) {
-    mxDestroyArray(const_cast<mxArray*>(record.handle));
-    record.handle = nullptr;
-    record.inUse = false;
-}
-
-// 'clear mex' arrives here, with whatever the user never released
-static void destroyRemainingCallbackRecords() {
-    for (CallbackRegistry* registry : callbackRegistries) {
-        for (CallbackRecord& record : registry->records) {
-            if (record.inUse && record.owned) destroyCallbackRecord(record);
-        }
-    }
-}
-
-inline void registerCallbackRecord(CallbackRegistry& registry, size_t index, const void* owner) {
-    // The first construction is the earliest point at which the sweep has anything to do
-    static const int atExitStatus = mexAtExit(destroyRemainingCallbackRecords);
-    (void) atExitStatus;
-    registry.records[index].owner = owner;
-}
-
-// The released handle is all the release case has, and it is what the constructor wrote
-// into the record it handed over.
-inline void releaseCallbackRecord(CallbackRegistry& registry, const void* owner) {
-    for (CallbackRecord& record : registry.records) {
-        if (record.inUse && record.owned && record.owner == owner) {
-            destroyCallbackRecord(record);
-        }
-    }
-}
-
-// An owned callback has no call of its own to report into, so a trapped error waits here
-// until the end of the mexFunction it fired in. That is the call the user was making while
-// the callback ran, which is where the error belongs.
-static mxArray* pendingCallbackError = nullptr;
-
-inline bool hasPendingCallbackError() {
-    return pendingCallbackError != nullptr;
-}
-
-// Cleared before the throw, because mexCallMATLAB longjmps past everything after it. A case
-// that raises on its own skips this, so its stashed error surfaces one call later.
-inline void checkPendingCallbackError() {
-    if (pendingCallbackError != nullptr) {
-        mxArray* error = pendingCallbackError;
-        pendingCallbackError = nullptr;
-        mexCallMATLAB(0, nullptr, 1, &error, "throw");
-    }
-}
-
-// A skipped invocation belongs to a thread nobody is waiting on, so it is reported at the
-// next entry rather than raised on a call that did not cause it.
-inline void warnAboutDroppedCallbacks() {
-    for (CallbackRegistry* registry : callbackRegistries) {
-        for (CallbackRecord& record : registry->records) {
-            if (!record.inUse || !record.owned) continue;
-            const int dropped = record.dropped.exchange(0, std::memory_order_relaxed);
-            if (dropped != 0) {
-                mexWarnMsgIdAndTxt("bindings_tests:NotSupported",
-                                   "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", dropped);
-            }
-        }
-    }
 }
 
 inline mxArray* createEmpty() {
@@ -628,8 +539,11 @@ static double invokeDoubleCallbackFunc(double a, double b) {
         record.dropped.fetch_add(1, std::memory_order_relaxed);
         return double{};
     }
-    if (record.owned ? pendingCallbackError != nullptr : record.error != nullptr) {
-        return double{}; // an earlier invocation already failed, and that error is the one raised
+    // A released slot means the library kept the pointer past the call that passed
+    // it, which is not supported, and a slot whose earlier invocation failed has that
+    // error waiting to be raised. Neither reaches MATLAB.
+    if (!record.inUse || record.error != nullptr) {
+        return double{};
     }
     mxArray* args[3] = {const_cast<mxArray*>(record.handle), createMexScalar(a), createMexScalar(b)};
     double value{};
@@ -642,13 +556,7 @@ static double invokeDoubleCallbackFunc(double a, double b) {
         }
         mxDestroyArray(result);
     }
-    // An owned callback has no call of its own to report into, so its error waits for the
-    // mexFunction it fired in to raise it on the way out.
-    if (record.owned) {
-        pendingCallbackError = error;
-    } else {
-        record.error = error;
-    }
+    record.error = error;
     mxDestroyArray(args[1]);
     mxDestroyArray(args[2]);
     return value;
@@ -677,8 +585,11 @@ static double invokeDoubleSpanToScalarCallbackFunc(const DoubleSpan* a, const Do
         record.dropped.fetch_add(1, std::memory_order_relaxed);
         return double{};
     }
-    if (record.owned ? pendingCallbackError != nullptr : record.error != nullptr) {
-        return double{}; // an earlier invocation already failed, and that error is the one raised
+    // A released slot means the library kept the pointer past the call that passed
+    // it, which is not supported, and a slot whose earlier invocation failed has that
+    // error waiting to be raised. Neither reaches MATLAB.
+    if (!record.inUse || record.error != nullptr) {
+        return double{};
     }
     mxArray* args[3] = {const_cast<mxArray*>(record.handle), createMexDoubleArray(*a), createMexDoubleArray(*b)};
     double value{};
@@ -691,13 +602,7 @@ static double invokeDoubleSpanToScalarCallbackFunc(const DoubleSpan* a, const Do
         }
         mxDestroyArray(result);
     }
-    // An owned callback has no call of its own to report into, so its error waits for the
-    // mexFunction it fired in to raise it on the way out.
-    if (record.owned) {
-        pendingCallbackError = error;
-    } else {
-        record.error = error;
-    }
+    record.error = error;
     mxDestroyArray(args[1]);
     mxDestroyArray(args[2]);
     return value;
@@ -726,18 +631,15 @@ static void invokePlainIndexCallbackFunction(int index) {
         record.dropped.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    if (record.owned ? pendingCallbackError != nullptr : record.error != nullptr) {
-        return; // an earlier invocation already failed, and that error is the one raised
+    // A released slot means the library kept the pointer past the call that passed
+    // it, which is not supported, and a slot whose earlier invocation failed has that
+    // error waiting to be raised. Neither reaches MATLAB.
+    if (!record.inUse || record.error != nullptr) {
+        return;
     }
     mxArray* args[2] = {const_cast<mxArray*>(record.handle), createMexScalar(index)};
     mxArray* error = mexCallMATLABWithTrap(0, nullptr, 2, args, "feval");
-    // An owned callback has no call of its own to report into, so its error waits for the
-    // mexFunction it fired in to raise it on the way out.
-    if (record.owned) {
-        pendingCallbackError = error;
-    } else {
-        record.error = error;
-    }
+    record.error = error;
     mxDestroyArray(args[1]);
 }
 
@@ -764,18 +666,15 @@ static void invokePlainNotifyCallbackFunction() {
         record.dropped.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    if (record.owned ? pendingCallbackError != nullptr : record.error != nullptr) {
-        return; // an earlier invocation already failed, and that error is the one raised
+    // A released slot means the library kept the pointer past the call that passed
+    // it, which is not supported, and a slot whose earlier invocation failed has that
+    // error waiting to be raised. Neither reaches MATLAB.
+    if (!record.inUse || record.error != nullptr) {
+        return;
     }
     mxArray* args[1] = {const_cast<mxArray*>(record.handle)};
     mxArray* error = mexCallMATLABWithTrap(0, nullptr, 1, args, "feval");
-    // An owned callback has no call of its own to report into, so its error waits for the
-    // mexFunction it fired in to raise it on the way out.
-    if (record.owned) {
-        pendingCallbackError = error;
-    } else {
-        record.error = error;
-    }
+    record.error = error;
 }
 
 // Each entry is a separate instantiation, so the index cannot be a runtime value and
@@ -870,10 +769,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
     // Bind to the binary once per MATLAB session/clear
     static std::string binPath = getLibraryPath();
     static LibLoader libLoader(binPath);
-
-    // An owned callback skipped on another thread has no call of its own to report on,
-    // so the count is warned about here instead
-    warnAboutDroppedCallbacks();
 
     // Switch on a Perfect Hash (seeds are chosen until there are no collisions)
     switch (funcHash) {
@@ -974,51 +869,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto custom_prefix_Naming_release = libLoader.getFunc<void(*)(void*)>("custom_prefix_Naming_release");
             checkArgCount(nrhs, 1, "custom_prefix_Naming_release");
             custom_prefix_Naming_release(getPtr<void*>(prhs[1]));
-            break;
-        }
-
-        // PlainStored
-        case /* hash32_fnv1a("bindings_tests_PlainStored_create") */ 330439990: {
-            static auto bindings_tests_PlainStored_create = libLoader.getFunc<void*(*)(ErrorInfo*, bindings_tests_PlainIndexCallbackFunction, size_t)>("bindings_tests_PlainStored_create");
-            static auto bindings_tests_PlainStored_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_PlainStored_release");
-            checkArgCount(nrhs, 2, "bindings_tests_PlainStored_create");
-            ErrorInfo _error = {};
-            size_t times = getScalar<size_t>(prhs[2], "times");
-            const size_t func = createCallbackRecord(plainIndexCallbackFunctionRegistry, prhs[1]);
-            void* _value = bindings_tests_PlainStored_create(&_error, plainIndexCallbackFunctionTable[func], times);
-            // The object owns the record from here on. A failed creation has no owner,
-            // and a raising mexFunction discards plhs, so both go away instead.
-            if (_value != nullptr && !hasPendingCallbackError()) {
-                registerCallbackRecord(plainIndexCallbackFunctionRegistry, func, _value);
-            } else {
-                destroyCallbackRecord(plainIndexCallbackFunctionRegistry.records[func]);
-                if (_value != nullptr) bindings_tests_PlainStored_release(_value);
-            }
-            checkPendingCallbackError();
-            checkError(_error);
-            if (nlhs > 0) plhs[0] = createMexPointer(_value);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_PlainStored_fire") */ 4239641014: {
-            static auto bindings_tests_PlainStored_fire = libLoader.getFunc<void(*)(void*, int)>("bindings_tests_PlainStored_fire");
-            checkArgCount(nrhs, 2, "bindings_tests_PlainStored_fire");
-            int index = getScalar<int>(prhs[2], "index");
-            bindings_tests_PlainStored_fire(getPtr<void*>(prhs[1]), index);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_PlainStored_getClosedCount") */ 3337694769: {
-            static auto bindings_tests_PlainStored_getClosedCount = libLoader.getFunc<int(*)()>("bindings_tests_PlainStored_getClosedCount");
-            checkArgCount(nrhs, 0, "bindings_tests_PlainStored_getClosedCount");
-            int _value = bindings_tests_PlainStored_getClosedCount();
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_PlainStored_release") */ 1619983075: {
-            static auto bindings_tests_PlainStored_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_PlainStored_release");
-            checkArgCount(nrhs, 1, "bindings_tests_PlainStored_release");
-            void* _handle = getPtr<void*>(prhs[1]);
-            bindings_tests_PlainStored_release(_handle);
-            releaseCallbackRecord(plainIndexCallbackFunctionRegistry, _handle);
             break;
         }
 
@@ -1836,8 +1686,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         default:
             mexErrMsgIdAndTxt("bindings_tests:NotFound", "Function hash %08X not found.", funcHash);
     }
-
-    checkPendingCallbackError();
 
 }
 

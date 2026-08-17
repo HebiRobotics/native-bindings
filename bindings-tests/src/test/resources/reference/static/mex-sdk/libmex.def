@@ -3,10 +3,7 @@
 ; _800 suffix selects the R2018a interleaved-complex API.
 LIBRARY libmex
 EXPORTS
-    mexAtExit_800
     mexCallMATLAB_800
     mexCallMATLABWithTrap_800
     mexErrMsgIdAndTxt_800
     mexErrMsgTxt_800
-    mexMakeArrayPersistent_800
-    mexWarnMsgIdAndTxt_800

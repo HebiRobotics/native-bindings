@@ -157,10 +157,6 @@ class struct_Naming_(Structure):
     pass
 NamingPtr = POINTER(struct_Naming_)
 
-class struct_PlainStored_(Structure):
-    pass
-PlainStoredPtr = POINTER(struct_PlainStored_)
-
 class struct_Shape_(Structure):
     pass
 ShapePtr = POINTER(struct_Shape_)
@@ -249,16 +245,6 @@ libbindings_tests.custom_prefix_Naming_add_two_numbers.argtypes = [c_int, c_int]
 libbindings_tests.custom_prefix_Naming_add_two_numbers.restype = c_int
 libbindings_tests.custom_prefix_Naming_release.argtypes = [NamingPtr]
 libbindings_tests.custom_prefix_Naming_release.restype = None
-
-# ==== PlainStored ====
-libbindings_tests.bindings_tests_PlainStored_create.argtypes = [POINTER(_ErrorInfo), PlainIndexCallbackFunction, c_size_t]
-libbindings_tests.bindings_tests_PlainStored_create.restype = PlainStoredPtr
-libbindings_tests.bindings_tests_PlainStored_fire.argtypes = [PlainStoredPtr, c_int]
-libbindings_tests.bindings_tests_PlainStored_fire.restype = None
-libbindings_tests.bindings_tests_PlainStored_getClosedCount.argtypes = []
-libbindings_tests.bindings_tests_PlainStored_getClosedCount.restype = c_int
-libbindings_tests.bindings_tests_PlainStored_release.argtypes = [PlainStoredPtr]
-libbindings_tests.bindings_tests_PlainStored_release.restype = None
 
 # ==== Shape ====
 libbindings_tests.bindings_tests_Shape_getName.argtypes = [ShapePtr]
@@ -604,60 +590,6 @@ class Naming:
             second:
         """
         return libbindings_tests.custom_prefix_Naming_add_two_numbers(first, second)
-
-
-class PlainStored:
-    """A handle that invokes a callback during construction and stores it for later calls."""
-
-    __slots__ = ('ptr', '_func')
-
-    def __init__(self, func: Callable[[int], None], times: int) -> None:
-        """Invokes the callback with indices 0 to times-1 before returning the handle, and
-        keeps it for every later call to fire(), so it has to stay alive for as long as
-        the handle does.
-
-        Args:
-            func: Any callable is accepted. The object owns the resulting
-                PlainIndexCallbackFunction and keeps it alive for as long as it exists.
-            times:
-
-        Returns:
-            A handle that invokes a callback during construction and stores it for later calls.
-
-        Raises:
-            Exception: on internal errors
-        """
-        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
-            func = PlainIndexCallbackFunction(func)
-        self._func = func
-        error_ = _ErrorInfo()
-        ptr_ = _checked(error_, libbindings_tests.bindings_tests_PlainStored_create(byref(error_), func, times))
-        if not ptr_:
-            raise RuntimeError('Failed to create PlainStored in PlainStored::__init__')
-        self.ptr = ptr_
-
-    def __del__(self):
-        if self.ptr is not None:
-            libbindings_tests.bindings_tests_PlainStored_release(self.ptr)
-        self.ptr = None
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}()"
-
-    def fire(self, index: int) -> None:
-        """Invokes the stored callback once with the given index, on the calling thread.
-
-        Args:
-            index:
-        """
-        libbindings_tests.bindings_tests_PlainStored_fire(self.ptr, index)
-
-    @classmethod
-    def get_closed_count(cls) -> int:
-        """Total number of handles of this type that have been released so far in this
-        isolate. Increments exactly once per released handle.
-        """
-        return libbindings_tests.bindings_tests_PlainStored_getClosedCount()
 
 
 class Shape:

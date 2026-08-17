@@ -167,64 +167,6 @@
   }, {
     "type": {
       "cPrefix": "bindings_tests_",
-      "typeName": "PlainStored",
-      "comment": "A handle that invokes a callback during construction and stores it for later calls.",
-      "dataType": "OBJECT_HANDLE"
-    },
-    "instantiable": true,
-    "cDestructorName": "bindings_tests_PlainStored_release",
-    "methods": [{
-      "name": "create",
-      "lowerUnderscoreName": "create",
-      "isStatic": true,
-      "cName": "bindings_tests_PlainStored_create",
-      "returnType": {
-        "cPrefix": "bindings_tests_",
-        "typeName": "PlainStored",
-        "comment": "A handle that invokes a callback during construction and stores it for later calls.",
-        "dataType": "OBJECT_HANDLE"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "PlainIndexCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "times",
-        "lowerUnderscoreParamName": "times",
-        "dataType": "SIZE_T"
-      }],
-      "isConstructor": true,
-      "documentation": "Invokes the callback with indices 0 to times-1 before returning the handle, and\nkeeps it for every later call to fire(), so it has to stay alive for as long as\nthe handle does.\n"
-    }, {
-      "name": "fire",
-      "lowerUnderscoreName": "fire",
-      "cName": "bindings_tests_PlainStored_fire",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "index",
-        "lowerUnderscoreParamName": "index",
-        "dataType": "INT32"
-      }],
-      "documentation": "Invokes the stored callback once with the given index, on the calling thread.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "getClosedCount",
-      "lowerUnderscoreName": "get_closed_count",
-      "isStatic": true,
-      "cName": "bindings_tests_PlainStored_getClosedCount",
-      "returnType": {
-        "dataType": "INT32"
-      },
-      "documentation": "Total number of handles of this type that have been released so far in this\nisolate. Increments exactly once per released handle.\n",
-      "flags": ["Noexcept"]
-    }]
-  }, {
-    "type": {
-      "cPrefix": "bindings_tests_",
       "typeName": "Shape",
       "comment": "Base class for the shape hierarchy.",
       "dataType": "OBJECT_HANDLE"

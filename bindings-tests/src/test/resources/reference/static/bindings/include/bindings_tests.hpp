@@ -44,7 +44,6 @@ struct StatusInfo {
 // ==== Forward Declarations ====
 class Counter;
 class Naming;
-class PlainStored;
 class Shape;
 class Circle;
 class Square;
@@ -52,7 +51,6 @@ class Square;
 namespace internal {
 using CounterPtr = struct Counter_*;
 using NamingPtr = struct Naming_*;
-using PlainStoredPtr = struct PlainStored_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
@@ -190,47 +188,6 @@ public:
 private:
   void cleanup() noexcept;
   internal::NamingPtr ptr_{};
-};
-
-
-/**
- * @brief A handle that invokes a callback during construction and stores it for later calls.
- */
-class PlainStored {
-public:
-
-  /**
-   * @details 
-   * Invokes the callback with indices 0 to times-1 before returning the handle, and
-   * keeps it for every later call to fire(), so it has to stay alive for as long as
-   * the handle does.
-   *
-   * @param func 
-   * @param times 
-   * @return A handle that invokes a callback during construction and stores it for later calls.
-   * @throw on internal errors
-   */
-  PlainStored(PlainIndexCallbackFunction func, size_t times);
-
-  /**
-   * @brief Invokes the stored callback once with the given index, on the calling thread.
-   *
-   * @param index 
-   */
-  void fire(int index) noexcept;
-
-  /**
-   * @details 
-   * Total number of handles of this type that have been released so far in this
-   * isolate. Increments exactly once per released handle.
-   */
-  static int getClosedCount() noexcept;
-  PlainStored(PlainStored&& from) noexcept;
-  PlainStored& operator=(PlainStored&& from) noexcept;
-  ~PlainStored() noexcept;
-private:
-  void cleanup() noexcept;
-  internal::PlainStoredPtr ptr_{};
 };
 
 
@@ -923,10 +880,6 @@ extern "C" {
   int custom_prefix_Naming_get_start_value(internal::NamingPtr);
   int custom_prefix_Naming_add_two_numbers(int, int);
   void custom_prefix_Naming_release(internal::NamingPtr);
-  internal::PlainStoredPtr bindings_tests_PlainStored_create(internal::ErrorInfo*, PlainIndexCallbackFunction, size_t);
-  void bindings_tests_PlainStored_fire(internal::PlainStoredPtr, int);
-  int bindings_tests_PlainStored_getClosedCount();
-  void bindings_tests_PlainStored_release(internal::PlainStoredPtr);
   const char* bindings_tests_Shape_getName(internal::ShapePtr);
   void bindings_tests_Shape_setName(internal::ShapePtr, const char*);
   double bindings_tests_Shape_area(internal::ShapePtr);
@@ -1095,37 +1048,6 @@ inline Naming& Naming::operator=(Naming&& from) noexcept {
   return *this;
 };
 inline Naming::~Naming() noexcept {
-  cleanup();
-}
-
-// PlainStored
-inline PlainStored::PlainStored(PlainIndexCallbackFunction func, size_t times) {
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_PlainStored_create(&error_, func, times);
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create PlainStored");
-}
-inline void PlainStored::fire(int index) noexcept {
-  bindings_tests_PlainStored_fire(ptr_, index);
-}
-inline int PlainStored::getClosedCount() noexcept {
-  return bindings_tests_PlainStored_getClosedCount();
-}
-inline void PlainStored::cleanup() noexcept {
-  if (ptr_ != nullptr) {
-    bindings_tests_PlainStored_release(ptr_);
-  }
-}
-inline PlainStored::PlainStored(PlainStored&& from) noexcept : ptr_(from.ptr_) {
-  from.ptr_ = nullptr;
-};
-inline PlainStored& PlainStored::operator=(PlainStored&& from) noexcept {
-  cleanup();
-  ptr_ = from.ptr_;
-  from.ptr_ = nullptr;
-  return *this;
-};
-inline PlainStored::~PlainStored() noexcept {
   cleanup();
 }
 

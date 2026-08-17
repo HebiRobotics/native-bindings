@@ -74,7 +74,6 @@ typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const d
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
-typedef struct bindings_tests_PlainStored_* bindings_tests_PlainStoredPtr;
 typedef struct bindings_tests_Shape_* bindings_tests_ShapePtr;
 typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
@@ -128,12 +127,6 @@ custom_prefix_NamingPtr custom_prefix_Naming_create(bindings_tests_ErrorInfo* _e
 int custom_prefix_Naming_get_start_value(custom_prefix_NamingPtr obj);
 int custom_prefix_Naming_add_two_numbers(int first, int second);
 void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
-
-// ==== PlainStored ====
-bindings_tests_PlainStoredPtr bindings_tests_PlainStored_create(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, size_t times);
-void bindings_tests_PlainStored_fire(bindings_tests_PlainStoredPtr obj, int index);
-int bindings_tests_PlainStored_getClosedCount();
-void bindings_tests_PlainStored_release(bindings_tests_PlainStoredPtr obj);
 
 // ==== Shape ====
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj);

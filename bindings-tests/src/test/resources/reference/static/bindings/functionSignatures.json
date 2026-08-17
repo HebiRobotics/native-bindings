@@ -661,34 +661,6 @@
         "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
       }]
   },
-  "bindings_tests.PlainStored": {
-    "inputs": [{
-        "kind": "required",
-        "name": "func",
-        "type": ["function_handle"]
-      }, {
-        "kind": "required",
-        "name": "times",
-        "type": ["numeric"]
-      }],
-    "outputs": [{
-        "name": "obj",
-        "type": ["bindings_tests.PlainStored"]
-      }]
-  },
-  "bindings_tests.PlainStored.fire": {
-    "inputs": [{
-        "name": "this",
-        "type": "bindings_tests.PlainStored"
-      }, {
-        "kind": "required",
-        "name": "index",
-        "type": ["numeric"]
-      }]
-  },
-  "bindings_tests.PlainStored.getClosedCount": {
-    "inputs": []
-  },
   "bindings_tests.Shape.area": {
     "inputs": [{
         "name": "this",

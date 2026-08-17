@@ -67,7 +67,6 @@ mxArray* mxCreateLogicalScalar_800(mxLogical value);
 mxArray* mxCreateNumericMatrix_800(mwSize m, mwSize n, mxClassID classid, mxComplexity flag);
 mxArray* mxCreateStructMatrix_800(mwSize m, mwSize n, int nfields, const char** fieldnames);
 void mxDestroyArray_800(mxArray* pa);
-mxArray* mxDuplicateArray_800(const mxArray* in);
 void mxFree_800(void* ptr);
 mxArray* mxGetCell_800(const mxArray* pa, mwIndex index);
 mxClassID mxGetClassID_800(const mxArray* pa);
@@ -89,13 +88,10 @@ bool mxIsUint64_800(const mxArray* pa);
 void mxSetField_800(mxArray* pa, mwIndex index, const char* fieldname, mxArray* value);
 
 // MEX API (libmex)
-int mexAtExit_800(void (*exitFcn)(void));
 int mexCallMATLAB_800(int nlhs, mxArray* plhs[], int nrhs, mxArray* prhs[], const char* functionName);
 mxArray* mexCallMATLABWithTrap_800(int nlhs, mxArray* plhs[], int nrhs, mxArray* prhs[], const char* functionName);
 void mexErrMsgIdAndTxt_800(const char* errorid, const char* errormsg, ...);
 void mexErrMsgTxt_800(const char* errormsg);
-void mexMakeArrayPersistent_800(mxArray* pa);
-void mexWarnMsgIdAndTxt_800(const char* warningid, const char* warningmsg, ...);
 
 // The unsuffixed documented names map onto the versioned exports.
 #define mxArrayToUTF8String mxArrayToUTF8String_800
@@ -107,7 +103,6 @@ void mexWarnMsgIdAndTxt_800(const char* warningid, const char* warningmsg, ...);
 #define mxCreateNumericMatrix mxCreateNumericMatrix_800
 #define mxCreateStructMatrix mxCreateStructMatrix_800
 #define mxDestroyArray mxDestroyArray_800
-#define mxDuplicateArray mxDuplicateArray_800
 #define mxFree mxFree_800
 #define mxGetCell mxGetCell_800
 #define mxGetClassID mxGetClassID_800
@@ -127,13 +122,10 @@ void mexWarnMsgIdAndTxt_800(const char* warningid, const char* warningmsg, ...);
 #define mxIsNumeric mxIsNumeric_800
 #define mxIsUint64 mxIsUint64_800
 #define mxSetField mxSetField_800
-#define mexAtExit mexAtExit_800
 #define mexCallMATLAB mexCallMATLAB_800
 #define mexCallMATLABWithTrap mexCallMATLABWithTrap_800
 #define mexErrMsgIdAndTxt mexErrMsgIdAndTxt_800
 #define mexErrMsgTxt mexErrMsgTxt_800
-#define mexMakeArrayPersistent mexMakeArrayPersistent_800
-#define mexWarnMsgIdAndTxt mexWarnMsgIdAndTxt_800
 
 #ifdef __cplusplus
 }

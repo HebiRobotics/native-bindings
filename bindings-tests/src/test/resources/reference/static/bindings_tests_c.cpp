@@ -119,24 +119,6 @@ void custom_prefix_Naming_release(custom_prefix_NamingPtr obj) {
     __custom_prefix_Naming_release(isolate::global(), obj);
 }
 
-// ==== PlainStored ====
-bindings_tests_PlainStoredPtr __bindings_tests_PlainStored_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, long long times);
-bindings_tests_PlainStoredPtr bindings_tests_PlainStored_create(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, size_t times) {
-    return __bindings_tests_PlainStored_create(isolate::global(), _error, func, static_cast<long long>(times));
-}
-void __bindings_tests_PlainStored_fire(bindings_tests_IsolateThread* isolate, bindings_tests_PlainStoredPtr obj, int index);
-void bindings_tests_PlainStored_fire(bindings_tests_PlainStoredPtr obj, int index) {
-    __bindings_tests_PlainStored_fire(isolate::global(), obj, index);
-}
-int __bindings_tests_PlainStored_getClosedCount(bindings_tests_IsolateThread* isolate);
-int bindings_tests_PlainStored_getClosedCount() {
-    return __bindings_tests_PlainStored_getClosedCount(isolate::global());
-}
-void __bindings_tests_PlainStored_release(bindings_tests_IsolateThread* isolate, bindings_tests_PlainStoredPtr obj);
-void bindings_tests_PlainStored_release(bindings_tests_PlainStoredPtr obj) {
-    __bindings_tests_PlainStored_release(isolate::global(), obj);
-}
-
 // ==== Shape ====
 const char* __bindings_tests_Shape_getName(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj);
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj) {
