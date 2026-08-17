@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
-import com.google.common.base.Joiner;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEntryPointGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
@@ -9,10 +8,8 @@ import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
-import java.io.StringWriter;
 import java.io.Writer;
 import java.util.*;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.function.Function;
 
 /**
@@ -27,9 +24,8 @@ public class CBindingsGenerator extends BindingGenerator {
 
     @Override
     public void writeTo(Filer filer) throws IOException {
-        // Process all classes
         for (ClassDescription apiClass : lib.getClasses()) {
-            process(apiClass);
+            writeClass(apiClass);
         }
 
         // Header for the shared library
@@ -38,7 +34,7 @@ public class CBindingsGenerator extends BindingGenerator {
         // Additional sources for the static library
         filer.createFile("..", lib.getName() + "_c.h", writer -> writeHeader(writer, true));
         filer.createFile("..", lib.getName() + "_c.cpp", this::writeImplementation);
-        filer.createFile("..", lib.getName() + "_objc.m", writer -> writer.write(mFile.toString()));
+        filer.createFile("..", lib.getName() + "_objc.m", this::writeObjCImplementation);
         filer.createFile("..", lib.getName() + "_static.cmake", this::writeCMakeStatic);
         filer.createFile("..", "CMakeLists.txt", this::writeCMakeLists);
         filer.createFile("..", "mex.cmake", writer -> writer.write(loadContent("c/mex.cmake")));
@@ -84,12 +80,12 @@ public class CBindingsGenerator extends BindingGenerator {
      * @param types how the calling face spells a type, e.g. the MEX gateway's own struct copies
      */
     public static String getCCallbackTypedef(CallbackDescription callback, Function<TypeDescription, String> types) {
-        var parameters = new StringJoiner(", ");
+        var parameters = new ArrayList<String>();
         for (var parameter : callback.getParameters()) {
             parameters.add(getCallbackParameterType(parameter, types) + " " + parameter.getParamName());
         }
-        return String.format("typedef %s (*%s)(%s);",
-                types.apply(callback.getReturnType()), callback.getCPrefix() + callback.getName(), parameters);
+        return "typedef " + types.apply(callback.getReturnType()) + " (*" + callback.getCPrefix() + callback.getName() + ")("
+                + String.join(", ", parameters) + ");";
     }
 
     /**
@@ -105,87 +101,163 @@ public class CBindingsGenerator extends BindingGenerator {
         return type.getIsConst() ? "const " + name : name;
     }
 
-    protected void process(ClassDescription apiClass) {
-        // Type definition, e.g., typedef struct HebiCommand_* HebiCommandPtr;
+    /**
+     * The exported functions of one class: declarations into the header, entry point
+     * declarations plus the forwarding shims into the source.
+     */
+    private void writeClass(ClassDescription apiClass) {
         var type = apiClass.getType();
         if (apiClass.getInstantiable()) {
-            typeDefs.append(String.format("typedef struct %s_* %s;\n",
-                    TypeMap.toExternalC(type, false),
-                    TypeMap.toExternalC(type, true)
-            ));
+            typeDefs.addLine("typedef struct " + TypeMap.toExternalC(type, false) + "_* " + TypeMap.toExternalC(type, true) + ";");
         }
+        header.addLine().addLine("// ==== " + type.getTypeName() + " ====");
+        source.addLine().addLine("// ==== " + type.getTypeName() + " ====");
 
-        header.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
-        cFile.append("\n// ==== ").append(type.getTypeName()).append(" ====\n");
-        SignatureBuilder func = new SignatureBuilder(getIsolateThreadType(), getErrorType());
         String isolateName = apiClass.tryGetIsolateName().orElse("global");
-
-        // Function signatures, e.g.,
-        // HebiStatusCode hebiRobotModelSetBaseFrame(HebiRobotModelPtr robot_model, const double* transform, HebiMatrixOrdering ordering);
         for (var method : apiClass.getMethods()) {
-            func.init(isolateName, method.getReturnType(), method.getCName(), isThrowing(method));
-
-            // instance reference
+            var shim = new Shim(isolateName, method.getReturnType(), method.getCName(), isThrowing(method));
             if (!method.getIsStatic()) {
-                func.addParam(type, "obj");
+                shim.addParam(type, "obj");
             }
-
-            // arguments
             for (var param : method.getParameters()) {
-                // isolates are already added as the first argument
-                func.addParam(param, param.getParamName());
+                shim.addParam(param, param.getParamName());
             }
-
-            // finish
-            func.writeTo(header, cFile);
-
+            shim.write();
         }
 
         // additional methods
         if (apiClass.getInstantiable() && !apiClass.hasParent()) {
-            func.init(isolateName, TypeDescription.newInstance().setDataType(DataType.VOID), apiClass.getCDestructorName())
+            var voidType = TypeDescription.newInstance().setDataType(DataType.VOID);
+            new Shim(isolateName, voidType, apiClass.getCDestructorName(), false)
                     .addParam(type, "obj")
-                    .writeTo(header, cFile);
+                    .write();
         }
 
         // To have a pure C library, we need to add casts to go from child to parent pointers
-        apiClass.tryGetToParentCastMethod().ifPresent(method -> addParentCastMethod(method, header, cFile));
-
+        apiClass.tryGetToParentCastMethod().ifPresent(this::writeParentCast);
     }
 
-    public static void addParentCastMethod(MethodDescription method, StringBuilder header, StringBuilder cFile) {
-        Function<String, String> replace = input -> IndentingTextRenderer.of(input)
-                .set("DLL_PUBLIC", DLL_PUBLIC)
-                .set("PARENT", getQualifiedCType(method.getReturnType()))
-                .set("NAME", method.getCName())
-                .set("CHILD", getQualifiedCType(method.getParameters().get(0)))
-                .render();
-        header.append(replace.apply("""
-                %%DLL_PUBLIC%%%%PARENT%% %%NAME%%(%%CHILD%% ptr);
-                """));
-        if (cFile != null) {
-            cFile.append(replace.apply("""
-                    %%PARENT%% %%NAME%%(%%CHILD%% ptr) {
-                      return reinterpret_cast<%%PARENT%%>(ptr);
-                    }
-                    """));
+    private void writeParentCast(MethodDescription method) {
+        var decl = header.snapshot();
+        var def = source.snapshot();
+        for (var out : List.of(decl, def)) {
+            out.set("PARENT", getQualifiedCType(method.getReturnType()))
+                    .set("NAME", method.getCName())
+                    .set("CHILD", getQualifiedCType(method.getParameters().get(0)));
         }
+        decl.addLine("%%DLL_PUBLIC%%%%PARENT%% %%NAME%%(%%CHILD%% ptr);");
+        def.beginControlFlow("%%PARENT%% %%NAME%%(%%CHILD%% ptr) {")
+                .addLine("return reinterpret_cast<%%PARENT%%>(ptr);")
+                .endControlFlow("}");
     }
 
-    private static final String DLL_PUBLIC = "DLL_PUBLIC ";
+    /**
+     * One exported function: the public signature for the header, and for the source the GraalVM
+     * entry point it forwards to plus the shim itself. The entry point takes the isolate thread
+     * first, and structs cross it by pointer where the public face passes them by value.
+     */
+    private final class Shim {
 
-    private static String getCStructDefinition(StructDescription struct) {
+        Shim(String isolateName, TypeDescription returnType, String name, boolean throwing) {
+            this.name = name;
+            this.returnType = returnType;
+            this.structReturn = isPassedByAddress(returnType.getDataType());
+            internalParams.add(getIsolateThreadType() + "* isolate");
+            args.add(ISOLATE_NAMESPACE + isolateName + "()");
+            if (throwing) {
+                String errorParam = getErrorType() + "* " + ERROR_PARAM_NAME;
+                params.add(errorParam);
+                internalParams.add(errorParam);
+                args.add(ERROR_PARAM_NAME);
+            }
+        }
+
+        Shim addParam(TypeDescription type, String name) {
+            params.add(getQualifiedCType(type) + " " + name);
+            internalParams.add(isPassedByAddress(type.getDataType())
+                    ? "const " + TypeMap.toExternalC(type, false) + "* " + name
+                    : getInternalQualifiedCType(type) + " " + name);
+            args.add(switch (type.getDataType()) {
+                case SIZE_T -> "static_cast<long long>(" + name + ")";
+                // the public face says uint8_t*, the GraalVM entry point char*
+                case UINT8_POINTER -> "reinterpret_cast<char*>(" + name + ")";
+                // structs cross the entry point as a pointer to the by-value parameter
+                case STRUCT -> "&" + name;
+                default -> name;
+            });
+            return this;
+        }
+
+        void write() {
+            // A by-value struct return gets filled through a trailing out pointer
+            if (structReturn) {
+                internalParams.add(TypeMap.toExternalC(returnType, false) + "* " + OUT_PARAM_NAME);
+                args.add("&result_");
+            }
+
+            var decl = header.snapshot();
+            var def = source.snapshot();
+            for (var out : List.of(decl, def)) {
+                out.set("RETURN_TYPE", getQualifiedCType(returnType))
+                        .set("NAME", name)
+                        .setArgs("PARAMS", params);
+            }
+            decl.addLine("%%DLL_PUBLIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%);");
+
+            def.set("INTERNAL_RETURN_TYPE", structReturn ? "void" : getInternalQualifiedCType(returnType))
+                    .set("INTERNAL_NAME", getInternalName(name))
+                    .setArgs("INTERNAL_PARAMS", internalParams)
+                    .setArgs("ARGS", args);
+            def.addLine("%%INTERNAL_RETURN_TYPE%% %%INTERNAL_NAME%%(%%INTERNAL_PARAMS%%);");
+            def.beginControlFlow("%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%) {");
+            if (structReturn) {
+                def.addLine("%%RETURN_TYPE%% result_;");
+                def.addLine("%%INTERNAL_NAME%%(%%ARGS%%);");
+                def.addLine("return result_;");
+            } else {
+                boolean isVoid = returnType.getDataType() == DataType.VOID;
+                def.addLine((isVoid ? "" : "return ") + "%%INTERNAL_NAME%%(%%ARGS%%);");
+            }
+            def.endControlFlow("}");
+        }
+
+        /**
+         * User structs cross the entry point as a pointer, both as a parameter
+         * and as the trailing out-struct a by-value return is written through.
+         */
+        private static boolean isPassedByAddress(DataType type) {
+            return type == DataType.STRUCT;
+        }
+
+        private static String getInternalName(String cEntryPointName) {
+            return CEntryPointGenerator.INTERNAL_PREFIX + cEntryPointName;
+        }
+
+        private final String name;
+        private final TypeDescription returnType;
+        private final boolean structReturn;
+        private final List<String> params = new ArrayList<>();
+        private final List<String> internalParams = new ArrayList<>();
+        private final List<String> args = new ArrayList<>();
+
+    }
+
+    private static void writeStructDefinition(IndentingTextRenderer out, StructDescription struct) {
         // Note: the names have no effect on the memory layout, so each language can use their matching convention
-        var out = new IndentingTextRenderer().addLine();
+        out.addLine();
         struct.tryGetComment().ifPresent(comment -> out.add(DocumentationUtil.generateLineComments("", comment)));
-        out.addLine("typedef struct {").indent();
+        out.beginControlFlow("typedef struct {");
         for (var field : struct.getFields()) {
             out.addLine(TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";");
         }
-        return out.unindent().addLine("} " + struct.getCName() + ";").render();
+        out.endControlFlow("} " + struct.getCName() + ";");
     }
 
-    private void writeHeader(Writer fileWriter, boolean exportSymbols) throws IOException {
+    /**
+     * The same declarations serve the shared library, which exports them, and the static
+     * build, which does not.
+     */
+    private void writeHeader(Writer writer, boolean exportSymbols) throws IOException {
         final String DLL_DEFINES = !exportSymbols ? "" : """
                 #if !defined(_WIN32) && (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__)))
                 # ifndef DLL_PUBLIC
@@ -204,104 +276,85 @@ public class CBindingsGenerator extends BindingGenerator {
                 #endif
                 """;
 
-        StringWriter writer = new StringWriter();
-
-        writer.write(IndentingTextRenderer.of("""
-                        // Error information for every method that can throw. A non-zero code
-                        // means the call failed and the return value can be ignored. Contents
-                        // are library owned and only valid until the next call on this thread.
-                        typedef struct {
-                            const char* message;
-                            const char* id;
-                            int32_t code;
-                        } %%ERROR_TYPE%%;
-                        """)
-                .set("ERROR_TYPE", getErrorType())
-                .render());
+        var content = new IndentingTextRenderer()
+                .setIf("DLL_PUBLIC", exportSymbols, "DLL_PUBLIC ")
+                .set("ERROR_TYPE", getErrorType());
+        content.add("""
+                // Error information for every method that can throw. A non-zero code
+                // means the call failed and the return value can be ignored. Contents
+                // are library owned and only valid until the next call on this thread.
+                typedef struct {
+                    const char* message;
+                    const char* id;
+                    int32_t code;
+                } %%ERROR_TYPE%%;
+                """);
         for (var struct : lib.getStructs()) {
-            writer.write(getCStructDefinition(struct));
+            writeStructDefinition(content, struct);
         }
 
         // Callbacks come after structs as they may have struct inputs
         if (lib.getCallbacks().length() > 0) {
-            writer.write("\n");
+            content.addLine();
             for (var callback : lib.getCallbacks()) {
-                writer.write(getCCallbackTypedef(callback));
-                writer.write("\n");
+                content.addLine(getCCallbackTypedef(callback));
             }
         }
-        writer.write("\n");
-        writer.write(typeDefs.toString());
-        writer.write("\n");
+        content.addLine().add(typeDefs.render()).addLine();
 
-        // Enum defs
         for (var enumDesc : lib.getEnums()) {
-            writer.write(CEnumGenerator.getCEnumDefinition(enumDesc));
-            writer.write("\n");
+            content.add(CEnumGenerator.getCEnumDefinition(enumDesc)).addLine();
         }
 
-        // Content
-        writer.write(header.toString());
+        content.add(header.render());
         for (FeatureGenerator feature : features) {
-            writer.write("\n");
-            writer.write(feature.getCHeader(false));
+            content.addLine().add(feature.getCHeader(false));
         }
 
-        // Fix exports
-        var content = writer.toString();
-        if (!exportSymbols) {
-            content = content.replaceAll(DLL_PUBLIC, "");
-        }
-
-        fileWriter.write(loadTemplate("c/libName_c.h")
-                .add("content", content)
+        writer.write(loadTemplate("c/libName_c.h")
+                .add("content", content.render())
                 .add("defines", DLL_DEFINES)
                 .render());
     }
 
-    private void writeImplementation(Writer fileWriter) throws IOException {
-        var writer = new StringWriter();
-
-        writer.write(cFile.toString());
+    private void writeImplementation(Writer writer) throws IOException {
+        var content = new IndentingTextRenderer().add(source.render());
         for (FeatureGenerator feature : features) {
-            writer.write(feature.getCSource());
+            content.add(feature.getCSource());
         }
 
-        StringBuilder isolates = new StringBuilder();
+        // One accessor per named isolate, the global one lives in the template
         Set<String> isolateNames = new TreeSet<>();
         for (var aClass : lib.getClasses()) {
             aClass.tryGetIsolateName().ifPresent(isolateNames::add);
         }
+        var isolates = new IndentingTextRenderer()
+                .set("THREAD_TYPE", getIsolateThreadType())
+                .set("ISOLATE_TYPE", getIsolateType());
         for (var isolateName : isolateNames) {
-            isolates.append(createIsolateCode(isolateName));
+            isolates.set("NAME", isolateName).add("""
+                    %%THREAD_TYPE%%* %%NAME%%() {
+                        static %%ISOLATE_TYPE%%* isolate = createIsolate();
+                        static thread_local ThreadHandle thread(isolate);
+                        return thread.ptr;
+                    }
+
+                    """);
         }
 
-        fileWriter.write(loadTemplate("c/libName_c.cpp")
+        writer.write(loadTemplate("c/libName_c.cpp")
                 .add("isolateApi", getIsolateApiDeclarations())
-                .add("isolates", isolates.toString().trim())
+                .add("isolates", isolates.render().trim())
                 .add("libName", lib.getName())
                 .add("cPrefix", lib.getCPrefix())
-                .add("content", writer.toString())
+                .add("content", content.render())
                 .render());
-
-        for (FeatureGenerator feature : features) {
-            mFile.append(feature.getObjCSource());
-        }
-
     }
 
-    private String createIsolateCode(String functionName) {
-        return IndentingTextRenderer.of("""
-                        %%THREAD_TYPE%%* %%NAME%%() {
-                             static %%ISOLATE_TYPE%%* isolate = createIsolate();
-                             static thread_local ThreadHandle thread(isolate);
-                             return thread.ptr;
-                        }
-                        """)
-                .set("THREAD_TYPE", getIsolateThreadType())
-                .set("ISOLATE_TYPE", getIsolateType())
-                .set("NAME", functionName)
-                .render();
+    private void writeObjCImplementation(Writer writer) throws IOException {
+        for (FeatureGenerator feature : features) {
+            writer.write(feature.getObjCSource());
+        }
     }
 
     /**
@@ -311,7 +364,11 @@ public class CBindingsGenerator extends BindingGenerator {
      * (not part of the user-facing C ABI)
      */
     private String getIsolateApiDeclarations() {
-        return IndentingTextRenderer.of("""
+        return new IndentingTextRenderer()
+                .set("ISOLATE_TYPE", getIsolateType())
+                .set("THREAD_TYPE", getIsolateThreadType())
+                .set("PREFIX", lib.getCPrefix())
+                .add("""
                         typedef struct %%PREFIX%%_Isolate_s %%ISOLATE_TYPE%%;
                         typedef struct %%PREFIX%%_IsolateThread_s %%THREAD_TYPE%%;
 
@@ -321,9 +378,6 @@ public class CBindingsGenerator extends BindingGenerator {
                         %%THREAD_TYPE%%* %%PREFIX%%_getCurrentThread(%%ISOLATE_TYPE%%* isolate);
                         int %%PREFIX%%_detachThread(%%THREAD_TYPE%%* thread);
                         int %%PREFIX%%_tearDownIsolate(%%THREAD_TYPE%%* thread);""")
-                .set("ISOLATE_TYPE", getIsolateType())
-                .set("THREAD_TYPE", getIsolateThreadType())
-                .set("PREFIX", lib.getCPrefix())
                 .render();
     }
 
@@ -365,161 +419,17 @@ public class CBindingsGenerator extends BindingGenerator {
         for (FeatureGenerator feature : features) {
             libs.addAll(feature.getAppleLibraries());
         }
-        return Joiner.on(",\n").join(libs);
+        return String.join(",\n", libs);
     }
 
-    static class SignatureBuilder {
-
-        public SignatureBuilder(String isolateThreadType, String errorType) { // TODO: make params replacements via IndentingAppender?
-            this.isolateThreadParam = isolateThreadType + "* isolate";
-            this.errorParam = errorType + "* " + ERROR_PARAM_NAME;
-        }
-
-        public SignatureBuilder init(String isolateName, TypeDescription returnType, String cEntryPointName) {
-            return init(isolateName, returnType, cEntryPointName, false);
-        }
-
-        public SignatureBuilder init(String isolateName, TypeDescription returnType, String cEntryPointName,
-                                     boolean throwing) {
-            params.clear();
-            this.returnType = returnType;
-            this.cEntryPointName = cEntryPointName;
-            this.isolateName = isolateName;
-            this.throwing = throwing;
-            return this;
-        }
-
-        public SignatureBuilder addParam(TypeDescription type, String name) {
-            params.add(new SimpleEntry<>(type, name));
-            return this;
-        }
-
-        public void writeTo(StringBuilder header, StringBuilder impl) {
-            writeExternalSignature(header);
-            writeInternalSignature(impl);
-            writeExternalToInternalWrapper(impl);
-        }
-
-        public void writeInternalSignature(StringBuilder out) {
-            // Original signature generated by GraalVM. Structs cannot cross an entry point
-            // by value, structs get allocated by the wrapper and passed by reference.
-            boolean structReturn = isPassedByAddress(returnType.getDataType());
-            out.append(structReturn ? "void" : getInternalQualifiedCType(returnType))
-                    .append(" ").append(getInternalName(cEntryPointName)).append("(");
-            out.append(isolateThreadParam);
-            if (throwing) {
-                out.append(", ").append(errorParam);
-            }
-            for (var param : params) {
-                if (isPassedByAddress(param.getKey().getDataType())) {
-                    out.append(", const ").append(TypeMap.toExternalC(param.getKey(), false))
-                            .append("* ").append(param.getValue());
-                } else {
-                    out.append(", ").append(getInternalQualifiedCType(param.getKey())).append(" ").append(param.getValue());
-                }
-            }
-            if (structReturn) {
-                out.append(", ").append(TypeMap.toExternalC(returnType, false))
-                        .append("* ").append(OUT_PARAM_NAME);
-            }
-            out.append(");\n");
-        }
-
-        public void writeExternalSignature(StringBuilder out) {
-            // External signature without GraalVM isolates
-            out.append(DLL_PUBLIC);
-            out.append(getQualifiedCType(returnType)).append(" ").append(cEntryPointName).append("(");
-            int numParams = 0;
-            if (throwing) {
-                out.append(errorParam);
-                numParams++;
-            }
-            for (var param : params) {
-                var key = getQualifiedCType(param.getKey());
-                out.append(numParams++ > 0 ? ", " : "").append(key).append(" ").append(param.getValue());
-            }
-            out.append(");\n");
-        }
-
-        public void writeExternalToInternalWrapper(StringBuilder out) {
-
-            // Custom wrapper
-            invocation.setLength(0);
-            boolean structReturn = isPassedByAddress(returnType.getDataType());
-            if (returnType.getDataType() != DataType.VOID && !structReturn) {
-                invocation.append("return ");
-            }
-            out.append(getQualifiedCType(returnType)).append(" ").append(cEntryPointName).append("(");
-            invocation.append(getInternalName(cEntryPointName)).append("(").append(isolateNamespace).append(isolateName).append("()");
-
-            int numParams = 0;
-            if (throwing) {
-                numParams++;
-                out.append(errorParam);
-                invocation.append(", ").append(ERROR_PARAM_NAME);
-            }
-            for (var param : params) {
-                String name = param.getValue();
-                String value = switch (param.getKey().getDataType()) {
-                    case SIZE_T -> "static_cast<long long>(" + name + ")";
-                    // the public face says uint8_t*, the GraalVM entry point char*
-                    case UINT8_POINTER -> "reinterpret_cast<char*>(" + name + ")";
-                    // structs cross the entry point as a pointer to the by-value parameter
-                    case STRUCT -> "&" + name;
-                    default -> name;
-                };
-
-                String type = getQualifiedCType(param.getKey());
-                out.append(numParams++ > 0 ? ", " : "").append(type).append(" ").append(name);
-                invocation.append(", ").append(value);
-            }
-
-            // Forward wrapper call. Struct returns get filled into a local struct that gets
-            // returned by value. Seeded with the opening brace, so the buffer ends on
-            // a newline, which is what makes the renderer indent the first body line.
-            var body = IndentingTextRenderer.of(") {\n").indent();
-            if (structReturn) {
-                invocation.append(", &result_");
-                body.addLine(getQualifiedCType(returnType) + " result_;")
-                        .addLine(invocation + ");")
-                        .addLine("return result_;");
-            } else {
-                body.addLine(invocation + ");");
-            }
-            out.append(body.unindent().addLine("}").render());
-        }
-
-        /**
-         * User structs cross the entry point as a pointer, both as a parameter
-         * and as the trailing out-struct a by-value return is written through.
-         */
-        private static boolean isPassedByAddress(DataType type) {
-            return type == DataType.STRUCT;
-        }
-
-        private static String getInternalName(String cEntryPointName) {
-            return CEntryPointGenerator.INTERNAL_PREFIX + cEntryPointName;
-        }
-
-        private final String isolateThreadParam;
-        private final String errorParam;
-        private boolean throwing;
-        private String isolateName;
-        private TypeDescription returnType;
-        private String cEntryPointName;
-        private List<Map.Entry<TypeDescription, String>> params = new ArrayList<>();
-
-        private final StringBuilder invocation = new StringBuilder();
-
-    }
-
-    private static final String isolateNamespace = "isolate::";
-
+    private static final String ISOLATE_NAMESPACE = "isolate::";
     static final String ERROR_PARAM_NAME = "_error";
     static final String OUT_PARAM_NAME = "structOut";
-    StringBuilder typeDefs = new StringBuilder();
-    StringBuilder header = new StringBuilder();
-    StringBuilder cFile = new StringBuilder();
-    StringBuilder mFile = new StringBuilder();
+
+    // Built up class by class, then spliced into the whole-file templates. The export
+    // macro stays a token until the header decides whether it exports.
+    private final IndentingTextRenderer typeDefs = new IndentingTextRenderer();
+    private final IndentingTextRenderer header = new IndentingTextRenderer();
+    private final IndentingTextRenderer source = new IndentingTextRenderer();
 
 }

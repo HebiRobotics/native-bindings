@@ -28,16 +28,15 @@ public class CocoaFeature implements FeatureGenerator {
     public String getCHeader(boolean isCpp) {
         if (isCpp) {
             return getReplacedText("""
-                      typedef int (*main_func_t)(int argc, char** argv);
-                      int runApplicationC(main_func_t callback, int argc, char** argv);
-                    """
-            );
+                    typedef int (*main_func_t)(int argc, char** argv);
+                    int runApplicationC(main_func_t callback, int argc, char** argv);
+                    """);
         } else {
             return getReplacedText("""
 
                     // ==== Cocoa utilities for supporting macOS ====
                     typedef int (*main_func_t)(int argc, char** argv);
-                    DLL_PUBLIC int runApplicationC(main_func_t callback, int argc, char** argv);
+                    %%DLL_PUBLIC%%int runApplicationC(main_func_t callback, int argc, char** argv);
                     """
             );
         }

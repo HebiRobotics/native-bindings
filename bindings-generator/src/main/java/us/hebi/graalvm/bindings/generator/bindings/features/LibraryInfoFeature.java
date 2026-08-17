@@ -22,7 +22,7 @@ public class LibraryInfoFeature implements FeatureGenerator {
             // would otherwise collide with it. __inline covers MSVC's legacy C mode, which
             // does not know the C99 keyword.
             return getReplacedText("""
-                    DLL_PUBLIC void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
+                    %%DLL_PUBLIC%%void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
                     static __inline void getHeaderVersionC(int* major, int* minor, int* patch, int* build) {
                         *major = VERSION_MAJOR;
                         *minor = VERSION_MINOR;
