@@ -634,23 +634,6 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual([1], seen)
 
-    def test_plain_stored_fires_during_and_after_construction(self):
-        seen = []
-        closed = bindings_tests.PlainStored.get_closed_count()
-
-        # The indices arrive during construction, and the instance owns the trampoline,
-        # which is what keeps it alive for the later fire() calls
-        stored = bindings_tests.PlainStored(seen.append, 2)
-        self.assertEqual([0, 1], seen)
-        self.assertIsNotNone(stored._func)
-
-        stored.fire(9)
-        self.assertEqual([0, 1, 9], seen)
-
-        del stored
-        gc.collect()
-        self.assertEqual(closed + 1, bindings_tests.PlainStored.get_closed_count())
-
     def test_method_wrapper_is_not_retained(self):
         # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call
         # that passed it. The module therefore has no process-lifetime cache at all.

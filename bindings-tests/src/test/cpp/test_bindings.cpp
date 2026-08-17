@@ -623,20 +623,6 @@ static void testCallbacks() {
   plainState = CallbackState();
   bt::callbacks::notifyPlainOnce([] { ++plainState.count; });
   CHECK(plainState.count == 1);
-
-  // The constructor both fires the callback and keeps it, so the later fire reaches the
-  // same function pointer the creation used.
-  const int plainClosedBefore = bt::PlainStored::getClosedCount();
-  plainState = CallbackState();
-  {
-    bt::PlainStored handle(&onPlainIndex, 2);
-    CHECK(plainState.count == 2);
-    CHECK(plainState.indices[0] == 0 && plainState.indices[1] == 1);
-    handle.fire(9);
-    CHECK(plainState.count == 3);
-    CHECK(plainState.indices[2] == 9);
-  }
-  CHECK(bt::PlainStored::getClosedCount() == plainClosedBefore + 1);
 }
 
 // ---------------------------------------------------------------------------

@@ -388,12 +388,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         // Fixed slots (fields) to prevent dynamic fields and dictionary overhead
         if (apiClass.getInstantiable()) {
-            var slots = new ArrayList<String>();
-            slots.add(refField);
-            slots.addAll(getCallbackFieldNames(apiClass));
-            var quoted = slots.stream().map(slot -> "'" + slot + "'").toList();
-            content.append("    __slots__ = (%s)\n\n".formatted(
-                    quoted.size() == 1 ? quoted.get(0) + "," : String.join(", ", quoted)));
+            content.append("    __slots__ = ('%s',)\n\n".formatted(refField));
         } else if (apiClass.hasChildren() || apiClass.hasParent()) {
             content.append("    __slots__ = ()\n\n"); // dummy to prevent __dict__ creation
         }
@@ -499,23 +494,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 .set("LIB", libField)
                 .set("REF", refField)
                 .render();
-    }
-
-    /** The instance attribute that keeps a constructor's callback trampoline alive */
-    private static String getCallbackFieldName(TypeDescription param) {
-        return "_" + param.getLowerUnderscoreParamName();
-    }
-
-    private static List<String> getCallbackFieldNames(ClassDescription apiClass) {
-        var fields = new ArrayList<String>();
-        GeneratorUtil.getConstructor(apiClass).ifPresent(constructor -> {
-            for (var param : constructor.getParameters()) {
-                if (param.getDataType() == DataType.CALLBACK) {
-                    fields.add(getCallbackFieldName(param));
-                }
-            }
-        });
-        return fields;
     }
 
     private static String getPropertyName(MethodDescription method) {
@@ -858,7 +836,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // Conversions and C call
             for (var parameter : desc.getParameters()) {
                 // Convert from input to C type
-                appendInputConversion(lib, parameter, isConstructor, conversions);
+                appendInputConversion(lib, parameter, conversions);
 
                 // Call the C method
                 if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
@@ -877,8 +855,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             this.inputConversions = conversions.toString();
         }
 
-        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc,
-                                                  boolean isConstructor, StringBuilder out) {
+        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc, StringBuilder out) {
             String pyType = getCPythonType(desc);
             String name = desc.getLowerUnderscoreParamName();
 
@@ -908,22 +885,10 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("ARGS", joiner.join(args))
                         .render());
 
-            } else if (desc.getDataType() == DataType.CALLBACK && isConstructor) {
-                // The library holds the pointer for as long as the handle lives, so the instance
-                // owns the trampoline. That keeps it out of the process-wide cache, which a fresh
-                // callable per instance would grow without bound.
-                out.append(IndentingTextRenderer.of("""
-                        if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
-                            %%NAME%% = %%CTYPE%%(%%NAME%%)
-                        self.%%FIELD%% = %%NAME%%
-                        """).set("NAME", name).set("CTYPE", pyType)
-                        .set("FIELD", getCallbackFieldName(desc))
-                        .render());
-
             } else if (desc.getDataType() == DataType.CALLBACK) {
                 // Anything callable is accepted, a prebuilt prototype passes straight through. A
-                // raw callback parameter is call-scoped, so its trampoline stays a local and a
-                // fresh lambda per call gets collected like any other object.
+                // callback parameter is call-scoped, so its trampoline stays a local and a fresh
+                // lambda per call gets collected like any other object.
                 out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
                             %%NAME%% = %%CTYPE%%(%%NAME%%)

@@ -713,14 +713,12 @@ static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
-    bindings_tests_PlainStoredPtr plain_stored;
     double source[TRANSFORM_COUNT];
     double target[TRANSFORM_COUNT];
     double left[3];
     double right[2];
     bindings_tests_DoubleSpan a;
     bindings_tests_DoubleSpan b;
-    int released;
     int i;
 
     /* Fires synchronously, five times, with indices 0..4, before returning. The void*
@@ -799,20 +797,6 @@ static void test_callbacks(void) {
     memset(&plain_state, 0, sizeof(plain_state));
     bindings_tests_Callbacks_notifyPlainOnce(&on_plain_notify);
     assert(plain_state.count == 1);
-
-    /* The constructor both fires the callback and keeps it, so the later fire reaches the
-       same function pointer the creation used. */
-    memset(&plain_state, 0, sizeof(plain_state));
-    released = bindings_tests_PlainStored_getClosedCount();
-    plain_stored = bindings_tests_PlainStored_create(&error, &on_plain_index, (size_t) 2);
-    assert(error.code == 0);
-    assert(plain_stored != NULL);
-    assert(plain_state.count == 2);
-    bindings_tests_PlainStored_fire(plain_stored, 9);
-    assert(plain_state.count == 3);
-    assert(plain_state.indices[2] == 9);
-    bindings_tests_PlainStored_release(plain_stored);
-    assert(bindings_tests_PlainStored_getClosedCount() == released + 1);
 
     printf("callbacks ok\n");
 }

@@ -232,7 +232,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         var cases = withLibVars().indent(2)
                 .set("PRE", "")
                 .set("POST", "")
-                .set("EXTRA_SYMBOLS", "")
                 .set("CALL", "%%CNAME%%(%%ARGS%%);")
                 .set("RETURN_VALUE", "_value")
                 .set("ARG_COUNT", "0");
@@ -245,7 +244,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         Consumer<IndentingTextRenderer> addCase = (template) -> {
             template.beginControlFlow("case /* hash32_fnv1a(\"%%CNAME%%\") */ %%HASH%%: {");
-            template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");%%EXTRA_SYMBOLS%%");
+            template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");");
             template.addLine("checkArgCount(nrhs, %%ARG_COUNT%%, \"%%CNAME%%\");");
             template.addLine("%%PRE%%%%CALL%%%%POST%%");
             template.addLine("break;").unindent().addLine("}");
@@ -253,85 +252,44 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         final StringBuilder pre = new StringBuilder();
         final StringBuilder post = new StringBuilder();
-        final List<DispatchArg> arguments = new ArrayList<>();
         final List<String> types = new ArrayList<>();
         final List<String> args = new ArrayList<>();
+        final List<CallbackArg> callbackArgs = new ArrayList<>();
         final int FIRST_INDEX = 1; // first real argument after function name
         for (ClassDescription clazz : lib.getClasses()) {
             cases.addLine("\n// " + getMatlabClassName(clazz));
             for (MethodDescription method : clazz.getMethods()) {
                 if (callbacks.getMatlabExclusionReason(method).isPresent()) continue;
-
-                // Classify. The index counter walks the prhs slots and ends up as ARG_COUNT.
                 int index = FIRST_INDEX;
-                arguments.clear();
-                if (!method.getIsStatic()) {
-                    arguments.add(DispatchArg.inline(getMexCType(clazz.getType()), getMexToC(clazz.getType(), index++)));
-                }
-                for (var param : method.getParameters()) {
-                    var name = param.getParamName();
-                    if (param.getDataType() != DataType.CALLBACK) {
-                        arguments.add(DispatchArg.conversion(getMexCType(param), name, getMexToC(param, index++)));
-                    } else if (method.getIsConstructor()) {
-                        // A constructor's callback is stored on the object it creates, so the handle
-                        // moves into a callback that outlives this call.
-                        arguments.add(DispatchArg.ownedCallback(getMexCType(param), param.getTypeName(), name,
-                                "const size_t " + name + " = createCallbackRecord("
-                                + MatlabCallbackGenerator.getCallbackRegistryName(param.getTypeName())
-                                + ", prhs[" + index++ + "])"));
-                    } else {
-                        // A borrowed callback lives for exactly this call, so its acquisition and the
-                        // library call share a scope that nothing inside may raise out of.
-                        arguments.add(DispatchArg.borrowedCallback(getMexCType(param), param.getTypeName(), name,
-                                getMexToC(param, index++)));
-                    }
-                }
-                var borrowed = arguments.stream().filter(arg -> arg.kind() == DispatchArg.Kind.BORROWED_CALLBACK).toList();
-                var releaseOnCallbackError = callbacks.tryGetCallbackErrorRelease(method);
-
-                // Emit
                 pre.setLength(0);
                 post.setLength(0);
                 types.clear();
                 args.clear();
+                callbackArgs.clear();
                 // The error struct is filled by the call and raises before any output is built
                 if (isThrowing(method)) {
                     pre.append("ErrorInfo _error = {};\n");
                     types.add("ErrorInfo*");
                     args.add("&_error");
                 }
-                for (var arg : arguments) {
-                    types.add(arg.cType());
-                    args.add(arg.arg());
-                    if (arg.kind() == DispatchArg.Kind.CONVERSION) {
-                        pre.append(arg.conversion()).append(";\n");
+                if (!method.getIsStatic()) {
+                    types.add(getMexCType(clazz.getType()));
+                    args.add(getMexToC(clazz.getType(), index++));
+                }
+                for (var param : method.getParameters()) {
+                    types.add(getMexCType(param));
+                    if (param.getDataType() == DataType.CALLBACK) {
+                        // A callback lives for exactly this call, so its acquisition and the library
+                        // call share a scope that nothing inside may raise out of
+                        callbackArgs.add(new CallbackArg(param.getParamName(), getMexToC(param, index++)));
+                        args.add(MatlabCallbackGenerator.getCallbackTableEntry(param.getTypeName(), param.getParamName() + ".index"));
+                    } else {
+                        pre.append(getMexToC(param, index++)).append(";\n");
+                        args.add(param.getParamName());
                     }
                 }
-                // Callbacks are acquired last, because a raise from any argument conversion after
-                // one of them would leak the persistent copy
-                for (var arg : arguments) {
-                    if (arg.kind() == DispatchArg.Kind.OWNED_CALLBACK) {
-                        pre.append(arg.conversion()).append(";\n");
-                    }
-                }
-                for (var arg : arguments) {
-                    switch (arg.kind()) {
-                        case OWNED_CALLBACK -> post.append(callbacks.createRecordOwnershipTransfer(
-                                releaseOnCallbackError.orElse(null), arg.typeName(), arg.name()));
-                        case BORROWED_CALLBACK -> {
-                            releaseOnCallbackError.ifPresent(release -> post.append(IndentingTextRenderer.of("""
-
-                                    // A raising mexFunction discards plhs, so a handle created before the
-                                    // callback failed or was skipped would never reach an owner that releases it
-                                    if (willRaiseCallbackError(%%OUTCOME%%) && %%RETURN_VALUE%% != nullptr) %%RELEASE%%(%%RETURN_VALUE%%);""")
-                                    .set("OUTCOME", arg.name() + "Outcome")
-                                    .set("RELEASE", release)
-                                    .render()));
-                            post.append("\ncheckCallbackError(").append(arg.name()).append("Outcome);");
-                        }
-                        default -> {
-                        }
-                    }
+                for (var callback : callbackArgs) {
+                    post.append("\ncheckCallbackError(").append(callback.name()).append("Outcome);");
                 }
                 // A library error raised because the callback failed would otherwise mask
                 // the root cause, so the callback error is checked first
@@ -340,14 +298,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 }
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
-                releaseOnCallbackError.ifPresent(release -> vars.set("EXTRA_SYMBOLS",
-                        "\nstatic auto " + release + " = libLoader.getFunc<void(*)("
-                        + getMexCType(method.getReturnType()) + ")>(\"" + release + "\");"));
                 boolean returnsValue = method.getReturnType().getDataType() != DataType.VOID;
                 if (returnsValue) {
                     post.append("\nif (nlhs > 0) plhs[0] = ").append(getCToMex(method.getReturnType())).append(";");
                 }
-                if (borrowed.isEmpty()) {
+                if (callbackArgs.isEmpty()) {
                     if (returnsValue) {
                         pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
                     }
@@ -356,20 +311,20 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     if (returnsValue) {
                         pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%%;\n");
                     }
-                    for (var arg : borrowed) {
-                        pre.append("CallbackOutcome ").append(arg.name()).append("Outcome;\n");
+                    for (var callback : callbackArgs) {
+                        pre.append("CallbackOutcome ").append(callback.name()).append("Outcome;\n");
                     }
                     var scope = new IndentingTextRenderer().add("""
                             // mexErrMsgIdAndTxt longjmps without running destructors, so nothing inside
                             // the scope may raise. The outcome is checked once the slot has been released.
                             {
                             """).indent();
-                    for (var arg : borrowed) {
-                        scope.addLine(arg.conversion() + ";");
+                    for (var callback : callbackArgs) {
+                        scope.addLine(callback.conversion() + ";");
                     }
                     scope.addLine((returnsValue ? "%%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
-                    for (var arg : borrowed) {
-                        scope.addLine(arg.name() + "Outcome = " + arg.name() + ".outcome();");
+                    for (var callback : callbackArgs) {
+                        scope.addLine(callback.name() + "Outcome = " + callback.name() + ".outcome();");
                     }
                     scope.unindent().add("}");
                     vars.set("CALL", scope.render());
@@ -384,28 +339,13 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             }
             if (clazz.getInstantiable()) {
                 if (clazz.hasCDestructorName()) {
-                    var release = cases.snapshot()
+                    addCase.accept(cases.snapshot()
                             .set("RETURN_TYPE", "void")
                             .set("TYPES", getMexCType(clazz.getType()))
                             .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
                             .set("CNAME", clazz.getCDestructorName())
                             .set("HASH", computeHash.apply(clazz.getCDestructorName()))
-                            .set("ARG_COUNT", "1");
-                    // The record is destroyed after the library release, so a callback fired from
-                    // the object's own teardown still finds its handle
-                    var ownedTypes = callbacks.getOwnedCallbackTypes(clazz);
-                    if (!ownedTypes.isEmpty()) {
-                        var releases = new StringBuilder();
-                        for (var callbackType : ownedTypes) {
-                            releases.append("\nreleaseCallbackRecord(")
-                                    .append(MatlabCallbackGenerator.getCallbackRegistryName(callbackType)).append(", _handle);");
-                        }
-                        release.set("PRE", getMexCType(clazz.getType()) + " _handle = "
-                                            + getMexToC(clazz.getType(), FIRST_INDEX) + ";\n")
-                                .set("ARGS", "_handle")
-                                .set("POST", releases.toString());
-                    }
-                    addCase.accept(release);
+                            .set("ARG_COUNT", "1"));
                 }
                 if (clazz.hasToParentCastMethod()) {
                     addCase.accept(cases.snapshot()
@@ -427,8 +367,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("CALLBACK_TYPEDEFS", callbacks.createCallbackTypedefs())
                 .set("CALLBACK_SUPPORT", callbacks.createCallbackSupport())
                 .set("CALLBACK_TRAMPOLINES", callbacks.createCallbackTrampolines())
-                .set("CALLBACK_ENTRY", callbacks.createCallbackEntry())
-                .set("CALLBACK_EXIT", callbacks.createCallbackExit())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
@@ -437,38 +375,10 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * One argument of a dispatched call, classified by how it reaches the emitted sections.
-     * {@code conversion} reads the prhs slot, {@code arg} is what the library call receives.
+     * A callback parameter of a dispatched call. The conversion acquires its registry slot, and
+     * the name is what the outcome is copied out under once the slot has been released.
      */
-    private record DispatchArg(Kind kind, String cType, String arg, String conversion, String name, String typeName) {
-
-        enum Kind {
-            INLINE, // converted straight into the argument list, e.g., the instance handle
-            CONVERSION, // converted into a local variable in the PRE section
-            BORROWED_CALLBACK, // callback slot that lives for exactly this call
-            OWNED_CALLBACK // callback handle that moves into a record outliving this call
-        }
-
-        static DispatchArg inline(String cType, String conversion) {
-            return new DispatchArg(Kind.INLINE, cType, conversion, conversion, null, null);
-        }
-
-        static DispatchArg conversion(String cType, String name, String conversion) {
-            return new DispatchArg(Kind.CONVERSION, cType, name, conversion, name, null);
-        }
-
-        static DispatchArg borrowedCallback(String cType, String typeName, String name, String conversion) {
-            return new DispatchArg(Kind.BORROWED_CALLBACK, cType,
-                    MatlabCallbackGenerator.getCallbackTableEntry(typeName, name + ".index"),
-                    conversion, name, typeName);
-        }
-
-        static DispatchArg ownedCallback(String cType, String typeName, String name, String conversion) {
-            return new DispatchArg(Kind.OWNED_CALLBACK, cType,
-                    MatlabCallbackGenerator.getCallbackTableEntry(typeName, name),
-                    conversion, name, typeName);
-        }
-
+    private record CallbackArg(String name, String conversion) {
     }
 
     /**

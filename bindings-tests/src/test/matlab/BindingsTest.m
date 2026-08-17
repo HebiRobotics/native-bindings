@@ -581,87 +581,22 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
-        function testPlainStoredLifecycle(testCase)
-            % The constructor fires the callback and keeps it, so the fires below reach the
-            % same record the creation registered, and the release destroys it.
-            collected = [];
-            released = bindings_tests.PlainStored.getClosedCount();
-
-            stored = bindings_tests.PlainStored(@collect, 2);
-            testCase.verifyEqual(collected, [0 1]);
-            testCase.verifyNotEmpty(stored.c_ptr());
-
-            stored.fire(9);
-            stored.fire(4);
-            testCase.verifyEqual(collected, [0 1 9 4]);
-
-            delete(stored);
-            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + 1);
-
-            % An error inside a stored callback is raised on the fire that ran it, since that
-            % is the call the user was making at the time.
-            failing = bindings_tests.PlainStored(@fail, 0);
-            testCase.verifyError(@() failing.fire(1), 'bindings_tests:CallbackFailed');
-            delete(failing);
-
-            % The pending error slot is cleared by the raise, so a later object still works
-            collected = [];
-            stored = bindings_tests.PlainStored(@collect, 1);
-            testCase.verifyEqual(collected, 0);
-            delete(stored);
-
-            function collect(index)
-                collected(end + 1) = index;
-            end
-
-            function fail(~)
-                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
-            end
-        end
-
-        function testPlainStoredConstructorCallbackFailure(testCase)
-            % The error is raised at the call site, after the library has returned. The object
-            % it created is unreachable by then, so the dispatch case releases it before
-            % raising rather than leaking it.
-            released = bindings_tests.PlainStored.getClosedCount();
-            testCase.verifyError(@() bindings_tests.PlainStored(@fail, 1), 'bindings_tests:CallbackFailed');
-            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + 1);
-
-            % The pending error slot is cleared by the raise, so the next construction works
-            collected = [];
-            stored = bindings_tests.PlainStored(@collect, 2);
-            testCase.verifyEqual(collected, [0 1]);
-            delete(stored);
-
-            function collect(index)
-                collected(end + 1) = index;
-            end
-
-            function fail(~)
-                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
-            end
-        end
-
         function testCallbackRegistryExhaustion(testCase)
-            % One record per live owned handle out of a fixed table, so the seventeenth object
-            % of this type has nowhere to go. The slot is acquired before the library is
-            % called, so the raise leaves nothing behind to release.
-            maxCallbacks = 16;
-            released = bindings_tests.PlainStored.getClosedCount();
+            % One slot per callback of a type live at once, out of a fixed table. A callback
+            % is live for exactly the call that passed it, so the cap is nesting depth: the
+            % seventeenth call to hold one has nowhere to go. The slot is acquired before the
+            % library is called, so the raise leaves nothing behind.
+            depth = 0;
+            testCase.verifyError(@() nest(0), 'bindings_tests:TooManyCallbacks');
+            testCase.verifyEqual(depth, 17);
 
-            handles = cell(1, maxCallbacks);
-            for i = 1:maxCallbacks
-                handles{i} = bindings_tests.PlainStored(@(index) [], 0);
+            % Every slot was released on the way out, so the next call works again
+            bindings_tests.Callbacks.invokePlainTimes(@(index) [], 1);
+
+            function nest(~)
+                depth = depth + 1;
+                bindings_tests.Callbacks.invokePlainTimes(@nest, 1);
             end
-
-            testCase.verifyError(@() bindings_tests.PlainStored(@(index) [], 0), ...
-                'bindings_tests:TooManyCallbacks');
-            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released);
-
-            for i = 1:maxCallbacks
-                delete(handles{i});
-            end
-            testCase.verifyEqual(bindings_tests.PlainStored.getClosedCount(), released + maxCallbacks);
         end
 
         function testIsolated(testCase)

@@ -12,7 +12,6 @@ EXPORTS
     mxCreateNumericMatrix_800
     mxCreateStructMatrix_800
     mxDestroyArray_800
-    mxDuplicateArray_800
     mxFree_800
     mxGetCell_800
     mxGetClassID_800
