@@ -533,39 +533,11 @@ class CallbacksTest(unittest.TestCase):
 
         bindings_tests.Callbacks.invoke_times(callback, user_data, 5)
 
-        # Fires synchronously, five times, with indices 0..4, before returning
+        # Fires synchronously, five times, with indices 0..4, before returning. The void*
+        # is an ordinary argument the library passes through unread, so the address the
+        # callback casts back is the one that went in.
         self.assertEqual(5, state.count)
         self.assertEqual([0, 1, 2, 3, 4], list(state.indices)[:5])
-
-    def test_invoke_once(self):
-        state = CallbacksTest._State()
-        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
-        callback = self._make_callback()
-
-        bindings_tests.Callbacks.invoke_once(callback, user_data, 7)
-
-        self.assertEqual(1, state.count)
-        self.assertEqual(7, state.indices[0])
-
-    def test_invoke_checked(self):
-        state = CallbacksTest._State()
-        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
-        callback = self._make_callback()
-
-        bindings_tests.Callbacks.invoke_checked(callback, user_data, 3)
-
-        self.assertEqual(1, state.count)
-        self.assertEqual(3, state.indices[0])
-
-        # The callback fires before the validation, so a failing call still records it
-        state = CallbacksTest._State()
-        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
-        with self.assertRaises(bindings_tests.Error) as caught:
-            bindings_tests.Callbacks.invoke_checked(callback, user_data, -1)
-        self.assertIn("must not be negative", str(caught.exception))
-        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
-        self.assertEqual(1, state.count)
-        self.assertEqual(-1, state.indices[0])
 
     def test_null_callback_is_a_noop(self):
         state = CallbacksTest._State()
@@ -573,7 +545,6 @@ class CallbacksTest(unittest.TestCase):
         null_callback = bindings_tests.IndexCallbackFunction()
 
         bindings_tests.Callbacks.invoke_times(null_callback, user_data, 5)
-        bindings_tests.Callbacks.invoke_once(null_callback, user_data, 7)
 
         self.assertEqual(0, state.count)
 
@@ -581,38 +552,15 @@ class CallbacksTest(unittest.TestCase):
         seen = []
 
         def handler(user_data, index):
+            # Nothing was passed, so nothing arrives: the wrapper neither fills the
+            # argument in nor reads it
+            self.assertIsNone(user_data)
             seen.append(index)
 
         # Any callable works, the wrapper builds the ctypes prototype around it
         bindings_tests.Callbacks.invoke_times(handler, None, 5)
 
         self.assertEqual([0, 1, 2, 3, 4], seen)
-
-    def test_lambda_with_captured_state(self):
-        seen = []
-
-        # The closure carries the state, so user_data has nothing left to do
-        bindings_tests.Callbacks.invoke_once(lambda user_data, index: seen.append(index), None, 7)
-
-        self.assertEqual([7], seen)
-
-    def test_callback_on_worker_thread(self):
-        seen = []
-
-        # ctypes attaches the foreign thread and takes the GIL, so the callback runs
-        # there like any other one, and the join makes the result visible here
-        bindings_tests.Callbacks.invoke_on_worker_thread(lambda user_data, index: seen.append(index), None, 4)
-
-        self.assertEqual([4], seen)
-
-    def test_value_returning_callback(self):
-        # The wrapper's restype carries the value back, which is the solver-objective shape
-        self.assertEqual(ctypes.c_double, bindings_tests.ScaleCallbackFunction._restype_)
-
-        result = bindings_tests.Callbacks.apply_scaled(lambda user_data, value: value * 2.0, None, 21.0)
-
-        self.assertIsInstance(result, float)
-        self.assertEqual(42.0, result)
 
     def test_double_callback(self):
         # A binary operator with no context at all, both arguments and the result are plain floats
@@ -648,53 +596,6 @@ class CallbacksTest(unittest.TestCase):
         bindings_tests.Callbacks.transform_once(double_all, None, source, target)
 
         self.assertEqual([2.0, 4.0, 6.0], list(target))
-
-    def test_notify_once(self):
-        seen = []
-
-        # The callback carries nothing but its userData
-        bindings_tests.Callbacks.notify_once(lambda user_data: seen.append(1), None)
-
-        self.assertEqual([1], seen)
-
-    def test_constructor_takes_a_callback(self):
-        seen = []
-
-        # The callback fires while the handle is being created, before __init__ returns
-        notified = bindings_tests.Notified(lambda user_data: seen.append(1), None)
-        self.assertEqual([1], seen)
-
-        del notified
-        gc.collect()
-
-    def test_counted_constructor_callback(self):
-        seen = []
-
-        # The indices all arrive during construction, so the instance still owns the
-        # trampoline afterwards even though nothing will fire again
-        counted = bindings_tests.Counted(lambda user_data, index: seen.append(index), None, 3)
-        self.assertEqual([0, 1, 2], seen)
-        self.assertIsNotNone(counted._func)
-
-        del counted
-        gc.collect()
-
-    def test_stored_constructor_owns_the_callback(self):
-        seen = []
-        closed = bindings_tests.Stored.get_closed_count()
-
-        # Nothing fires during construction. The handle owns the trampoline, which is what
-        # keeps it alive for the later calls that do fire.
-        stored = bindings_tests.Stored(lambda user_data, index: seen.append(index), None)
-        self.assertEqual([], seen)
-
-        stored.fire(2)
-        stored.fire(5)
-        self.assertEqual([2, 5], seen)
-
-        del stored
-        gc.collect()
-        self.assertEqual(closed + 1, bindings_tests.Stored.get_closed_count())
 
     def test_invoke_plain_times(self):
         seen = []
@@ -754,7 +655,7 @@ class CallbacksTest(unittest.TestCase):
         # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call
         # that passed it. The module therefore has no process-lifetime cache at all.
         for i in range(10):
-            bindings_tests.Callbacks.invoke_once(lambda user_data, index: None, None, i)
+            bindings_tests.Callbacks.invoke_times(lambda user_data, index: None, None, i)
 
         self.assertFalse(hasattr(bindings_tests, "_callback_wrappers"))
         self.assertFalse(hasattr(bindings_tests, "_wrap_callback"))

@@ -666,15 +666,6 @@ static void on_index(void* userData, int index) {
     state->count++;
 }
 
-static void on_notify(void* userData) {
-    ((CallbackState*) userData)->count++;
-}
-
-static double on_scale(void* userData, double value) {
-    ((CallbackState*) userData)->count++;
-    return value * 2.0;
-}
-
 /* The callback's pointers carry no length, so the element count is agreed on out of band. */
 #define TRANSFORM_COUNT 3
 
@@ -722,9 +713,6 @@ static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
-    bindings_tests_NotifiedPtr notified;
-    bindings_tests_CountedPtr counted;
-    bindings_tests_StoredPtr stored;
     bindings_tests_PlainStoredPtr plain_stored;
     double source[TRANSFORM_COUNT];
     double target[TRANSFORM_COUNT];
@@ -735,7 +723,9 @@ static void test_callbacks(void) {
     int released;
     int i;
 
-    /* Fires synchronously, five times, with indices 0..4, before returning. */
+    /* Fires synchronously, five times, with indices 0..4, before returning. The void*
+       is an ordinary argument the library passes through unread, so the state struct
+       arrives at the callback exactly as it was handed in. */
     memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_invokeTimes(&on_index, &state, (size_t) 5);
     assert(state.count == 5);
@@ -743,41 +733,10 @@ static void test_callbacks(void) {
         assert(state.indices[i] == i);
     }
 
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_invokeOnce(&on_index, &state, 7);
-    assert(state.count == 1);
-    assert(state.indices[0] == 7);
-
     /* A null function pointer is a no-op. */
     memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_invokeTimes(NULL, &state, (size_t) 5);
-    bindings_tests_Callbacks_invokeOnce(NULL, &state, 7);
     assert(state.count == 0);
-
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_invokeChecked(&error, &on_index, &state, 3);
-    assert(error.code == 0);
-    assert(state.count == 1);
-    assert(state.indices[0] == 3);
-
-    /* The callback fires before the validation, so a failing call still records it. */
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_invokeChecked(&error, &on_index, &state, -1);
-    assert(error.code != 0);
-    assert(error.message != NULL && strstr(error.message, "must not be negative") != NULL);
-    assert(state.count == 1);
-    assert(state.indices[0] == -1);
-
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_notifyOnce(&on_notify, &state);
-    assert(state.count == 1);
-
-    /* The value the callback produces is what the method hands back. */
-    memset(&state, 0, sizeof(state));
-    assert(bindings_tests_Callbacks_applyScaled(&on_scale, &state, 21.0) == 42.0);
-    assert(state.count == 1);
-    assert(bindings_tests_Callbacks_applyScaled(NULL, &state, 21.0) == 21.0);
-    assert(state.count == 1);
 
     /* A binary operator with no context at all: both arguments and the result cross as plain doubles. */
     assert(bindings_tests_Callbacks_invokeDoubleCallback(&sum, 1.5, 2.25) == 3.75);
@@ -804,49 +763,6 @@ static void test_callbacks(void) {
     bindings_tests_Callbacks_transformOnce(&on_transform, &state, source, target);
     assert(state.count == 1);
     assert(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
-
-    /* Fires on a worker thread the method joins before returning, so the recorded index
-       is visible here without any synchronization of our own. */
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_invokeOnWorkerThread(&on_index, &state, 4);
-    assert(state.count == 1);
-    assert(state.indices[0] == 4);
-
-    /* A constructor takes a callback like any other method, and this one fires during
-       construction. */
-    memset(&state, 0, sizeof(state));
-    notified = bindings_tests_Notified_create(&error, &on_notify, &state);
-    assert(error.code == 0);
-    assert(notified != NULL);
-    assert(state.count == 1);
-    bindings_tests_Notified_release(notified);
-
-    /* A constructor's callback fires once per index, in order, before it returns. */
-    memset(&state, 0, sizeof(state));
-    counted = bindings_tests_Counted_create(&error, &on_index, &state, 3);
-    assert(error.code == 0);
-    assert(counted != NULL);
-    assert(state.count == 3);
-    for (i = 0; i < 3; i++) {
-        assert(state.indices[i] == i);
-    }
-    bindings_tests_Counted_release(counted);
-
-    /* A stored callback fires during later calls rather than during construction, so the
-       pair has to stay valid for as long as the handle does. */
-    memset(&state, 0, sizeof(state));
-    released = bindings_tests_Stored_getClosedCount();
-    stored = bindings_tests_Stored_create(&error, &on_index, &state);
-    assert(error.code == 0);
-    assert(stored != NULL);
-    assert(state.count == 0);
-    bindings_tests_Stored_fire(stored, 2);
-    bindings_tests_Stored_fire(stored, 5);
-    assert(state.count == 2);
-    assert(state.indices[0] == 2);
-    assert(state.indices[1] == 5);
-    bindings_tests_Stored_release(stored);
-    assert(bindings_tests_Stored_getClosedCount() == released + 1);
 
     /* The same shapes without a context pointer. C loses nothing but the argument, which
        is what makes them expressible in MATLAB. */

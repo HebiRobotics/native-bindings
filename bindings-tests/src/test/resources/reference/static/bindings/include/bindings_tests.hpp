@@ -42,26 +42,20 @@ struct StatusInfo {
 };
 
 // ==== Forward Declarations ====
-class Counted;
 class Counter;
 class Naming;
-class Notified;
 class PlainStored;
 class Shape;
 class Circle;
 class Square;
-class Stored;
 
 namespace internal {
-using CountedPtr = struct Counted_*;
 using CounterPtr = struct Counter_*;
 using NamingPtr = struct Naming_*;
-using NotifiedPtr = struct Notified_*;
 using PlainStoredPtr = struct PlainStored_*;
 using ShapePtr = struct Shape_*;
 using CirclePtr = struct Circle_*;
 using SquarePtr = struct Square_*;
-using StoredPtr = struct Stored_*;
 struct ByteSpan {
   const uint8_t* data;
   size_t length;
@@ -88,11 +82,8 @@ struct ErrorInfo {
 using DoubleCallbackFunc = double (*)(double a, double b);
 using DoubleSpanToScalarCallbackFunc = double (*)(const internal::DoubleSpan* a, const internal::DoubleSpan* b);
 using IndexCallbackFunction = void (*)(void* userData, int index);
-using NotifyCallbackFunction = void (*)(void* userData);
 using PlainIndexCallbackFunction = void (*)(int index);
 using PlainNotifyCallbackFunction = void (*)();
-using ScaleCallbackFunction = double (*)(void* userData, double value);
-using StoredCallbackFunction = void (*)(void* userData, int index);
 using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 class Exception : public std::runtime_error {
@@ -120,38 +111,6 @@ inline void checkNotNull(const void* ptr, const char* message) {
 }
 
 // ==== Class Wrappers ====
-
-/**
- * @brief A handle whose construction invokes a callback once per index.
- */
-class Counted {
-public:
-
-  /**
-   * @brief Creates the handle, invoking the callback with indices 0 to times-1 before returning it.
-   *
-   * @param func 
-   * @param userData 
-   * @param times 
-   * @return A handle whose construction invokes a callback once per index.
-   * @throw on internal errors
-   */
-  Counted(IndexCallbackFunction func, void* userData, int times);
-
-  /**
-   * @details 
-   * Total number of handles of this type that have been released so far in this
-   * isolate. Increments exactly once per released handle.
-   */
-  static int getClosedCount() noexcept;
-  Counted(Counted&& from) noexcept;
-  Counted& operator=(Counted&& from) noexcept;
-  ~Counted() noexcept;
-private:
-  void cleanup() noexcept;
-  internal::CountedPtr ptr_{};
-};
-
 
 /**
  * @brief A mutable counter, used to check handle creation and release.
@@ -231,30 +190,6 @@ public:
 private:
   void cleanup() noexcept;
   internal::NamingPtr ptr_{};
-};
-
-
-/**
- * @brief A handle whose construction invokes a callback.
- */
-class Notified {
-public:
-
-  /**
-   * @brief Creates the handle and invokes the callback once before returning it.
-   *
-   * @param func 
-   * @param userData 
-   * @return A handle whose construction invokes a callback.
-   * @throw on internal errors
-   */
-  Notified(NotifyCallbackFunction func, void* userData);
-  Notified(Notified&& from) noexcept;
-  Notified& operator=(Notified&& from) noexcept;
-  ~Notified() noexcept;
-private:
-  void cleanup() noexcept;
-  internal::NotifiedPtr ptr_{};
 };
 
 
@@ -368,47 +303,6 @@ private:
   explicit Square(internal::SquarePtr cPointer) noexcept;
   static internal::ShapePtr getShapePointer(internal::SquarePtr cPointer) noexcept;
   internal::SquarePtr ptr_{};
-};
-
-
-/**
- * @brief A handle that stores a callback and invokes it during later calls.
- */
-class Stored {
-public:
-
-  /**
-   * @details 
-   * Stores the callback and returns without invoking it. Every later call to
-   * fire() runs it on the calling thread, so it has to stay alive for as long
-   * as the handle does.
-   *
-   * @param func 
-   * @param userData 
-   * @return A handle that stores a callback and invokes it during later calls.
-   * @throw on internal errors
-   */
-  Stored(StoredCallbackFunction func, void* userData);
-
-  /**
-   * @brief Invokes the stored callback once with the given index, on the calling thread.
-   *
-   * @param index 
-   */
-  void fire(int index) noexcept;
-
-  /**
-   * @details 
-   * Total number of handles of this type that have been released so far in this
-   * isolate. Increments exactly once per released handle.
-   */
-  static int getClosedCount() noexcept;
-  Stored(Stored&& from) noexcept;
-  Stored& operator=(Stored&& from) noexcept;
-  ~Stored() noexcept;
-private:
-  void cleanup() noexcept;
-  internal::StoredPtr ptr_{};
 };
 
 
@@ -551,60 +445,6 @@ double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, con
  * @param times 
  */
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
-
-/**
- * @brief Invokes the callback once with the given index. Returns after it completes.
- *
- * @param func 
- * @param userData 
- * @param index 
- */
-void invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept;
-
-/**
- * @details 
- * Invokes the callback once with the given index, then throws if the index is
- * negative. The invocation happens before the validation on purpose, so that a
- * caller can observe both failures in one call.
- *
- * @param func 
- * @param userData 
- * @param index 
- * @throw index is negative
- */
-void invokeChecked(IndexCallbackFunction func, void* userData, int index);
-
-/**
- * @details 
- * Invokes the callback once with the given index on a worker thread, and joins that
- * thread before returning. The invocation therefore completes within the call but not
- * on the calling thread, which is the shape a solver has when it fans an objective
- * out to workers. The callback must be thread safe.
- *
- * @param func 
- * @param userData 
- * @param index 
- */
-void invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept;
-
-/**
- * @brief Invokes the callback once. Returns after it completes.
- *
- * @param func 
- * @param userData 
- */
-void notifyOnce(NotifyCallbackFunction func, void* userData) noexcept;
-
-/**
- * @details 
- * Passes the value to the callback and returns what the callback produced. A null
- * function pointer leaves the value unchanged.
- *
- * @param func 
- * @param userData 
- * @param value 
- */
-double applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept;
 
 /**
  * @details 
@@ -1070,9 +910,6 @@ StatusInfo getCheckedStatus(int index);
 
 // ==== C Library Functions ====
 extern "C" {
-  internal::CountedPtr bindings_tests_Counted_create(internal::ErrorInfo*, IndexCallbackFunction, void*, int);
-  int bindings_tests_Counted_getClosedCount();
-  void bindings_tests_Counted_release(internal::CountedPtr);
   internal::CounterPtr bindings_tests_Counter_create(internal::ErrorInfo*, int);
   int bindings_tests_Counter_getValue(internal::CounterPtr);
   void bindings_tests_Counter_setValue(internal::CounterPtr, int);
@@ -1086,8 +923,6 @@ extern "C" {
   int custom_prefix_Naming_get_start_value(internal::NamingPtr);
   int custom_prefix_Naming_add_two_numbers(int, int);
   void custom_prefix_Naming_release(internal::NamingPtr);
-  internal::NotifiedPtr bindings_tests_Notified_create(internal::ErrorInfo*, NotifyCallbackFunction, void*);
-  void bindings_tests_Notified_release(internal::NotifiedPtr);
   internal::PlainStoredPtr bindings_tests_PlainStored_create(internal::ErrorInfo*, PlainIndexCallbackFunction, size_t);
   void bindings_tests_PlainStored_fire(internal::PlainStoredPtr, int);
   int bindings_tests_PlainStored_getClosedCount();
@@ -1108,10 +943,6 @@ extern "C" {
   double bindings_tests_Square_area(internal::SquarePtr);
   int bindings_tests_Square_sideCount(internal::SquarePtr);
   internal::ShapePtr bindings_tests_Square_to_Shape(internal::SquarePtr);
-  internal::StoredPtr bindings_tests_Stored_create(internal::ErrorInfo*, StoredCallbackFunction, void*);
-  void bindings_tests_Stored_fire(internal::StoredPtr, int);
-  int bindings_tests_Stored_getClosedCount();
-  void bindings_tests_Stored_release(internal::StoredPtr);
   double bindings_tests_Arrays_sumFloat64(const double*, size_t);
   int bindings_tests_Arrays_sumInt32(const int*, size_t);
   void bindings_tests_Arrays_fillFloat64(double*, size_t, double);
@@ -1127,11 +958,6 @@ extern "C" {
   double bindings_tests_Callbacks_invokeDoubleCallback(DoubleCallbackFunc, double, double);
   double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc, internal::DoubleSpan, internal::DoubleSpan);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
-  void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
-  void bindings_tests_Callbacks_invokeChecked(internal::ErrorInfo*, IndexCallbackFunction, void*, int);
-  void bindings_tests_Callbacks_invokeOnWorkerThread(IndexCallbackFunction, void*, int);
-  void bindings_tests_Callbacks_notifyOnce(NotifyCallbackFunction, void*);
-  double bindings_tests_Callbacks_applyScaled(ScaleCallbackFunction, void*, double);
   void bindings_tests_Callbacks_transformOnce(TransformCallbackFunction, void*, const double*, double*);
   void bindings_tests_Callbacks_invokePlainTimes(PlainIndexCallbackFunction, size_t);
   void bindings_tests_Callbacks_invokePlainChecked(internal::ErrorInfo*, PlainIndexCallbackFunction, int);
@@ -1195,34 +1021,6 @@ extern "C" {
 }
 
 // ==== C++ Implementations ====
-// Counted
-inline Counted::Counted(IndexCallbackFunction func, void* userData, int times) {
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Counted_create(&error_, func, userData, times);
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Counted");
-}
-inline int Counted::getClosedCount() noexcept {
-  return bindings_tests_Counted_getClosedCount();
-}
-inline void Counted::cleanup() noexcept {
-  if (ptr_ != nullptr) {
-    bindings_tests_Counted_release(ptr_);
-  }
-}
-inline Counted::Counted(Counted&& from) noexcept : ptr_(from.ptr_) {
-  from.ptr_ = nullptr;
-};
-inline Counted& Counted::operator=(Counted&& from) noexcept {
-  cleanup();
-  ptr_ = from.ptr_;
-  from.ptr_ = nullptr;
-  return *this;
-};
-inline Counted::~Counted() noexcept {
-  cleanup();
-}
-
 // Counter
 inline Counter::Counter(int start) {
   internal::ErrorInfo error_ = {};
@@ -1297,31 +1095,6 @@ inline Naming& Naming::operator=(Naming&& from) noexcept {
   return *this;
 };
 inline Naming::~Naming() noexcept {
-  cleanup();
-}
-
-// Notified
-inline Notified::Notified(NotifyCallbackFunction func, void* userData) {
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Notified_create(&error_, func, userData);
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Notified");
-}
-inline void Notified::cleanup() noexcept {
-  if (ptr_ != nullptr) {
-    bindings_tests_Notified_release(ptr_);
-  }
-}
-inline Notified::Notified(Notified&& from) noexcept : ptr_(from.ptr_) {
-  from.ptr_ = nullptr;
-};
-inline Notified& Notified::operator=(Notified&& from) noexcept {
-  cleanup();
-  ptr_ = from.ptr_;
-  from.ptr_ = nullptr;
-  return *this;
-};
-inline Notified::~Notified() noexcept {
   cleanup();
 }
 
@@ -1464,37 +1237,6 @@ inline Square& Square::operator=(Square&& from) noexcept {
   return *this;
 };
 
-// Stored
-inline Stored::Stored(StoredCallbackFunction func, void* userData) {
-  internal::ErrorInfo error_ = {};
-  ptr_ = bindings_tests_Stored_create(&error_, func, userData);
-  checkError(error_);
-  checkNotNull(ptr_, "Could not create Stored");
-}
-inline void Stored::fire(int index) noexcept {
-  bindings_tests_Stored_fire(ptr_, index);
-}
-inline int Stored::getClosedCount() noexcept {
-  return bindings_tests_Stored_getClosedCount();
-}
-inline void Stored::cleanup() noexcept {
-  if (ptr_ != nullptr) {
-    bindings_tests_Stored_release(ptr_);
-  }
-}
-inline Stored::Stored(Stored&& from) noexcept : ptr_(from.ptr_) {
-  from.ptr_ = nullptr;
-};
-inline Stored& Stored::operator=(Stored&& from) noexcept {
-  cleanup();
-  ptr_ = from.ptr_;
-  from.ptr_ = nullptr;
-  return *this;
-};
-inline Stored::~Stored() noexcept {
-  cleanup();
-}
-
 // Arrays
 inline double arrays::sumFloat64(const double* values, size_t count) noexcept {
   return bindings_tests_Arrays_sumFloat64(values, count);
@@ -1574,23 +1316,6 @@ inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCall
 }
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   bindings_tests_Callbacks_invokeTimes(func, userData, times);
-}
-inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept {
-  bindings_tests_Callbacks_invokeOnce(func, userData, index);
-}
-inline void callbacks::invokeChecked(IndexCallbackFunction func, void* userData, int index) {
-  internal::ErrorInfo error_ = {};
-  bindings_tests_Callbacks_invokeChecked(&error_, func, userData, index);
-  checkError(error_);
-}
-inline void callbacks::invokeOnWorkerThread(IndexCallbackFunction func, void* userData, int index) noexcept {
-  bindings_tests_Callbacks_invokeOnWorkerThread(func, userData, index);
-}
-inline void callbacks::notifyOnce(NotifyCallbackFunction func, void* userData) noexcept {
-  bindings_tests_Callbacks_notifyOnce(func, userData);
-}
-inline double callbacks::applyScaled(ScaleCallbackFunction func, void* userData, double value) noexcept {
-  return bindings_tests_Callbacks_applyScaled(func, userData, value);
 }
 inline void callbacks::transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept {
   bindings_tests_Callbacks_transformOnce(func, userData, input, output);

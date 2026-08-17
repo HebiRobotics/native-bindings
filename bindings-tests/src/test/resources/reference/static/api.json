@@ -8,54 +8,6 @@
   "classes": [{
     "type": {
       "cPrefix": "bindings_tests_",
-      "typeName": "Counted",
-      "comment": "A handle whose construction invokes a callback once per index.",
-      "dataType": "OBJECT_HANDLE"
-    },
-    "instantiable": true,
-    "cDestructorName": "bindings_tests_Counted_release",
-    "methods": [{
-      "name": "create",
-      "lowerUnderscoreName": "create",
-      "isStatic": true,
-      "cName": "bindings_tests_Counted_create",
-      "returnType": {
-        "cPrefix": "bindings_tests_",
-        "typeName": "Counted",
-        "comment": "A handle whose construction invokes a callback once per index.",
-        "dataType": "OBJECT_HANDLE"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "IndexCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }, {
-        "paramName": "times",
-        "lowerUnderscoreParamName": "times",
-        "dataType": "INT32"
-      }],
-      "isConstructor": true,
-      "documentation": "Creates the handle, invoking the callback with indices 0 to times-1 before returning it."
-    }, {
-      "name": "getClosedCount",
-      "lowerUnderscoreName": "get_closed_count",
-      "isStatic": true,
-      "cName": "bindings_tests_Counted_getClosedCount",
-      "returnType": {
-        "dataType": "INT32"
-      },
-      "documentation": "Total number of handles of this type that have been released so far in this\nisolate. Increments exactly once per released handle.\n",
-      "flags": ["Noexcept"]
-    }]
-  }, {
-    "type": {
-      "cPrefix": "bindings_tests_",
       "typeName": "Counter",
       "comment": "A mutable counter, used to check handle creation and release.",
       "dataType": "OBJECT_HANDLE"
@@ -211,40 +163,6 @@
       }],
       "documentation": "A static method, so the conversion is pinned for both kinds of call.",
       "flags": ["Noexcept"]
-    }]
-  }, {
-    "type": {
-      "cPrefix": "bindings_tests_",
-      "typeName": "Notified",
-      "comment": "A handle whose construction invokes a callback.",
-      "dataType": "OBJECT_HANDLE"
-    },
-    "instantiable": true,
-    "cDestructorName": "bindings_tests_Notified_release",
-    "methods": [{
-      "name": "create",
-      "lowerUnderscoreName": "create",
-      "isStatic": true,
-      "cName": "bindings_tests_Notified_create",
-      "returnType": {
-        "cPrefix": "bindings_tests_",
-        "typeName": "Notified",
-        "comment": "A handle whose construction invokes a callback.",
-        "dataType": "OBJECT_HANDLE"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "NotifyCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }],
-      "isConstructor": true,
-      "documentation": "Creates the handle and invokes the callback once before returning it."
     }]
   }, {
     "type": {
@@ -531,64 +449,6 @@
         "dataType": "INT32"
       },
       "flags": ["Noexcept", "Const"]
-    }]
-  }, {
-    "type": {
-      "cPrefix": "bindings_tests_",
-      "typeName": "Stored",
-      "comment": "A handle that stores a callback and invokes it during later calls.",
-      "dataType": "OBJECT_HANDLE"
-    },
-    "instantiable": true,
-    "cDestructorName": "bindings_tests_Stored_release",
-    "methods": [{
-      "name": "create",
-      "lowerUnderscoreName": "create",
-      "isStatic": true,
-      "cName": "bindings_tests_Stored_create",
-      "returnType": {
-        "cPrefix": "bindings_tests_",
-        "typeName": "Stored",
-        "comment": "A handle that stores a callback and invokes it during later calls.",
-        "dataType": "OBJECT_HANDLE"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "StoredCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }],
-      "isConstructor": true,
-      "documentation": "Stores the callback and returns without invoking it. Every later call to\nfire() runs it on the calling thread, so it has to stay alive for as long\nas the handle does.\n"
-    }, {
-      "name": "fire",
-      "lowerUnderscoreName": "fire",
-      "cName": "bindings_tests_Stored_fire",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "index",
-        "lowerUnderscoreParamName": "index",
-        "dataType": "INT32"
-      }],
-      "documentation": "Invokes the stored callback once with the given index, on the calling thread.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "getClosedCount",
-      "lowerUnderscoreName": "get_closed_count",
-      "isStatic": true,
-      "cName": "bindings_tests_Stored_getClosedCount",
-      "returnType": {
-        "dataType": "INT32"
-      },
-      "documentation": "Total number of handles of this type that have been released so far in this\nisolate. Increments exactly once per released handle.\n",
-      "flags": ["Noexcept"]
     }]
   }, {
     "type": {
@@ -942,127 +802,6 @@
         "dataType": "SIZE_T"
       }],
       "documentation": "Invokes the callback exactly 'times' times with indices 0 to times-1, then\nreturns. A null function pointer is ignored, and a non-positive count does\nnothing.\n",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "invokeOnce",
-      "lowerUnderscoreName": "invoke_once",
-      "isStatic": true,
-      "cName": "bindings_tests_Callbacks_invokeOnce",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "IndexCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }, {
-        "paramName": "index",
-        "lowerUnderscoreParamName": "index",
-        "dataType": "INT32"
-      }],
-      "documentation": "Invokes the callback once with the given index. Returns after it completes.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "invokeChecked",
-      "lowerUnderscoreName": "invoke_checked",
-      "isStatic": true,
-      "cName": "bindings_tests_Callbacks_invokeChecked",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "IndexCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }, {
-        "paramName": "index",
-        "lowerUnderscoreParamName": "index",
-        "dataType": "INT32"
-      }],
-      "documentation": "Invokes the callback once with the given index, then throws if the index is\nnegative. The invocation happens before the validation on purpose, so that a\ncaller can observe both failures in one call.\n",
-      "throwsOn": "index is negative"
-    }, {
-      "name": "invokeOnWorkerThread",
-      "lowerUnderscoreName": "invoke_on_worker_thread",
-      "isStatic": true,
-      "cName": "bindings_tests_Callbacks_invokeOnWorkerThread",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "IndexCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }, {
-        "paramName": "index",
-        "lowerUnderscoreParamName": "index",
-        "dataType": "INT32"
-      }],
-      "documentation": "Invokes the callback once with the given index on a worker thread, and joins that\nthread before returning. The invocation therefore completes within the call but not\non the calling thread, which is the shape a solver has when it fans an objective\nout to workers. The callback must be thread safe.\n",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "notifyOnce",
-      "lowerUnderscoreName": "notify_once",
-      "isStatic": true,
-      "cName": "bindings_tests_Callbacks_notifyOnce",
-      "returnType": {
-        "dataType": "VOID"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "NotifyCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }],
-      "documentation": "Invokes the callback once. Returns after it completes.",
-      "flags": ["Noexcept"]
-    }, {
-      "name": "applyScaled",
-      "lowerUnderscoreName": "apply_scaled",
-      "isStatic": true,
-      "cName": "bindings_tests_Callbacks_applyScaled",
-      "returnType": {
-        "dataType": "FLOAT64"
-      },
-      "parameters": [{
-        "paramName": "func",
-        "lowerUnderscoreParamName": "func",
-        "cPrefix": "bindings_tests_",
-        "typeName": "ScaleCallbackFunction",
-        "dataType": "CALLBACK"
-      }, {
-        "paramName": "userData",
-        "lowerUnderscoreParamName": "user_data",
-        "dataType": "VOID_POINTER"
-      }, {
-        "paramName": "value",
-        "lowerUnderscoreParamName": "value",
-        "dataType": "FLOAT64"
-      }],
-      "documentation": "Passes the value to the callback and returns what the callback produced. A null\nfunction pointer leaves the value unchanged.\n",
       "flags": ["Noexcept"]
     }, {
       "name": "transformOnce",
@@ -2368,16 +2107,6 @@
     }],
     "cPrefix": "bindings_tests_"
   }, {
-    "name": "NotifyCallbackFunction",
-    "returnType": {
-      "dataType": "VOID"
-    },
-    "parameters": [{
-      "paramName": "userData",
-      "dataType": "VOID_POINTER"
-    }],
-    "cPrefix": "bindings_tests_"
-  }, {
     "name": "PlainIndexCallbackFunction",
     "returnType": {
       "dataType": "VOID"
@@ -2392,32 +2121,6 @@
     "returnType": {
       "dataType": "VOID"
     },
-    "cPrefix": "bindings_tests_"
-  }, {
-    "name": "ScaleCallbackFunction",
-    "returnType": {
-      "dataType": "FLOAT64"
-    },
-    "parameters": [{
-      "paramName": "userData",
-      "dataType": "VOID_POINTER"
-    }, {
-      "paramName": "value",
-      "dataType": "FLOAT64"
-    }],
-    "cPrefix": "bindings_tests_"
-  }, {
-    "name": "StoredCallbackFunction",
-    "returnType": {
-      "dataType": "VOID"
-    },
-    "parameters": [{
-      "paramName": "userData",
-      "dataType": "VOID_POINTER"
-    }, {
-      "paramName": "index",
-      "dataType": "INT32"
-    }],
     "cPrefix": "bindings_tests_"
   }, {
     "name": "TransformCallbackFunction",

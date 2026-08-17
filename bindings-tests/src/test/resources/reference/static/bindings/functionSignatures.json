@@ -243,9 +243,6 @@
         "type": "bindings_tests.Circle"
       }]
   },
-  "bindings_tests.Counted.getClosedCount": {
-    "inputs": []
-  },
   "bindings_tests.Counter": {
     "inputs": [{
         "kind": "ordered",
@@ -730,19 +727,6 @@
         "name": "this",
         "type": "bindings_tests.Square"
       }]
-  },
-  "bindings_tests.Stored.fire": {
-    "inputs": [{
-        "name": "this",
-        "type": "bindings_tests.Stored"
-      }, {
-        "kind": "required",
-        "name": "index",
-        "type": ["numeric"]
-      }]
-  },
-  "bindings_tests.Stored.getClosedCount": {
-    "inputs": []
   },
   "bindings_tests.Strings.concat": {
     "inputs": [{

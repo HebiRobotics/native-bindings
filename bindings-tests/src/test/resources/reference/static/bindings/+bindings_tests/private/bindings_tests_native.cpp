@@ -497,11 +497,8 @@ inline StatusInfo getStatusInfo(const mxArray* arg) {
 typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
 typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const DoubleSpan* a, const DoubleSpan* b);
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
-typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
 typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
 typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
-typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
-typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
@@ -881,21 +878,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
     // Switch on a Perfect Hash (seeds are chosen until there are no collisions)
     switch (funcHash) {
 
-        // Counted
-        case /* hash32_fnv1a("bindings_tests_Counted_getClosedCount") */ 656734994: {
-            static auto bindings_tests_Counted_getClosedCount = libLoader.getFunc<int(*)()>("bindings_tests_Counted_getClosedCount");
-            checkArgCount(nrhs, 0, "bindings_tests_Counted_getClosedCount");
-            int _value = bindings_tests_Counted_getClosedCount();
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_Counted_release") */ 1636176438: {
-            static auto bindings_tests_Counted_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Counted_release");
-            checkArgCount(nrhs, 1, "bindings_tests_Counted_release");
-            bindings_tests_Counted_release(getPtr<void*>(prhs[1]));
-            break;
-        }
-
         // Counter
         case /* hash32_fnv1a("bindings_tests_Counter_create") */ 3878812671: {
             static auto bindings_tests_Counter_create = libLoader.getFunc<void*(*)(ErrorInfo*, int)>("bindings_tests_Counter_create");
@@ -992,14 +974,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto custom_prefix_Naming_release = libLoader.getFunc<void(*)(void*)>("custom_prefix_Naming_release");
             checkArgCount(nrhs, 1, "custom_prefix_Naming_release");
             custom_prefix_Naming_release(getPtr<void*>(prhs[1]));
-            break;
-        }
-
-        // Notified
-        case /* hash32_fnv1a("bindings_tests_Notified_release") */ 2875289296: {
-            static auto bindings_tests_Notified_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Notified_release");
-            checkArgCount(nrhs, 1, "bindings_tests_Notified_release");
-            bindings_tests_Notified_release(getPtr<void*>(prhs[1]));
             break;
         }
 
@@ -1166,28 +1140,6 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             static auto bindings_tests_Square_to_Shape = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Square_to_Shape");
             checkArgCount(nrhs, 1, "bindings_tests_Square_to_Shape");
             if (nlhs > 0) plhs[0] = createMexPointer(bindings_tests_Square_to_Shape(getPtr<void*>(prhs[1])));
-            break;
-        }
-
-        // Stored
-        case /* hash32_fnv1a("bindings_tests_Stored_fire") */ 44693218: {
-            static auto bindings_tests_Stored_fire = libLoader.getFunc<void(*)(void*, int)>("bindings_tests_Stored_fire");
-            checkArgCount(nrhs, 2, "bindings_tests_Stored_fire");
-            int index = getScalar<int>(prhs[2], "index");
-            bindings_tests_Stored_fire(getPtr<void*>(prhs[1]), index);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_Stored_getClosedCount") */ 2692990085: {
-            static auto bindings_tests_Stored_getClosedCount = libLoader.getFunc<int(*)()>("bindings_tests_Stored_getClosedCount");
-            checkArgCount(nrhs, 0, "bindings_tests_Stored_getClosedCount");
-            int _value = bindings_tests_Stored_getClosedCount();
-            if (nlhs > 0) plhs[0] = createMexScalar(_value);
-            break;
-        }
-        case /* hash32_fnv1a("bindings_tests_Stored_release") */ 3208332647: {
-            static auto bindings_tests_Stored_release = libLoader.getFunc<void(*)(void*)>("bindings_tests_Stored_release");
-            checkArgCount(nrhs, 1, "bindings_tests_Stored_release");
-            bindings_tests_Stored_release(getPtr<void*>(prhs[1]));
             break;
         }
 

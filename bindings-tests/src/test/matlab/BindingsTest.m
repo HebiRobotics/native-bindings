@@ -427,23 +427,13 @@ classdef BindingsTest < matlab.unittest.TestCase
 
         function testContextCarryingCallbacksAreNotSupported(testCase)
             % Nothing may cross the ABI as context, because the gateway would have to hand
-            % the void* to the function handle as an mxArray and an address is not one. Every
-            % callback in the test API that carries userData therefore gets a stub, and the
-            % raw pointer shape below is rejected for its own reason on top of that.
+            % the void* to the function handle as an mxArray and an address is not one. A
+            % method whose callback carries one therefore gets a stub, and the raw pointer
+            % shape below is rejected for its own reason on top of that.
             noop = @(varargin) [];
 
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(noop, 4), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnce(noop, 7), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeChecked(noop, 3), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Callbacks.invokeOnWorkerThread(noop, 5), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Callbacks.notifyOnce(noop), 'bindings_tests:NotSupported');
             testCase.verifyError(@() bindings_tests.Callbacks.transformOnce(noop), 'bindings_tests:NotSupported');
-
-            % A constructor taking one of the same typedefs gets the same stub, so the class
-            % exists and only its construction is closed off.
-            testCase.verifyError(@() bindings_tests.Notified(noop), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Counted(noop, 3), 'bindings_tests:NotSupported');
-            testCase.verifyError(@() bindings_tests.Stored(noop), 'bindings_tests:NotSupported');
         end
 
         function testValueReturningCallback(testCase)
@@ -460,9 +450,6 @@ classdef BindingsTest < matlab.unittest.TestCase
                 'bindings_tests:TypeError');
             testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@fail, 1, 2), ...
                 'bindings_tests:CallbackFailed');
-
-            % applyScaled still carries a userData pointer, which MATLAB cannot express
-            testCase.verifyError(@() bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 'bindings_tests:NotSupported');
 
             function result = fail(~, ~)
                 result = 0; %#ok<NASGU>

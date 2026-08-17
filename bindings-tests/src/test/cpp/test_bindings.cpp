@@ -509,15 +509,6 @@ struct CallbackState {
   int indices[kMaxCallbacks];
 };
 
-void onNotify(void* userData) {
-  ++static_cast<CallbackState*>(userData)->count;
-}
-
-double onScale(void* userData, double value) {
-  ++static_cast<CallbackState*>(userData)->count;
-  return value * 2.0;
-}
-
 // The callback's pointers carry no length, so the element count is agreed on out of band.
 const int kTransformCount = 3;
 
@@ -551,7 +542,9 @@ void onPlainIndex(int index) {
 }  // namespace
 
 static void testCallbacks() {
-  // Fires synchronously, five times, with indices 0..4, before returning.
+  // Fires synchronously, five times, with indices 0..4, before returning. The void* is
+  // an ordinary argument the library passes through unread, so the state struct arrives
+  // at the callback exactly as it was handed in.
   CallbackState state = {};
   bt::callbacks::invokeTimes(&onIndex, &state, 5);
   CHECK(state.count == 5);
@@ -559,40 +552,10 @@ static void testCallbacks() {
     CHECK(state.indices[i] == i);
   }
 
-  CallbackState once = {};
-  bt::callbacks::invokeOnce(&onIndex, &once, 7);
-  CHECK(once.count == 1);
-  CHECK(once.indices[0] == 7);
-
   // A null function pointer is a no-op.
   CallbackState none = {};
   bt::callbacks::invokeTimes(nullptr, &none, 5);
-  bt::callbacks::invokeOnce(nullptr, &none, 7);
   CHECK(none.count == 0);
-
-  CallbackState checked = {};
-  bt::callbacks::invokeChecked(&onIndex, &checked, 3);
-  CHECK(checked.count == 1);
-  CHECK(checked.indices[0] == 3);
-
-  // The callback fires before the validation, so a throwing call still records it.
-  CallbackState failed = {};
-  CHECK(throwsWithMessage([&failed] { bt::callbacks::invokeChecked(&onIndex, &failed, -1); },
-                          "must not be negative"));
-  CHECK(failed.count == 1);
-  CHECK(failed.indices[0] == -1);
-
-  // A callback whose only argument is the pointer the caller passed in
-  CallbackState notified = {};
-  bt::callbacks::notifyOnce(&onNotify, &notified);
-  CHECK(notified.count == 1);
-
-  // A value-returning callback hands its result back to the caller.
-  CallbackState scaled = {};
-  CHECK(bt::callbacks::applyScaled(&onScale, &scaled, 21.0) == 42.0);
-  CHECK(scaled.count == 1);
-  CHECK(bt::callbacks::applyScaled(nullptr, &scaled, 21.0) == 21.0);
-  CHECK(scaled.count == 1);
 
   // A binary operator with no context at all, a captureless lambda converts to it.
   CHECK(bt::callbacks::invokeDoubleCallback([](double a, double b) { return a + b; }, 1.5, 2.25) == 3.75);
@@ -625,63 +588,6 @@ static void testCallbacks() {
   bt::callbacks::transformOnce(&onTransform, &transformed, sourceVector, target);
   CHECK(transformed.count == 2);
   CHECK(target[0] == 8.0 && target[1] == 10.0 && target[2] == 12.0);
-
-  // Fires on a worker thread the method joins before returning. The callback has to be
-  // thread safe in this shape, which the wrapper cannot enforce for the user.
-  CallbackState worker = {};
-  bt::callbacks::invokeOnWorkerThread(&onIndex, &worker, 4);
-  CHECK(worker.count == 1);
-  CHECK(worker.indices[0] == 4);
-
-  // A constructor takes the callback like any other method
-  CallbackState constructed = {};
-  {
-    bt::Notified notified(&onNotify, &constructed);
-    CHECK(constructed.count == 1);
-  }
-
-  CallbackState counted = {};
-  {
-    bt::Counted handle(&onIndex, &counted, 3);
-    CHECK(counted.count == 3);
-    for (int i = 0; i < 3; ++i) {
-      CHECK(counted.indices[i] == i);
-    }
-  }
-
-  const int closedBefore = bt::Stored::getClosedCount();
-
-  // A stored callback fires during later calls, so nothing happens at construction
-  CallbackState fired = {};
-  {
-    bt::Stored handle(&onIndex, &fired);
-    CHECK(fired.count == 0);
-    handle.fire(2);
-    handle.fire(5);
-    CHECK(fired.count == 2);
-    CHECK(fired.indices[0] == 2);
-    CHECK(fired.indices[1] == 5);
-  }
-
-  // The library keeps what the constructor handed it, so a moved wrapper still fires
-  // into the same callback and the same pointer.
-  CallbackState moving = {};
-  {
-    bt::Stored handle(&onIndex, &moving);
-    bt::Stored moved(std::move(handle));
-    moved.fire(5);
-
-    bt::Stored assigned(&onIndex, &moving);
-    assigned = std::move(moved);
-    assigned.fire(6);
-
-    CHECK(moving.count == 2);
-    CHECK(moving.indices[0] == 5);
-    CHECK(moving.indices[1] == 6);
-  }
-
-  // Three constructions, three releases: a moved-from wrapper owns nothing
-  CHECK(bt::Stored::getClosedCount() == closedBefore + 3);
 
   // A callback that takes no pointer of its own has nothing to carry state through, so
   // the caller supplies a plain function pointer. A captureless lambda still converts.

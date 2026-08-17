@@ -22,47 +22,6 @@ classdef (Sealed) Callbacks
             error('bindings_tests:NotSupported', "'invokeTimes' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
         end
 
-        function varargout = invokeOnce(varargin)
-            % Invokes the callback once with the given index. Returns after it completes.
-            %
-            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
-            error('bindings_tests:NotSupported', "'invokeOnce' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
-        end
-
-        function varargout = invokeChecked(varargin)
-            % Invokes the callback once with the given index, then throws if the index is
-            %   negative. The invocation happens before the validation on purpose, so that a
-            %   caller can observe both failures in one call.
-            %
-            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
-            error('bindings_tests:NotSupported', "'invokeChecked' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
-        end
-
-        function varargout = invokeOnWorkerThread(varargin)
-            % Invokes the callback once with the given index on a worker thread, and joins that
-            %   thread before returning. The invocation therefore completes within the call but not
-            %   on the calling thread, which is the shape a solver has when it fans an objective
-            %   out to workers. The callback must be thread safe.
-            %
-            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
-            error('bindings_tests:NotSupported', "'invokeOnWorkerThread' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
-        end
-
-        function varargout = notifyOnce(varargin)
-            % Invokes the callback once. Returns after it completes.
-            %
-            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
-            error('bindings_tests:NotSupported', "'notifyOnce' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
-        end
-
-        function varargout = applyScaled(varargin)
-            % Passes the value to the callback and returns what the callback produced. A null
-            %   function pointer leaves the value unchanged.
-            %
-            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
-            error('bindings_tests:NotSupported', "'applyScaled' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
-        end
-
         function varargout = transformOnce(varargin)
             % Invokes the callback once with the two buffers and returns after it completes.
             %   Both buffers stay owned by the caller, and how many elements they hold is
