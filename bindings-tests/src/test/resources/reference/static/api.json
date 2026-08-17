@@ -867,6 +867,30 @@
     "instantiable": false,
     "cDestructorName": "bindings_tests_Callbacks_release",
     "methods": [{
+      "name": "invokeDoubleCallback",
+      "lowerUnderscoreName": "invoke_double_callback",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeDoubleCallback",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleCallbackFunc",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "FLOAT64"
+      }, {
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "FLOAT64"
+      }],
+      "flags": ["Noexcept"]
+    }, {
       "name": "invokeTimes",
       "lowerUnderscoreName": "invoke_times",
       "isStatic": true,
@@ -2273,6 +2297,19 @@
     }]
   }],
   "callbacks": [{
+    "name": "DoubleCallbackFunc",
+    "returnType": {
+      "dataType": "FLOAT64"
+    },
+    "parameters": [{
+      "paramName": "a",
+      "dataType": "FLOAT64"
+    }, {
+      "paramName": "b",
+      "dataType": "FLOAT64"
+    }],
+    "cPrefix": "bindings_tests_"
+  }, {
     "name": "IndexCallbackFunction",
     "returnType": {
       "dataType": "VOID"

@@ -59,6 +59,7 @@ class Shape;
 class Circle;
 class Square;
 class Stored;
+using DoubleCallbackFunc = double (*)(double a, double b);
 using IndexCallbackFunction = void (*)(void* userData, int index);
 using NotifyCallbackFunction = void (*)(void* userData);
 using PlainIndexCallbackFunction = void (*)(int index);
@@ -541,6 +542,7 @@ std::vector<double> getSequence(size_t count) noexcept;
  * @brief Synchronous callbacks into caller-provided function pointers.
  */
 namespace callbacks {
+double invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept;
 
 /**
  * @details 
@@ -1521,6 +1523,10 @@ inline std::vector<double> arrays::getSequence(size_t count) noexcept {
 }
 
 // Callbacks
+inline double callbacks::invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept {
+  static auto bindings_tests_Callbacks_invokeDoubleCallback = DynamicLookup::instance().getFunc<double(*)(DoubleCallbackFunc, double, double)>("bindings_tests_Callbacks_invokeDoubleCallback");
+  return bindings_tests_Callbacks_invokeDoubleCallback(func, a, b);
+}
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   static auto bindings_tests_Callbacks_invokeTimes = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
   bindings_tests_Callbacks_invokeTimes(func, userData, times);

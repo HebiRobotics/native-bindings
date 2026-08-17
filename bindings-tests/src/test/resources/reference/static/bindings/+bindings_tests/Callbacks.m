@@ -3,6 +3,11 @@ classdef (Sealed) Callbacks
 
     methods(Static)
 
+        function result = invokeDoubleCallback(func, a, b)
+            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokeDoubleCallback', 'func');
+            result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleCallback', func, a, b);
+        end
+
         function varargout = invokeTimes(varargin)
             % Invokes the callback exactly 'times' times with indices 0 to times-1, then
             %   returns. A null function pointer is ignored, and a non-positive count does
@@ -49,8 +54,8 @@ classdef (Sealed) Callbacks
             % Passes the value to the callback and returns what the callback produced. A null
             %   function pointer leaves the value unchanged.
             %
-            %   Not supported from MATLAB: its callback returns a value, which the gateway cannot hand back yet.
-            error('bindings_tests:NotSupported', "'applyScaled' is not supported from MATLAB: its callback returns a value, which the gateway cannot hand back yet.");
+            %   Not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.
+            error('bindings_tests:NotSupported', "'applyScaled' is not supported from MATLAB: its callback takes an argument ('userData') that the gateway cannot convert to an mxArray.");
         end
 
         function varargout = transformOnce(varargin)

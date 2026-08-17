@@ -136,6 +136,21 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Callbacks.invokeDoubleCallback": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
   "bindings_tests.Callbacks.invokePlainChecked": {
     "inputs": [{
         "kind": "required",

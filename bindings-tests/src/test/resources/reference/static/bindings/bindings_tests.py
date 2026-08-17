@@ -225,6 +225,7 @@ class struct_Structs_(Structure):
     pass
 StructsPtr = POINTER(struct_Structs_)
 
+DoubleCallbackFunc = CFUNCTYPE(c_double, c_double, c_double)
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
 PlainIndexCallbackFunction = CFUNCTYPE(None, c_int)
@@ -362,6 +363,8 @@ libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
 libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 
 # ==== Callbacks ====
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.argtypes = [DoubleCallbackFunc, c_double, c_double]
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.restype = c_double
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackFunction, c_void_p, c_int]
@@ -1162,6 +1165,12 @@ class Callbacks:
 
     def __new__(cls, *args, **kwargs):
         raise TypeError('Class is not instantiable')
+
+    @classmethod
+    def invoke_double_callback(cls, func: Callable[[float, float], float], a: float, b: float) -> float:
+        if func is not None and not isinstance(func, DoubleCallbackFunc):
+            func = DoubleCallbackFunc(func)
+        return libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback(func, a, b)
 
     @classmethod
     def invoke_times(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:

@@ -22,6 +22,7 @@
 extern "C" {
 #endif
 
+typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
 typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
@@ -207,6 +208,7 @@ DLL_PUBLIC bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings
 DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
+DLL_PUBLIC double bindings_tests_Callbacks_invokeDoubleCallback(bindings_tests_DoubleCallbackFunc func, double a, double b);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(bindings_tests_IndexCallbackFunction func, void* userData, int index);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeChecked(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int index);

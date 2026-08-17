@@ -11,6 +11,19 @@ import us.hebi.graalvm.bindings.tests.api.TestCallbacks;
 
 public final class TestCallbacks$CEntries {
     @CEntryPoint(
+            name = "__bindings_tests_Callbacks_invokeDoubleCallback"
+    )
+    public static double bindings_tests_Callbacks_invokeDoubleCallback(IsolateThread _isolate,
+            TestCallbacks.DoubleCallbackFunction func, double a, double b) {
+        try {
+            return TestCallbacks.invokeDoubleCallback(func, a, b);
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
             name = "__bindings_tests_Callbacks_invokeTimes"
     )
     public static void bindings_tests_Callbacks_invokeTimes(IsolateThread _isolate,
