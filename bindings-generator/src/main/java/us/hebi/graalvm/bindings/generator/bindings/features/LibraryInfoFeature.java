@@ -14,7 +14,7 @@ public class LibraryInfoFeature implements FeatureGenerator {
     public String getCHeader(boolean isCpp) {
         if (isCpp) {
             return getReplacedText("""
-                      void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
+                    void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
                     """);
         } else {
             // The header answers its own version, so this needs internal linkage: the shim
@@ -99,13 +99,13 @@ public class LibraryInfoFeature implements FeatureGenerator {
                                         lib_version.minor_ >= header_version.minor_ &&
                                         (lib_version.minor_ > header_version.minor_ || lib_version.patch_ >= header_version.patch_));
                   if (!is_compatible) {
-                    std::cerr << "Incompatible %%CPP_NAMESPACE%% library version found!\\\\n";
+                    std::cerr << "Incompatible %%CPP_NAMESPACE%% library version found!\\n";
                 #ifdef WIN32
                     if (!::FreeLibrary((HMODULE)lib_))
-                      std::cerr << "Error closing %%CPP_NAMESPACE%% library!\\\\n";
+                      std::cerr << "Error closing %%CPP_NAMESPACE%% library!\\n";
                 #else
                     if (dlclose(lib_) != 0)
-                      std::cerr << "Error closing %%CPP_NAMESPACE%% library!\\\\n";
+                      std::cerr << "Error closing %%CPP_NAMESPACE%% library!\\n";
                 #endif
                     lib_ = nullptr;
                   }

@@ -66,7 +66,7 @@ public final class StructMarshallers {
                 return;
             }
             throw new IllegalArgumentException("View '" + viewType + "' already registered marshaller "
-                    + existing.getClass().getName() + ", cannot also register " + marshallerClassName);
+                                               + existing.getClass().getName() + ", cannot also register " + marshallerClassName);
         }
         if (BUILT_INS.containsKey(viewType)) {
             throw new IllegalArgumentException(
@@ -105,7 +105,7 @@ public final class StructMarshallers {
         } catch (ReflectiveOperationException e) {
             throw new IllegalArgumentException(
                     "Struct marshaller could not be instantiated (public no-argument constructor required): "
-                            + className, e);
+                    + className, e);
         }
     }
 

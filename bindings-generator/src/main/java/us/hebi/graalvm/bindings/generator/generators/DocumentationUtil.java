@@ -128,7 +128,10 @@ public class DocumentationUtil {
         if (methodDesc.getParameters().length() > 0 || hasReturnComment(methodDesc)) {
             out.append("\n *");
             for (TypeDescription parameter : methodDesc.getParameters()) {
-                out.append("\n * @param ").append(parameter.getParamName()).append(" ").append(parameter.getComment());
+                out.append("\n * @param ").append(parameter.getParamName());
+                if (parameter.hasComment()) {
+                    out.append(" ").append(parameter.getComment());
+                }
             }
             if (hasReturnComment(methodDesc)) {
                 out.append("\n * @return ").append(methodDesc.getReturnType().getComment());
@@ -171,8 +174,10 @@ public class DocumentationUtil {
         if (isBrief) {
             out.append("\n * @brief ").append(comment);
         } else {
-            out.append("\n * @details ").append("\n * ");
-            out.append(comment.replaceAll("\n", "\n * "));
+            out.append("\n * @details");
+            for (String line : comment.split("\n")) {
+                out.append(line.isEmpty() ? "\n *" : "\n * " + line);
+            }
         }
         return out;
     }

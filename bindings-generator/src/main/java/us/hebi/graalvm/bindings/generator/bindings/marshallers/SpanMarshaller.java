@@ -117,8 +117,7 @@ class SpanMarshaller implements StructMarshaller {
 
         @Override
         public String unpack(String structVar) {
-            return "  return std::vector<%2$s>(%1$s.data, %1$s.data + %1$s.length); // copy before the next call invalidates it\n"
-                    .formatted(structVar, element.cppType());
+            return "return std::vector<" + element.cppType() + ">(" + structVar + ".data, " + structVar + ".data + " + structVar + ".length); // copy before the next call invalidates it";
         }
 
     }

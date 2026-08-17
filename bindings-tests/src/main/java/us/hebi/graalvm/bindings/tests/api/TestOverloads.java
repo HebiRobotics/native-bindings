@@ -39,7 +39,10 @@ public class TestOverloads {
             // silently dropped. See the known gaps section of the README.
             cppOverloads = @CLibMethod.MethodOverload(
                     parameters = "const std::vector<int>& values, int factor",
-                    body = "int sum = 0; for (int v : values) { sum += v; }",
+                    body = """
+                            int sum = 0;
+                            for (int v : values) { sum += v; }
+                            """,
                     call = "sum, factor"
             ),
             // The receiver (self or cls) is prepended by the generator

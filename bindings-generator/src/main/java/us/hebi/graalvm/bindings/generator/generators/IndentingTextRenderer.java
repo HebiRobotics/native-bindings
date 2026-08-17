@@ -223,8 +223,9 @@ public class IndentingTextRenderer {
         buffer = new StringBuilder();
     }
 
-    public void setIndentString(String indentString) {
+    public IndentingTextRenderer setIndentString(String indentString) {
         this.indentString = indentString;
+        return this;
     }
 
     private final StringBuilder buffer;
