@@ -349,19 +349,13 @@ public class CppBindingsGenerator extends BindingGenerator {
         m.decl.addLine("%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS_WITH_DEFAULTS%%)%%CONST%%%%NOEXCEPT%%;");
         def.beginControlFlow("inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {");
 
-        if (useDynamicLookup) {
-            def.addLine(getDynamicLookup(m.apiClass, method));
-        }
-        if (method.hasCppBody()) {
-            def.addLine(method.getCppBody().strip());
-        }
+        def.addLineIf(useDynamicLookup, getDynamicLookup(m.apiClass, method));
+        def.addLineIf(method.hasCppBody(), method.getCppBody().strip());
 
         // A plain value return has to be captured rather than returned directly, because
         // the error check comes after the call.
         boolean throwing = isThrowing(method);
-        if (throwing) {
-            def.addLine("%%ERROR_TYPE%% %%ERROR%% = {};");
-        }
+        def.addLineIf(throwing, "%%ERROR_TYPE%% %%ERROR%% = {};");
         var returnType = method.getReturnType().getDataType();
         var marshaller = getCppMarshaller(method.getReturnType());
         String capture = switch (returnType) {
@@ -374,9 +368,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
         if (throwing) {
             def.addLine("checkError(%%ERROR%%);");
-            if (returnType == DataType.OBJECT_HANDLE) {
-                def.addLine("checkNotNull(ptr, \"Could not create %%RETURN_TYPE%% in %%CLASS%%::%%NAME%%\");");
-            }
+            def.addLineIf(returnType == DataType.OBJECT_HANDLE, "checkNotNull(ptr, \"Could not create %%RETURN_TYPE%% in %%CLASS%%::%%NAME%%\");");
         }
 
         // Convert pointers to objects
@@ -400,12 +392,8 @@ public class CppBindingsGenerator extends BindingGenerator {
      * The dynamic symbol lookup and the error struct a throwing call reports through
      */
     private void writeCallSetup(MethodScope m, boolean useDynamicLookup) {
-        if (useDynamicLookup) {
-            m.def.addLine(getDynamicLookup(m.apiClass, m.method));
-        }
-        if (isThrowing(m.method)) {
-            m.def.addLine("%%ERROR_TYPE%% %%ERROR%% = {};");
-        }
+        m.def.addLineIf(useDynamicLookup, getDynamicLookup(m.apiClass, m.method));
+        m.def.addLineIf(isThrowing(m.method), "%%ERROR_TYPE%% %%ERROR%% = {};");
     }
 
     /**
@@ -428,16 +416,13 @@ public class CppBindingsGenerator extends BindingGenerator {
             }
             writeAccessLabel(decl, "private:");
             decl.addLine("void cleanup() noexcept;");
-            if (!apiClass.hasChildren() && !scope.hasDedicatedConstructor) {
-                decl.addLine("explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
-            }
+            decl.addLineIf(!apiClass.hasChildren() && !scope.hasDedicatedConstructor,
+                    "explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
             decl.addLine("%%CTYPE%% ptr_{};");
 
             def.beginControlFlow("inline void %%CLASS%%::cleanup() noexcept {");
             def.beginControlFlow("if (ptr_ != nullptr) {");
-            if (useDynamicLookup) {
-                def.addLine(getDynamicLookup(apiClass.getCDestructorName(), "void", scope.cType));
-            }
+            def.addLineIf(useDynamicLookup, getDynamicLookup(apiClass.getCDestructorName(), "void", scope.cType));
             def.addLine(apiClass.getCDestructorName() + "(ptr_);");
             def.endControlFlow("}");
             def.endControlFlow("}");
@@ -465,9 +450,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             decl.addLine("%%CTYPE%% ptr_{};");
 
             def.beginControlFlow("inline %%PARENT_CTYPE%% %%CLASS%%::get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept {");
-            if (useDynamicLookup) {
-                def.addLine(getDynamicLookup(scope.castToParent, scope.parentCType, scope.cType));
-            }
+            def.addLineIf(useDynamicLookup, getDynamicLookup(scope.castToParent, scope.parentCType, scope.cType));
             def.addLine("return %%CAST%%(cPointer);");
             def.endControlFlow("}");
             def.add("""
@@ -608,13 +591,13 @@ public class CppBindingsGenerator extends BindingGenerator {
                 renderer.set("NAME", method.getName())
                         .set("CNAME", method.getCName())
                         .set("RETURN_TYPE", getCppReturnType(method))
-                        .set("STATIC", method.getIsStatic() && !scope.useNamespace ? "static " : "")
-                        .set("CONST", hasFlag(method, MethodFlag.Const) ? " const" : "")
-                        .set("NOEXCEPT", hasFlag(method, MethodFlag.Noexcept) ? " noexcept" : "")
-                        .set("PARAMS", joiner.join(params))
-                        .set("PARAMS_WITH_DEFAULTS", joiner.join(paramsWithDefaults))
-                        .set("ARGS", joiner.join(cArgs))
-                        .set("ARG_NAMES", joiner.join(argNames));
+                        .setIf("STATIC", method.getIsStatic() && !scope.useNamespace, "static ")
+                        .setIf("CONST", hasFlag(method, MethodFlag.Const), " const")
+                        .setIf("NOEXCEPT", hasFlag(method, MethodFlag.Noexcept), " noexcept")
+                        .setArgs("PARAMS", params)
+                        .setArgs("PARAMS_WITH_DEFAULTS", paramsWithDefaults)
+                        .setArgs("ARGS", cArgs)
+                        .setArgs("ARG_NAMES", argNames);
             }
         }
 
@@ -677,12 +660,12 @@ public class CppBindingsGenerator extends BindingGenerator {
      * The C header's function pointer as an alias. Parameter names are kept for readability.
      */
     private static String getCppCallbackAlias(CallbackDescription callback) {
-        var parameters = new StringJoiner(", ");
+        var parameters = new ArrayList<String>();
         for (var parameter : callback.getParameters()) {
             parameters.add(CBindingsGenerator.getCallbackParameterType(parameter, CppBindingsGenerator::getCType)
                     + " " + parameter.getParamName());
         }
-        return "using " + callback.getName() + " = " + getCType(callback.getReturnType()) + " (*)(" + parameters + ");";
+        return "using " + callback.getName() + " = " + getCType(callback.getReturnType()) + " (*)(" + String.join(", ", parameters) + ");";
     }
 
     private static String getCType(TypeDescription type) {
@@ -727,8 +710,9 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * Name of the factory that value constructors of child classes delegate through. It carries the
-     * class name and lives in the internal namespace, so it cannot collide with a wrapped method.
+     * The C++ helper a child class's value constructor delegates through, see writeConstructor.
+     * It carries the class name and lives in the internal namespace, so it cannot collide with
+     * a wrapped method.
      */
     private static String getConstructorFactoryName(TypeDescription type) {
         return "create" + getCppClassName(type) + "Pointer";
@@ -794,7 +778,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         }
 
         if (needsDefaultOverload) {
-            writeCppOverload(m, joiner.join(parameters), "", joiner.join(call));
+            writeCppOverload(m, String.join(", ", parameters), "", String.join(", ", call));
         }
 
     }
@@ -810,9 +794,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                 .set("CALL", call);
         decl.addLine("%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%%;");
         def.beginControlFlow("inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {");
-        if (!body.isBlank()) {
-            def.addLine(body.strip());
-        }
+        def.addLineIf(!body.isBlank(), body.strip());
         def.addLine(TypeMap.isVoid(m.method.getReturnType().getDataType()) ? "%%NAME%%(%%CALL%%);" : "return %%NAME%%(%%CALL%%);");
         def.endControlFlow("}");
     }
@@ -832,7 +814,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         for (TypeDescription parameter : method.getParameters()) {
             cParamTypes.add(getCType(parameter));
         }
-        return joiner.join(cParamTypes);
+        return String.join(", ", cParamTypes);
     }
 
     private String getDynamicLookup(ClassDescription apiClass, MethodDescription method) {

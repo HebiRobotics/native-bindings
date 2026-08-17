@@ -74,6 +74,20 @@ public class IndentingTextRenderer {
         return set(key, Integer.toString(value));
     }
 
+    /**
+     * Sets the value to the comma separated arguments
+     */
+    public IndentingTextRenderer setArgs(String key, Iterable<String> args) {
+        return set(key, String.join(", ", args));
+    }
+
+    /**
+     * Sets the value if the condition holds, and to an empty string otherwise
+     */
+    public IndentingTextRenderer setIf(String key, boolean condition, String value) {
+        return set(key, condition ? value : "");
+    }
+
     public IndentingTextRenderer remove(String key) {
         variables.remove("%%" + key + "%%");
         return this;
@@ -112,6 +126,17 @@ public class IndentingTextRenderer {
 
     public IndentingTextRenderer addLine(String text) {
         return add(text).addLine();
+    }
+
+    public IndentingTextRenderer addLineIf(boolean condition, String text) {
+        return condition ? addLine(text) : this;
+    }
+
+    /**
+     * Appends the comma separated arguments
+     */
+    public IndentingTextRenderer addArgs(Iterable<String> args) {
+        return add(String.join(", ", args));
     }
 
     public IndentingTextRenderer add(String text) {
