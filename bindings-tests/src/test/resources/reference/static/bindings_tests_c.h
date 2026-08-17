@@ -22,15 +22,6 @@
 extern "C" {
 #endif
 
-typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
-typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
-typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
-typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
-typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
-typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
-typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
-typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
-
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
 // are library owned and only valid until the next call on this thread.
@@ -89,6 +80,16 @@ typedef struct {
     int32_t state;
     int32_t enabled;
 } bindings_tests_StatusInfo;
+
+typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
+typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const bindings_tests_DoubleSpan* a, const bindings_tests_DoubleSpan* b);
+typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
+typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
+typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
+typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 typedef struct bindings_tests_Counted_* bindings_tests_CountedPtr;
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
@@ -209,6 +210,7 @@ DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t co
 
 // ==== Callbacks ====
 DLL_PUBLIC double bindings_tests_Callbacks_invokeDoubleCallback(bindings_tests_DoubleCallbackFunc func, double a, double b);
+DLL_PUBLIC double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(bindings_tests_DoubleSpanToScalarCallbackFunc func, bindings_tests_DoubleSpan a, bindings_tests_DoubleSpan b);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(bindings_tests_IndexCallbackFunction func, void* userData, int index);
 DLL_PUBLIC void bindings_tests_Callbacks_invokeChecked(bindings_tests_ErrorInfo* _error, bindings_tests_IndexCallbackFunction func, void* userData, int index);

@@ -59,14 +59,6 @@ class Shape;
 class Circle;
 class Square;
 class Stored;
-using DoubleCallbackFunc = double (*)(double a, double b);
-using IndexCallbackFunction = void (*)(void* userData, int index);
-using NotifyCallbackFunction = void (*)(void* userData);
-using PlainIndexCallbackFunction = void (*)(int index);
-using PlainNotifyCallbackFunction = void (*)();
-using ScaleCallbackFunction = double (*)(void* userData, double value);
-using StoredCallbackFunction = void (*)(void* userData, int index);
-using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 namespace internal {
 using CountedPtr = struct Counted_*;
@@ -100,6 +92,16 @@ struct ErrorInfo {
   int32_t code;
 };
 }
+
+using DoubleCallbackFunc = double (*)(double a, double b);
+using DoubleSpanToScalarCallbackFunc = double (*)(const internal::DoubleSpan* a, const internal::DoubleSpan* b);
+using IndexCallbackFunction = void (*)(void* userData, int index);
+using NotifyCallbackFunction = void (*)(void* userData);
+using PlainIndexCallbackFunction = void (*)(int index);
+using PlainNotifyCallbackFunction = void (*)();
+using ScaleCallbackFunction = double (*)(void* userData, double value);
+using StoredCallbackFunction = void (*)(void* userData, int index);
+using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 class Exception : public std::runtime_error {
 public:
@@ -543,6 +545,8 @@ std::vector<double> getSequence(size_t count) noexcept;
  */
 namespace callbacks {
 double invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept;
 
 /**
  * @details 
@@ -1526,6 +1530,13 @@ inline std::vector<double> arrays::getSequence(size_t count) noexcept {
 inline double callbacks::invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept {
   static auto bindings_tests_Callbacks_invokeDoubleCallback = DynamicLookup::instance().getFunc<double(*)(DoubleCallbackFunc, double, double)>("bindings_tests_Callbacks_invokeDoubleCallback");
   return bindings_tests_Callbacks_invokeDoubleCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept {
+  static auto bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback = DynamicLookup::instance().getFunc<double(*)(DoubleSpanToScalarCallbackFunc, internal::DoubleSpan, internal::DoubleSpan)>("bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback");
+  return bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept {
+  return invokeDoubleSpanToScalarCallback(func, {a.data(), a.size()}, {b.data(), b.size()});
 }
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   static auto bindings_tests_Callbacks_invokeTimes = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");

@@ -51,14 +51,6 @@ class Shape;
 class Circle;
 class Square;
 class Stored;
-using DoubleCallbackFunc = double (*)(double a, double b);
-using IndexCallbackFunction = void (*)(void* userData, int index);
-using NotifyCallbackFunction = void (*)(void* userData);
-using PlainIndexCallbackFunction = void (*)(int index);
-using PlainNotifyCallbackFunction = void (*)();
-using ScaleCallbackFunction = double (*)(void* userData, double value);
-using StoredCallbackFunction = void (*)(void* userData, int index);
-using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 namespace internal {
 using CountedPtr = struct Counted_*;
@@ -92,6 +84,16 @@ struct ErrorInfo {
   int32_t code;
 };
 }
+
+using DoubleCallbackFunc = double (*)(double a, double b);
+using DoubleSpanToScalarCallbackFunc = double (*)(const internal::DoubleSpan* a, const internal::DoubleSpan* b);
+using IndexCallbackFunction = void (*)(void* userData, int index);
+using NotifyCallbackFunction = void (*)(void* userData);
+using PlainIndexCallbackFunction = void (*)(int index);
+using PlainNotifyCallbackFunction = void (*)();
+using ScaleCallbackFunction = double (*)(void* userData, double value);
+using StoredCallbackFunction = void (*)(void* userData, int index);
+using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 class Exception : public std::runtime_error {
 public:
@@ -535,6 +537,8 @@ std::vector<double> getSequence(size_t count) noexcept;
  */
 namespace callbacks {
 double invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept;
 
 /**
  * @details 
@@ -1121,6 +1125,7 @@ extern "C" {
   internal::ByteSpan bindings_tests_Arrays_addOffsetUint8(internal::ByteSpan, char);
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
   double bindings_tests_Callbacks_invokeDoubleCallback(DoubleCallbackFunc, double, double);
+  double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc, internal::DoubleSpan, internal::DoubleSpan);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
   void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
   void bindings_tests_Callbacks_invokeChecked(internal::ErrorInfo*, IndexCallbackFunction, void*, int);
@@ -1560,6 +1565,12 @@ inline std::vector<double> arrays::getSequence(size_t count) noexcept {
 // Callbacks
 inline double callbacks::invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept {
   return bindings_tests_Callbacks_invokeDoubleCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept {
+  return bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept {
+  return invokeDoubleSpanToScalarCallback(func, {a.data(), a.size()}, {b.data(), b.size()});
 }
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   bindings_tests_Callbacks_invokeTimes(func, userData, times);

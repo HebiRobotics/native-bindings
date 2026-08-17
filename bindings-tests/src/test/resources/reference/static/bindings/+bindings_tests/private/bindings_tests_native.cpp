@@ -58,15 +58,6 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
     }
 }
 
-typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
-typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
-typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
-typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
-typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
-typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
-typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
-typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
-
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.
 struct ErrorInfo {
@@ -210,6 +201,7 @@ struct CallbackRegistry {
 
 static CallbackRegistry plainIndexCallbackFunctionRegistry;
 static CallbackRegistry doubleCallbackFuncRegistry;
+static CallbackRegistry doubleSpanToScalarCallbackFuncRegistry;
 static CallbackRegistry plainNotifyCallbackFunctionRegistry;
 
 // The index selects which of the type's trampolines the library is handed, so a nested
@@ -294,7 +286,7 @@ inline mxArray* checkCallbackResult(const mxArray* result, const char* callback)
 }
 
 // Only the owned sweeps run over every registry, so they are listed once here
-static CallbackRegistry* const callbackRegistries[] = {&plainIndexCallbackFunctionRegistry, &doubleCallbackFuncRegistry, &plainNotifyCallbackFunctionRegistry};
+static CallbackRegistry* const callbackRegistries[] = {&plainIndexCallbackFunctionRegistry, &doubleCallbackFuncRegistry, &doubleSpanToScalarCallbackFuncRegistry, &plainNotifyCallbackFunctionRegistry};
 
 
 // A constructor's callback is invoked by later calls, so its handle outlives the call
@@ -502,6 +494,16 @@ inline StatusInfo getStatusInfo(const mxArray* arg) {
     };
 }
 
+typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
+typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const DoubleSpan* a, const DoubleSpan* b);
+typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_NotifyCallbackFunction)(void* userData);
+typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
+typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef double (*bindings_tests_ScaleCallbackFunction)(void* userData, double value);
+typedef void (*bindings_tests_StoredCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
+
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
 // as "either UTF-8 encoding or the local codepage encoding". The UTF-8 default was added in
@@ -662,6 +664,55 @@ static std::array<bindings_tests_DoubleCallbackFunc, sizeof...(Is)> makeDoubleCa
     return {{&invokeDoubleCallbackFunc<Is>...}};
 }
 static const auto doubleCallbackFuncTable = makeDoubleCallbackFuncTable(std::make_index_sequence<MAX_CALLBACKS>{});
+
+// Invokes the function handle registered in slot N for DoubleSpanToScalarCallbackFunc. Which of these
+// the library was handed is the whole channel, so nothing arriving back from it is
+// dereferenced. An error is trapped rather than raised, because a longjmp from here
+// would tear down the library's own frames. One mxArray per argument per call is
+// inherent to MATLAB.
+template <size_t N>
+static double invokeDoubleSpanToScalarCallbackFunc(const DoubleSpan* a, const DoubleSpan* b) {
+    CallbackRecord& record = doubleSpanToScalarCallbackFuncRegistry.records[N];
+    // The thread comes first, because everything below reaches into MATLAB. The
+    // count is read after the library call has joined its threads, so relaxed is
+    // enough, and the caller sees it as an error or a warning afterwards.
+    if (std::this_thread::get_id() != matlabThread) {
+        record.dropped.fetch_add(1, std::memory_order_relaxed);
+        return double{};
+    }
+    if (record.owned ? pendingCallbackError != nullptr : record.error != nullptr) {
+        return double{}; // an earlier invocation already failed, and that error is the one raised
+    }
+    mxArray* args[3] = {const_cast<mxArray*>(record.handle), createMexDoubleArray(*a), createMexDoubleArray(*b)};
+    double value{};
+    mxArray* result = nullptr;
+    mxArray* error = mexCallMATLABWithTrap(1, &result, 3, args, "feval");
+    if (error == nullptr) {
+        error = checkCallbackResult(result, "DoubleSpanToScalarCallbackFunc");
+        if (error == nullptr) {
+            value = static_cast<double>(mxGetScalar(result));
+        }
+        mxDestroyArray(result);
+    }
+    // An owned callback has no call of its own to report into, so its error waits for the
+    // mexFunction it fired in to raise it on the way out.
+    if (record.owned) {
+        pendingCallbackError = error;
+    } else {
+        record.error = error;
+    }
+    mxDestroyArray(args[1]);
+    mxDestroyArray(args[2]);
+    return value;
+}
+
+// Each entry is a separate instantiation, so the index cannot be a runtime value and
+// the table has to be expanded from a pack rather than filled in a loop.
+template <size_t... Is>
+static std::array<bindings_tests_DoubleSpanToScalarCallbackFunc, sizeof...(Is)> makeDoubleSpanToScalarCallbackFuncTable(std::index_sequence<Is...>) {
+    return {{&invokeDoubleSpanToScalarCallbackFunc<Is>...}};
+}
+static const auto doubleSpanToScalarCallbackFuncTable = makeDoubleSpanToScalarCallbackFuncTable(std::make_index_sequence<MAX_CALLBACKS>{});
 
 // Invokes the function handle registered in slot N for PlainIndexCallbackFunction. Which of these
 // the library was handed is the whole channel, so nothing arriving back from it is
@@ -1269,6 +1320,26 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             {
                 MatlabCallback func(doubleCallbackFuncRegistry, prhs[1]);
                 _value = bindings_tests_Callbacks_invokeDoubleCallback(doubleCallbackFuncTable[func.index], a, b);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback") */ 728431532: {
+            static auto bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback = libLoader.getFunc<double(*)(bindings_tests_DoubleSpanToScalarCallbackFunc, DoubleSpan, DoubleSpan)>("bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback");
+            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback");
+            MatlabArray<double, mxDOUBLE_CLASS> a_arr(prhs[2]);
+            DoubleSpan a = {a_arr.ptr, mxGetNumberOfElements(prhs[2])};
+            MatlabArray<double, mxDOUBLE_CLASS> b_arr(prhs[3]);
+            DoubleSpan b = {b_arr.ptr, mxGetNumberOfElements(prhs[3])};
+            double _value;
+            CallbackOutcome funcOutcome;
+            // mexErrMsgIdAndTxt longjmps without running destructors, so nothing inside
+            // the scope may raise. The outcome is checked once the slot has been released.
+            {
+                MatlabCallback func(doubleSpanToScalarCallbackFuncRegistry, prhs[1]);
+                _value = bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(doubleSpanToScalarCallbackFuncTable[func.index], a, b);
                 funcOutcome = func.outcome();
             }
             checkCallbackError(funcOutcome);

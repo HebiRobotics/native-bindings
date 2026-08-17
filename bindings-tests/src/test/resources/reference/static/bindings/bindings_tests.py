@@ -226,6 +226,7 @@ class struct_Structs_(Structure):
 StructsPtr = POINTER(struct_Structs_)
 
 DoubleCallbackFunc = CFUNCTYPE(c_double, c_double, c_double)
+DoubleSpanToScalarCallbackFunc = CFUNCTYPE(c_double, POINTER(_DoubleSpan), POINTER(_DoubleSpan))
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 NotifyCallbackFunction = CFUNCTYPE(None, c_void_p)
 PlainIndexCallbackFunction = CFUNCTYPE(None, c_int)
@@ -365,6 +366,8 @@ libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 # ==== Callbacks ====
 libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.argtypes = [DoubleCallbackFunc, c_double, c_double]
 libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.restype = c_double
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.argtypes = [DoubleSpanToScalarCallbackFunc, _DoubleSpan, _DoubleSpan]
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.restype = c_double
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
 libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackFunction, c_void_p, c_int]
@@ -1171,6 +1174,23 @@ class Callbacks:
         if func is not None and not isinstance(func, DoubleCallbackFunc):
             func = DoubleCallbackFunc(func)
         return libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback(func, a, b)
+
+    @classmethod
+    def invoke_double_span_to_scalar_callback(cls, func: Callable[[Any, Any], float], a: Sequence[float], b: Sequence[float]) -> float:
+        np = _require_numpy()
+        if func is not None and not isinstance(func, DoubleSpanToScalarCallbackFunc):
+            func = DoubleSpanToScalarCallbackFunc(func)
+        if a is None:
+            a = _DoubleSpan(None, 0)
+        elif not isinstance(a, _DoubleSpan):
+            a_arr = np.ascontiguousarray(a, dtype=np.float64)
+            a = _DoubleSpan(a_arr.ctypes.data_as(POINTER(c_double)), len(a_arr))
+        if b is None:
+            b = _DoubleSpan(None, 0)
+        elif not isinstance(b, _DoubleSpan):
+            b_arr = np.ascontiguousarray(b, dtype=np.float64)
+            b = _DoubleSpan(b_arr.ctypes.data_as(POINTER(c_double)), len(b_arr))
+        return libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b)
 
     @classmethod
     def invoke_times(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:

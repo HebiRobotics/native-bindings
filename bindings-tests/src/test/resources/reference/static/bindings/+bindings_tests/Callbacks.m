@@ -8,6 +8,11 @@ classdef (Sealed) Callbacks
             result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleCallback', func, a, b);
         end
 
+        function result = invokeDoubleSpanToScalarCallback(func, a, b)
+            validateattributes(func, {'function_handle'}, {'scalar'}, 'Callbacks.invokeDoubleSpanToScalarCallback', 'func');
+            result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback', func, a, b);
+        end
+
         function varargout = invokeTimes(varargin)
             % Invokes the callback exactly 'times' times with indices 0 to times-1, then
             %   returns. A null function pointer is ignored, and a non-positive count does

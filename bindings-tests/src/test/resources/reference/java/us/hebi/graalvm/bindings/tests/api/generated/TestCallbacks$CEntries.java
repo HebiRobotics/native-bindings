@@ -6,6 +6,7 @@ import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
+import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestCallbacks;
 
@@ -17,6 +18,20 @@ public final class TestCallbacks$CEntries {
             TestCallbacks.DoubleCallbackFunction func, double a, double b) {
         try {
             return TestCallbacks.invokeDoubleCallback(func, a, b);
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback"
+    )
+    public static double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(
+            IsolateThread _isolate, TestCallbacks.DoubleSpanToScalarCallbackFunction func,
+            DoubleSpan a, DoubleSpan b) {
+        try {
+            return TestCallbacks.invokeDoubleSpanToScalarCallback(func, a, b);
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return 0;

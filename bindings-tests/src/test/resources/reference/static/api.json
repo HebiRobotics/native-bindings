@@ -891,6 +891,34 @@
       }],
       "flags": ["Noexcept"]
     }, {
+      "name": "invokeDoubleSpanToScalarCallback",
+      "lowerUnderscoreName": "invoke_double_span_to_scalar_callback",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpanToScalarCallbackFunc",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
+      }],
+      "flags": ["Noexcept"]
+    }, {
       "name": "invokeTimes",
       "lowerUnderscoreName": "invoke_times",
       "isStatic": true,
@@ -2307,6 +2335,23 @@
     }, {
       "paramName": "b",
       "dataType": "FLOAT64"
+    }],
+    "cPrefix": "bindings_tests_"
+  }, {
+    "name": "DoubleSpanToScalarCallbackFunc",
+    "returnType": {
+      "dataType": "FLOAT64"
+    },
+    "parameters": [{
+      "paramName": "a",
+      "cPrefix": "bindings_tests_",
+      "typeName": "DoubleSpan",
+      "dataType": "STRUCT"
+    }, {
+      "paramName": "b",
+      "cPrefix": "bindings_tests_",
+      "typeName": "DoubleSpan",
+      "dataType": "STRUCT"
     }],
     "cPrefix": "bindings_tests_"
   }, {
