@@ -174,7 +174,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             // RAII views over the MATLAB array, valid for the duration of the call
             case FLOAT64_POINTER -> "MatlabArray<double, mxDOUBLE_CLASS> " + name + "(" + arg + ")";
             case FLOAT32_POINTER -> "MatlabArray<float, mxSINGLE_CLASS> " + name + "(" + arg + ")";
-            case INT64_POINTER -> "MatlabArray<int64_t, mxINT64_CLASS> " + name + "(" + arg + ")";
+            case INT64_POINTER -> "MatlabArray<long long, mxINT64_CLASS> " + name + "(" + arg + ")"; // the C face says long long*, and int64_t is long on Linux
             case INT32_POINTER -> "MatlabArray<int32_t, mxINT32_CLASS> " + name + "(" + arg + ")";
             case INT16_POINTER -> "MatlabArray<int16_t, mxINT16_CLASS> " + name + "(" + arg + ")";
             case UINT8_POINTER -> "MatlabArray<uint8_t, mxUINT8_CLASS> " + name + "(" + arg + ")";

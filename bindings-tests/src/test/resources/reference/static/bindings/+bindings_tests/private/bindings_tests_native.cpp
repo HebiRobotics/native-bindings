@@ -1588,7 +1588,7 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 4, "bindings_tests_Structs_fillFieldTypes");
             unsigned short unit = getScalar<unsigned short>(prhs[1], "unit");
             MatlabArray<int16_t, mxINT16_CLASS> shorts(prhs[2]);
-            MatlabArray<int64_t, mxINT64_CLASS> longs(prhs[3]);
+            MatlabArray<long long, mxINT64_CLASS> longs(prhs[3]);
             void* context = getPtr<void*>(prhs[4]);
             FieldTypes _value = bindings_tests_Structs_fillFieldTypes(unit, shorts, longs, context);
             if (nlhs > 0) plhs[0] = createMexFieldTypes(_value);
