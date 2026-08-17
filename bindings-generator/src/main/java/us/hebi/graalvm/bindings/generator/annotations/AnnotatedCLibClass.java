@@ -115,7 +115,7 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     public Optional<MethodDescription> getToParentCast() {
         return getParent().map(parent -> {
             var method = MethodDescription.newInstance();
-            method.setName("%s_to_%s".formatted(getApiClassName(), parent.getClassName().get()));
+            method.setName(getApiClassName() + "_to_" + parent.getClassName().get());
             method.setLowerUnderscoreName(method.getName());
             method.setCName(AnnotationUtil.getCPrefix(getOptions(), annotation.cPrefix()) + "_" + method.getName());
             method.setIsStatic(true);

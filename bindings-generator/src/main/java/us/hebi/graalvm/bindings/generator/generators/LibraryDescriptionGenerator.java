@@ -155,11 +155,9 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     /**
-     * The four kinds a library declares share one namespace, so the same name may only be taken
-     * once. The comparison is on the plain name rather than on the C name: the Python module and
-     * the MATLAB package are one flat namespace per library, so two kinds with the same plain
-     * name overwrite each other there even when their C prefixes keep them apart in the header.
-     * Two declarations of the same kind are rejected earlier, with their own message.
+     * The four kinds share one namespace: the Python module and the MATLAB package are flat, so
+     * two kinds with the same plain name overwrite each other there even when the C prefixes
+     * keep them apart. Two declarations of the same kind are rejected earlier.
      */
     private void registerName(String kind, String name, TypeElement element) {
         var qualifiedName = element.getQualifiedName().toString();

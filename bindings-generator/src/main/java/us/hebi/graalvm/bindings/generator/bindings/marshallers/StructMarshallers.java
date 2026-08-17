@@ -51,13 +51,10 @@ public final class StructMarshallers {
     }
 
     /**
-     * Registers the marshaller a {@code @CLibStruct(marshaller = ...)} annotation names
-     * for its view. The annotated view is the only naming direction, so one marshaller
-     * class may serve several views. A view gets modeled once per use, so registering
-     * the same class again is a no-op rather than a duplicate.
+     * Registers the marshaller a {@code @CLibStruct(marshaller = ...)} names for its view. One
+     * class may serve several views, and registering the same class again is a no-op.
      *
-     * @throws IllegalArgumentException naming the offending class on any lookup,
-     *                                  instantiation, or conflict problem
+     * @throws IllegalArgumentException naming the offending class
      */
     public static void register(String viewType, String marshallerClassName) {
         var existing = userByViewType.get(viewType);

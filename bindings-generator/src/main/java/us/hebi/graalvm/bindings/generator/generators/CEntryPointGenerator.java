@@ -97,9 +97,8 @@ public class CEntryPointGenerator extends AbstractGenerator {
     }
 
     /**
-     * The entry point converts the C arguments, forwards to the Java method, and converts the
-     * result back. Anything that can throw reports through the caller-provided error struct,
-     * which goes ahead of the instance handle so that it is argument zero of every public
+     * Converts the C arguments, forwards to the Java method and converts the result back. The
+     * error struct goes ahead of the instance handle so it is argument zero of every public
      * C signature.
      */
     private MethodSpec generateEntryPoint(AnnotatedCLibClass apiClass, AnnotatedCLibMethod method) {

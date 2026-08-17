@@ -310,11 +310,9 @@ public class CppBindingsGenerator extends BindingGenerator {
         m.decl.addLine("%%CLASS%%(%%PARAMS_WITH_DEFAULTS%%);");
 
         if (m.apiClass.hasParent()) {
-            // The base class has no default constructor, so the value constructor has to delegate
-            // to the pointer constructor that initializes the inherited part. Base initializers run
-            // before the constructor body, so the null check moves into a factory that runs
-            // while the delegated arguments get evaluated. It is a free function in the internal
-            // namespace rather than a class member so that it cannot collide with a wrapped method.
+            // Base initializers run before the constructor body, so the null check lives in a factory
+            // the delegating constructor calls. A free function in the internal namespace cannot
+            // collide with a wrapped method.
             def.set("FACTORY", getConstructorFactoryName(m.apiClass.getType()));
             def.addLine("namespace %%INTERNAL%% {");
             def.addLine("// The null check happens here because the base class gets initialized before the constructor body runs");

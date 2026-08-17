@@ -4,52 +4,12 @@ import us.hebi.graalvm.bindings.model.*;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * @author Florian Enner
  * @since 05 Jan 2024
  */
 public class GeneratorUtil {
-
-    public static Function<String, String> createIndenter(String indent) {
-        return input -> input.replaceAll("\n", "\n" + indent);
-    }
-
-    public static String indent(String input, String indent) {
-        return indent + input.stripLeading().replaceAll("\n", "\n" + indent);
-    }
-
-    /**
-     * Same as Guava's LOWER_UNDERSCORE.converterTo(UPPER_CAMEL).convert(input), but
-     * it preserves any existing uppercase characters casing.
-     * <p>
-     * For example, hebi_charts_LineStyle becomes HebiChartsLineStyle
-     */
-    public static String convertUnderscoresToCamelCase(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-
-        // Always start with uppercase
-        StringBuilder result = new StringBuilder(input.length());
-        result.append(Character.toUpperCase(input.charAt(0)));
-
-        // For others, uppercase after
-        boolean upperNext = false;
-        for (int i = 1; i < input.length(); i++) {
-            char c = input.charAt(i);
-            if (c == '_') {
-                upperNext = true;
-            } else {
-                result.append(upperNext ? Character.toUpperCase(c) : c);
-                upperNext = false;
-            }
-        }
-
-        return result.toString();
-
-    }
 
     public static Set<String> getPropertyNames(ClassDescription desc) {
         var properties = new TreeSet<String>();
@@ -116,19 +76,6 @@ public class GeneratorUtil {
                 return;
             }
         }
-    }
-
-    /**
-     * The default isolate (empty name) plus all named per-class isolates,
-     * sorted so that the generated output stays deterministic.
-     */
-    public static List<String> getIsolateNames(LibraryDescription lib) {
-        var names = new TreeSet<String>();
-        names.add("");
-        for (ClassDescription clazz : lib.getClasses()) {
-            clazz.tryGetIsolateName().ifPresent(names::add);
-        }
-        return new ArrayList<>(names);
     }
 
     /**

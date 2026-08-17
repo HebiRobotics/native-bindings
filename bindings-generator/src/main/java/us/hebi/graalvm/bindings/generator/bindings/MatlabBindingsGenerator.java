@@ -890,13 +890,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The default value as MATLAB should see it.
-     * <p>
-     * Defaults are stored zero based, like everything else in the descriptor model. An
-     * index default therefore has to shift into MATLAB's own indexing here, so that the
-     * conversion below can subtract unconditionally instead of special casing whether the
-     * argument was supplied. Emitting the default in Java's space and then converting it
-     * would decrement it a second time.
+     * The default as MATLAB sees it. Defaults are stored zero based, so an index default shifts
+     * here and {@link #getIndexInputConversion} subtracts unconditionally, converting the emitted
+     * default instead would decrement it twice.
      */
     static String getMatlabDefaultValue(TypeDescription param) {
         var value = convertCDefaultParamString(param);
