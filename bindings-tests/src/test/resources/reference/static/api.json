@@ -2007,6 +2007,7 @@
   }],
   "callbacks": [{
     "name": "DoubleCallbackFunc",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "FLOAT64"
     },
@@ -2016,10 +2017,10 @@
     }, {
       "paramName": "b",
       "dataType": "FLOAT64"
-    }],
-    "cPrefix": "bindings_tests_"
+    }]
   }, {
     "name": "DoubleSpanToScalarCallbackFunc",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "FLOAT64"
     },
@@ -2033,10 +2034,10 @@
       "cPrefix": "bindings_tests_",
       "typeName": "DoubleSpan",
       "dataType": "STRUCT"
-    }],
-    "cPrefix": "bindings_tests_"
+    }]
   }, {
     "name": "IndexCallbackFunction",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "VOID"
     },
@@ -2046,26 +2047,26 @@
     }, {
       "paramName": "index",
       "dataType": "INT32"
-    }],
-    "cPrefix": "bindings_tests_"
+    }]
   }, {
     "name": "PlainIndexCallbackFunction",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "VOID"
     },
     "parameters": [{
       "paramName": "index",
       "dataType": "INT32"
-    }],
-    "cPrefix": "bindings_tests_"
+    }]
   }, {
     "name": "PlainNotifyCallbackFunction",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "VOID"
-    },
-    "cPrefix": "bindings_tests_"
+    }
   }, {
     "name": "TransformCallbackFunction",
+    "cPrefix": "bindings_tests_",
     "returnType": {
       "dataType": "VOID"
     },
@@ -2079,7 +2080,6 @@
     }, {
       "paramName": "output",
       "dataType": "FLOAT64_POINTER"
-    }],
-    "cPrefix": "bindings_tests_"
+    }]
   }]
 }

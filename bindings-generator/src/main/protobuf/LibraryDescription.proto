@@ -22,7 +22,6 @@ message LibraryDescription {
   repeated EnumDescription enums = 11;
   repeated StructDescription structs = 16;
   repeated CallbackDescription callbacks = 17;
-  reserved 15;                // was TypeDef typedefs, replaced by derived callbacks
 
   optional bool enable_graphics = 14 [default = false];
 
@@ -46,10 +45,9 @@ message EnumValueDescription {
 // face declares the same typedef.
 message CallbackDescription {
   optional string name = 1; // typedef name, the interface's simple name
-  optional TypeDescription return_type = 2;
-  repeated TypeDescription parameters = 3;
-  reserved 4;                 // was is_synchronous, the lifetime axis is structural
-  optional string c_prefix = 5; // namespaced prefix to guarantee uniqueness
+  optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
+  optional TypeDescription return_type = 3;
+  repeated TypeDescription parameters = 4;
 }
 
 // A user-defined struct that crosses the public C ABI by value. The field order is
@@ -98,13 +96,10 @@ enum DataType {
   FLOAT64_POINTER = 18;       // GraalVM CDoublePointer -> double*
 
   // Meta / High-Level Types
-  reserved 40;                // was TYPEDEF, replaced by CALLBACK derived from CFunctionPointer
   ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
-  reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct
   STRUCT = 44;                // user-defined struct, passed and returned by value in the public C ABI
   CALLBACK = 45;              // function pointer described by a CallbackDescription of the same name
-  reserved 50;                // was FLOAT64_SPAN, replaced by STRUCT with the span marshaller
 
 }
 
