@@ -508,7 +508,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         // The overload snippets, the conversions and the return template
         var body = overload.tryGetBody().map(String::stripTrailing).orElse("");
-        var conversions = params.inputConversions.render().stripTrailing();
+        var conversions = params.preCallActions.render().stripTrailing();
         var postBody = overload.tryGetPostBody().map(String::stripTrailing).orElse("");
         var returnTemplate = getReturnTemplate(m.apiClass, method);
         boolean usesNumpy = isUsingNumpy(body, conversions, postBody, returnTemplate);
@@ -761,7 +761,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
     static class ParameterLists {
         final List<String> externalInput = new ArrayList<>();
         final List<String> internalInput = new ArrayList<>();
-        final IndentingTextRenderer inputConversions = new IndentingTextRenderer();
+        final IndentingTextRenderer preCallActions = new IndentingTextRenderer();
 
         ParameterLists(LibraryDescription lib, MethodDescription desc) {
             // First parameter: self or cls
@@ -780,7 +780,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     names.add(parameter.getLowerUnderscoreParamName());
                 }
                 externalInput.add(desc.getPropertyName() + ": " + getSetterTypeHint(desc));
-                inputConversions.addLine(String.join(", ", names) + " = " + desc.getPropertyName());
+                preCallActions.addLine(String.join(", ", names) + " = " + desc.getPropertyName());
             } else {
                 // Standard parameters -> one for each
                 for (var parameter : desc.getParameters()) {
@@ -795,7 +795,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // Conversions and C call
             for (var parameter : desc.getParameters()) {
                 // Convert from input to C type
-                addInputConversion(lib, parameter, inputConversions);
+                addInputConversion(lib, parameter, preCallActions);
 
                 // Call the C method
                 if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
