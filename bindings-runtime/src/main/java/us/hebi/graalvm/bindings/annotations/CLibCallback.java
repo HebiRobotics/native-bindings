@@ -21,7 +21,7 @@ public @interface CLibCallback {
     /**
      * @return typedef name, defaults to the interface's simple name
      */
-    String name() default "";
+    String value() default "";
 
     /**
      * @return prefix for non-namespaced C names

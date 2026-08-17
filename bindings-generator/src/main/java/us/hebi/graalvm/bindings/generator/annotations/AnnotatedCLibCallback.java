@@ -33,7 +33,7 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
         AnnotationUtil.checkIsCIdentifier(element, getName());
         var annotation = element.getAnnotation(CLibCallback.class);
         if (annotation != null) {
-            AnnotationUtil.checkIsCIdentifier(element, annotation.cPrefix(), annotation.name());
+            AnnotationUtil.checkIsCIdentifier(element, annotation.cPrefix(), annotation.value());
         }
 
         invokeMethod = findInvokeMethod();
@@ -123,8 +123,8 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
      */
     public static String getName(TypeElement element) {
         var annotation = element.getAnnotation(CLibCallback.class);
-        if (annotation != null && !annotation.name().isEmpty()) {
-            return annotation.name();
+        if (annotation != null && !annotation.value().isEmpty()) {
+            return annotation.value();
         }
         return String.valueOf(element.getSimpleName());
     }

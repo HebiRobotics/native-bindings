@@ -932,7 +932,7 @@ public class ProcessorValidationTest {
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("Renamed")
                 public class Renamed {
-                    @CLibCallback(name = "OnValue")
+                    @CLibCallback("OnValue")
                     public interface Callback extends CFunctionPointer {
                         @InvokeCFunctionPointer void invoke(int value);
                     }
@@ -980,7 +980,7 @@ public class ProcessorValidationTest {
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("BadName")
                 public class BadName {
-                    @CLibCallback(name = "on value")
+                    @CLibCallback("on value")
                     public interface Callback extends CFunctionPointer {
                         @InvokeCFunctionPointer void invoke(int value);
                     }
@@ -999,7 +999,7 @@ public class ProcessorValidationTest {
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("Collision")
                 public class Collision {
-                    @CLibCallback(name = "Collision")
+                    @CLibCallback("Collision")
                     public interface Callback extends CFunctionPointer {
                         @InvokeCFunctionPointer void invoke(int value);
                     }
