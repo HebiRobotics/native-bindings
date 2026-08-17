@@ -152,7 +152,7 @@ public class IndentingTextRenderer {
             return this;
         }
 
-        text = applyVariables(text);
+        text = resolveVariables(text);
         final int len = text.length();
 
         for (int i = 0; i < len; i++) {
@@ -206,12 +206,17 @@ public class IndentingTextRenderer {
     }
 
     public String render() {
-        // do multiple iterations in case we have circular references
-        String string = buffer.toString();
-        while (needsReplacement(string)) {
-            string = applyVariables(string);
+        return resolveVariables(buffer.toString());
+    }
+
+    /**
+     * Substitutes until nothing is left, so a value may itself carry tokens
+     */
+    private String resolveVariables(String text) {
+        while (needsReplacement(text)) {
+            text = applyVariables(text);
         }
-        return string;
+        return text;
     }
 
     private boolean needsReplacement(String text) {
