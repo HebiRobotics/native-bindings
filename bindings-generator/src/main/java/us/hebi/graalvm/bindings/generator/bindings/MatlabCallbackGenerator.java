@@ -189,6 +189,21 @@ class MatlabCallbackGenerator {
                         mexErrMsgIdAndTxt("%%LIB_NAME%%:NotSupported",
                                           "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", outcome.dropped);
                     }
+                }
+
+                // A result of the wrong shape cannot be raised from inside the library's frames any more
+                // than a failing feval can, so the check produces the same trapped MException by letting
+                // MATLAB's own error() format it. Returns nullptr when the result is usable.
+                inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
+                    if (isNumericScalar(result)) {
+                        return nullptr;
+                    }
+                    mxArray* args[3] = {mxCreateString("%%LIB_NAME%%:TypeError"),
+                                        mxCreateString("Callback '%s' must return a numeric scalar."),
+                                        mxCreateString(callback)};
+                    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
+                    for (mxArray* arg : args) mxDestroyArray(arg);
+                    return error;
                 }""");
 
         out.add(createCallbackLeakGuard());
@@ -359,8 +374,11 @@ class MatlabCallbackGenerator {
         var out = new IndentingTextRenderer();
         for (var callback : lib.getCallbacks()) {
             if (!visible.contains(callback.getName())) continue;
-            if (!TypeMap.isVoid(callback.getReturnType().getDataType())) {
-                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value, which the MEX trampoline cannot hand back to the library");
+            var returnType = callback.getReturnType();
+            boolean returnsValue = !TypeMap.isVoid(returnType.getDataType());
+            var cReturnType = CBindingsGenerator.getQualifiedCType(returnType);
+            if (returnsValue && !isScalar(returnType.getDataType())) {
+                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value that the MEX trampoline cannot hand back to the library");
             }
             var params = new ArrayList<String>();
             var mexArgs = new ArrayList<String>();
@@ -369,7 +387,10 @@ class MatlabCallbackGenerator {
                 mexArgs.add(cToMex.apply(parameter).replace("%%RETURN_VALUE%%", parameter.getParamName()));
             }
 
-            // feval takes the handle as its first argument, so the trapped error is the only output
+            // feval takes the handle as its first argument. A void callback asks for no output, so
+            // the trapped error is the only thing that comes back, and a skipped invocation has
+            // nothing to return. A value callback asks for one, and hands back a value-initialized
+            // result wherever the handle was not reached, its error is raised after the call anyway.
             var content = out.snapshot()
                     .set("CALLBACK", callback.getName())
                     .set("NAME", getCallbackTrampolineName(callback.getName()))
@@ -377,9 +398,11 @@ class MatlabCallbackGenerator {
                     .set("REGISTRY", getCallbackRegistryName(callback.getName()))
                     .set("TABLE", getCallbackTableName(callback.getName()))
                     .set("MAKE_TABLE", "make" + callback.getName() + "Table")
+                    .set("RETURN_TYPE", cReturnType)
                     .set("PARAMS", BindingGenerator.joiner.join(params))
                     .set("ARG_COUNT", String.valueOf(mexArgs.size() + 1))
                     .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + BindingGenerator.joiner.join(mexArgs))
+                    .set("SKIP", returnsValue ? "return " + cReturnType + "{};" : "return;")
                     .set("EARLIER_FAILURE", hasOwned
                             ? "record.owned ? pendingCallbackError != nullptr : record.error != nullptr"
                             : "record.error != nullptr")
@@ -393,24 +416,45 @@ class MatlabCallbackGenerator {
                     // would tear down the library's own frames. One mxArray per argument per call is
                     // inherent to MATLAB.
                     template <size_t N>
-                    static void %%NAME%%(%%PARAMS%%) {
+                    static %%RETURN_TYPE%% %%NAME%%(%%PARAMS%%) {
                         CallbackRecord& record = %%REGISTRY%%.records[N];
                         // The thread comes first, because everything below reaches into MATLAB. The
                         // count is read after the library call has joined its threads, so relaxed is
                         // enough, and the caller sees it as an error or a warning afterwards.
                         if (std::this_thread::get_id() != matlabThread) {
                             record.dropped.fetch_add(1, std::memory_order_relaxed);
-                            return;
+                            %%SKIP%%
                         }
                         if (%%EARLIER_FAILURE%%) {
-                            return; // an earlier invocation already failed, and that error is the one raised
+                            %%SKIP%% // an earlier invocation already failed, and that error is the one raised
                         }
                         mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(record.handle)%%MEX_ARGS%%};
+                    """).indent();
+            if (returnsValue) {
+                content.add("""
+                        %%RETURN_TYPE%% value{};
+                        mxArray* result = nullptr;
+                        mxArray* error = mexCallMATLABWithTrap(1, &result, %%ARG_COUNT%%, args, "feval");
+                        if (error == nullptr) {
+                            error = checkCallbackResult(result, "%%CALLBACK%%");
+                            if (error == nullptr) {
+                                value = static_cast<%%RETURN_TYPE%%>(mxGetScalar(result));
+                            }
+                            mxDestroyArray(result);
+                        }
+                        %%SINK_ERROR%%
+                        """);
+            } else {
+                content.add("""
                         mxArray* error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
                         %%SINK_ERROR%%
-                    """).indent();
+                        """);
+            }
             for (int i = 0; i < mexArgs.size(); i++) {
                 content.addLine("mxDestroyArray(args[" + (i + 1) + "]);");
+            }
+            if (returnsValue) {
+                content.addLine("return value;");
             }
             content.unindent().add("""
                     }
@@ -431,7 +475,7 @@ class MatlabCallbackGenerator {
      * has no deferred form, so it gets the one-liner rather than a branch that is always false.
      */
     private static String createCallbackErrorSink(boolean hasOwned) {
-        return new IndentingTextRenderer().indent().add(hasOwned ? """
+        return new IndentingTextRenderer().add(hasOwned ? """
                 // An owned callback has no call of its own to report into, so its error waits for the
                 // mexFunction it fired in to raise it on the way out.
                 if (record.owned) {
@@ -512,10 +556,11 @@ class MatlabCallbackGenerator {
     Optional<String> getMatlabExclusionReason(MethodDescription method) {
         for (var param : method.getParameters()) {
             if (param.getDataType() != DataType.CALLBACK) continue;
-            // The trampoline calls feval with zero outputs, so a value the function handle
-            // produces has no route back into the library.
-            if (!TypeMap.isVoid(getCallback(param).getReturnType().getDataType())) {
-                return Optional.of("its callback returns a value, which the gateway cannot hand back yet");
+            // The trampoline asks feval for one output and reads it as a scalar, so anything
+            // that is not one has no route back into the library.
+            var returnType = getCallback(param).getReturnType().getDataType();
+            if (!TypeMap.isVoid(returnType) && !isScalar(returnType)) {
+                return Optional.of("its callback returns a value that the gateway cannot hand back");
             }
             // A raw pointer argument carries no length, so the trampoline has nothing to size
             // the mxArray it would have to build. A span parameter would. A void* is rejected
@@ -538,6 +583,17 @@ class MatlabCallbackGenerator {
         return switch (type) {
             case ENUM, BOOL, INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, CHAR16,
                  OBJECT_HANDLE, CHAR_POINTER, STRUCT -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Whether a callback result can come back through mxGetScalar, the one read the
+     * trampoline does on the feval output.
+     */
+    private static boolean isScalar(DataType type) {
+        return switch (type) {
+            case ENUM, BOOL, INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T, CHAR16 -> true;
             default -> false;
         };
     }

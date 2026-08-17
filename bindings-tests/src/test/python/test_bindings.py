@@ -614,6 +614,12 @@ class CallbacksTest(unittest.TestCase):
         self.assertIsInstance(result, float)
         self.assertEqual(42.0, result)
 
+    def test_double_callback(self):
+        # A binary operator with no context at all, both arguments and the result are plain floats
+        result = bindings_tests.Callbacks.invoke_double_callback(lambda a, b: a + b, 1.5, 2.25)
+
+        self.assertEqual(3.75, result)
+
     def test_callback_with_raw_pointer_arguments(self):
         # The solver-objective shape. The callback's pointers carry no length, which is
         # why MATLAB excludes the method, so the count is agreed on out of band.

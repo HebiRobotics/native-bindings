@@ -28,6 +28,17 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 @CLibClass(value = "Callbacks", enableInstancing = false)
 public class TestCallbacks {
 
+    @CLibCallback("DoubleCallbackFunc")
+    public interface DoubleCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer
+        double invoke(double a, double b);
+    }
+
+    @CLibMethod(flags = Noexcept)
+    public static double invokeDoubleCallback(DoubleCallbackFunction func, double a, double b) {
+        return func.invoke(a, b);
+    }
+
     public interface IndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, int index);

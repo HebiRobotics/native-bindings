@@ -594,6 +594,9 @@ static void testCallbacks() {
   CHECK(bt::callbacks::applyScaled(nullptr, &scaled, 21.0) == 21.0);
   CHECK(scaled.count == 1);
 
+  // A binary operator with no context at all, a captureless lambda converts to it.
+  CHECK(bt::callbacks::invokeDoubleCallback([](double a, double b) { return a + b; }, 1.5, 2.25) == 3.75);
+
   // A callback whose own arguments are raw pointers, the shape a solver objective has.
   // Only the MATLAB face cannot express it, here the const input still gets its vector
   // overload.

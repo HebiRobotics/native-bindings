@@ -447,10 +447,27 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testValueReturningCallback(testCase)
-            % TODO: applyScaled is a NotSupported stub until the trampoline marshals
-            % the feval result back, mexCallMATLABWithTrap with one output.
-            testCase.assumeFail('applyScaled waits on feval return marshaling, plans item 1');
-            testCase.verifyEqual(bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 42);
+            % The trampoline asks feval for one output and hands it back as the C return
+            % value, so a binary operator round-trips through the library.
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) a + b, 1.5, 2.25), 3.75);
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@max, 1.5, 2.25), 2.25);
+
+            % A result that is not a numeric scalar is trapped like a failing feval and
+            % raised once the library has returned, rather than from inside its frames.
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [a b], 1, 2), ...
+                'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [], 1, 2), ...
+                'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@fail, 1, 2), ...
+                'bindings_tests:CallbackFailed');
+
+            % applyScaled still carries a userData pointer, which MATLAB cannot express
+            testCase.verifyError(@() bindings_tests.Callbacks.applyScaled(@(v) v * 2, 21), 'bindings_tests:NotSupported');
+
+            function result = fail(~, ~)
+                result = 0; %#ok<NASGU>
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
         end
 
         function testPlainCallbacks(testCase)

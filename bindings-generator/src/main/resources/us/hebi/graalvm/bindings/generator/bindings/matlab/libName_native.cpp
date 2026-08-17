@@ -34,12 +34,16 @@ inline uint32_t hash32_fnv1a(const mxChar* str, size_t len) {
     return hash;
 }
 
+// mxGetScalar is undefined on an empty array and unpredictable on a struct
+// or cell, so only classes it is actually defined for get through.
+inline bool isNumericScalar(const mxArray* arg) {
+    return (mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
+            && !mxIsComplex(arg) && mxGetNumberOfElements(arg) == 1;
+}
+
 template <typename T>
 inline T getScalar(const mxArray* arg, const char* name) {
-    // mxGetScalar is undefined on an empty array and unpredictable on a struct
-    // or cell, so only classes it is actually defined for get through.
-    if (!(mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
-            || mxIsComplex(arg) || mxGetNumberOfElements(arg) != 1) {
+    if (!isNumericScalar(arg)) {
         mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Argument '%s' must be a numeric scalar.", name);
     }
     return static_cast<T>(mxGetScalar(arg));

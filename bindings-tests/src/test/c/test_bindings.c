@@ -701,6 +701,10 @@ static void on_plain_notify(void) {
     plain_state.count++;
 }
 
+static double sum(double a, double b) {
+    return a + b;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
@@ -756,6 +760,9 @@ static void test_callbacks(void) {
     assert(state.count == 1);
     assert(bindings_tests_Callbacks_applyScaled(NULL, &state, 21.0) == 21.0);
     assert(state.count == 1);
+
+    /* A binary operator with no context at all: both arguments and the result cross as plain doubles. */
+    assert(bindings_tests_Callbacks_invokeDoubleCallback(&sum, 1.5, 2.25) == 3.75);
 
     /* A callback whose own arguments are raw pointers, the shape a solver objective has.
        Only the MATLAB face cannot express it, C hands the pointers straight through. */
