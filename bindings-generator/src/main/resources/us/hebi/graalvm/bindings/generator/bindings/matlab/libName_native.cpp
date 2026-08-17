@@ -56,7 +56,7 @@ inline void checkArgCount(int nrhs, int expected, const char* name) {
         mexErrMsgIdAndTxt("%%LIB_NAME%%:InvalidInput", "'%s' expects %d argument(s), but received %d.",
                           name, expected, nrhs - 1);
     }
-}%%CALLBACK_TYPEDEFS%%
+}
 
 // Struct for getting error return information. Every call that can throw fills it.
 // The char pointers are only valid until the current thread calls any other lib function.
@@ -171,7 +171,7 @@ struct MatlabStringArray {
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
     return mxCreateDoubleMatrix(0, 0, mxREAL);
-}%%STRUCT_HELPERS%%
+}%%STRUCT_HELPERS%%%%CALLBACK_TYPEDEFS%%
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes

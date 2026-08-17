@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.bindings;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.generators.CEntryPointGenerator;
@@ -14,6 +13,7 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.function.Function;
 
 /**
  * @author Florian Enner
@@ -77,12 +77,28 @@ public class CBindingsGenerator extends BindingGenerator {
      * own copy of this, so it stays a plain string rather than going through the header writer.
      */
     public static String getCCallbackTypedef(CallbackDescription callback) {
+        return getCCallbackTypedef(callback, CBindingsGenerator::getQualifiedCType);
+    }
+
+    /**
+     * @param types how the calling face spells a type, e.g., the MEX gateway's own struct copies
+     */
+    public static String getCCallbackTypedef(CallbackDescription callback, Function<TypeDescription, String> types) {
         var parameters = new StringJoiner(", ");
         for (var parameter : callback.getParameters()) {
-            parameters.add(getQualifiedCType(parameter) + " " + parameter.getParamName());
+            parameters.add(getCallbackParameterType(parameter, types) + " " + parameter.getParamName());
         }
         return String.format("typedef %s (*%s)(%s);",
-                getQualifiedCType(callback.getReturnType()), callback.getCPrefix() + callback.getName(), parameters);
+                types.apply(callback.getReturnType()), callback.getCPrefix() + callback.getName(), parameters);
+    }
+
+    /**
+     * A struct view is a word type on the GraalVM side, so a callback receives the address of the
+     * caller's struct rather than the by-value copy the shim hands the entry points. The view is
+     * only read for the duration of the call, which is what makes the const unconditional.
+     */
+    public static String getCallbackParameterType(TypeDescription type, Function<TypeDescription, String> types) {
+        return type.getDataType() == DataType.STRUCT ? "const " + types.apply(type) + "*" : types.apply(type);
     }
 
     public static String getQualifiedCType(TypeDescription type) {
@@ -191,13 +207,7 @@ public class CBindingsGenerator extends BindingGenerator {
 
         StringWriter writer = new StringWriter();
 
-        // Typedefs
-        for (var callback : lib.getCallbacks()) {
-            writer.write(getCCallbackTypedef(callback));
-            writer.write("\n");
-        }
         writer.write(IndentingTextRenderer.of("""
-
                         // Error information for every method that can throw. A non-zero code
                         // means the call failed and the return value can be ignored. Contents
                         // are library owned and only valid until the next call on this thread.
@@ -211,6 +221,16 @@ public class CBindingsGenerator extends BindingGenerator {
                 .render());
         for (var struct : lib.getStructs()) {
             writer.write(getCStructDefinition(struct));
+        }
+
+        // Typedefs. They come after the structs because a callback signature may name one, and a
+        // struct can never name a callback, function pointer fields being unsupported.
+        if (lib.getCallbacks().length() > 0) {
+            writer.write("\n");
+            for (var callback : lib.getCallbacks()) {
+                writer.write(getCCallbackTypedef(callback));
+                writer.write("\n");
+            }
         }
         writer.write("\n");
         writer.write(typeDefs.toString());

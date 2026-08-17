@@ -597,6 +597,20 @@ static void testCallbacks() {
   // A binary operator with no context at all, a captureless lambda converts to it.
   CHECK(bt::callbacks::invokeDoubleCallback([](double a, double b) { return a + b; }, 1.5, 2.25) == 3.75);
 
+  // The method's spans get their vector overload like any other span parameter. The callback
+  // itself receives both by pointer, because that is how a struct view crosses a function
+  // pointer, and each carries its own length.
+  const std::vector<double> left = {1.0, 2.0, 3.0};
+  const std::vector<double> right = {4.0, 5.0};
+  CHECK(bt::callbacks::invokeDoubleSpanToScalarCallback(
+            [](const bt::internal::DoubleSpan* a, const bt::internal::DoubleSpan* b) {
+              double total = 0.0;
+              for (size_t i = 0; i < a->length; i++) total += a->data[i];
+              for (size_t i = 0; i < b->length; i++) total += b->data[i];
+              return total;
+            },
+            left, right) == 15.0);
+
   // A callback whose own arguments are raw pointers, the shape a solver objective has.
   // Only the MATLAB face cannot express it, here the const input still gets its vector
   // overload.

@@ -202,10 +202,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             String cppClassName = apiClass.getType().getTypeName();
             out.write(String.format("class %s;\n", cppClassName));
         }
-        for (var callback : lib.getCallbacks()) {
-            out.write(getCppCallbackAlias(callback));
-            out.write("\n");
-        }
 
         // Forward declare opaque pointers in an internal namespace
         out.write("\nnamespace %s {\n".formatted(INTERNAL_POINTER_NAMESPACE));
@@ -231,6 +227,17 @@ public class CppBindingsGenerator extends BindingGenerator {
         // Error struct
         out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
         out.write("}\n\n");
+
+        // The aliases come after the internal namespace because a callback signature may name a
+        // struct layout, and a struct can never name a callback, function pointer fields being
+        // unsupported.
+        if (lib.getCallbacks().length() > 0) {
+            for (var callback : lib.getCallbacks()) {
+                out.write(getCppCallbackAlias(callback));
+                out.write("\n");
+            }
+            out.write("\n");
+        }
     }
 
     private void writeClassWrapper(ClassScope scope, Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
@@ -749,7 +756,8 @@ public class CppBindingsGenerator extends BindingGenerator {
     private static String getCppCallbackAlias(CallbackDescription callback) {
         var parameters = new StringJoiner(", ");
         for (var parameter : callback.getParameters()) {
-            parameters.add(getCType(parameter) + " " + parameter.getParamName());
+            parameters.add(CBindingsGenerator.getCallbackParameterType(parameter, CppBindingsGenerator::getCType)
+                    + " " + parameter.getParamName());
         }
         return String.format("using %s = %s (*)(%s);",
                 callback.getName(), getCType(callback.getReturnType()), parameters);

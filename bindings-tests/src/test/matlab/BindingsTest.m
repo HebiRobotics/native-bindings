@@ -470,6 +470,15 @@ classdef BindingsTest < matlab.unittest.TestCase
             end
         end
 
+        function testSpanArgumentCallback(testCase)
+            % A span argument carries its length, so the trampoline can size the mxArray and
+            % the handle sees a numeric row vector rather than an address.
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
+                @(a, b) sum(a) + sum(b), [1 2 3], [4 5]), 15);
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
+                @(a, b) numel(a) * 10 + numel(b), [1 2 3], [4 5]), 32);
+        end
+
         function testPlainCallbacks(testCase)
             % The supported shape: no void* anywhere, so the thunk the library was handed is
             % the whole channel and its identity is what names the record.

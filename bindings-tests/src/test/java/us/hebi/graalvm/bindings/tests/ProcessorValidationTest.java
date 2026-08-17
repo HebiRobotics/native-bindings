@@ -883,6 +883,30 @@ public class ProcessorValidationTest {
     }
 
     /**
+     * A struct view crosses a function pointer as a pointer, and the callee has no memory to
+     * point a returned one at, so only the parameter direction is admitted.
+     */
+    @Test
+    public void rejectsCallbackReturningAStructView() {
+        assertThat(compile(source("SpanCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
+                @CLibClass("SpanCallback")
+                public class SpanCallback {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer DoubleSpan invoke(DoubleSpan span);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("@InvokeCFunctionPointer return type"
+                                          + " 'us.hebi.graalvm.bindings.runtime.structs.DoubleSpan'"
+                                          + " is not supported in a callback signature: Callback.invoke");
+    }
+
+    /**
      * The annotated API declares plain Java enums, and native-image rejects those in an
      * {@code @InvokeCFunctionPointer} signature ("parameter types are restricted to primitive
      * types, word types and enumerations (@CEnum)"). Only stage 1 sees that, so the processor

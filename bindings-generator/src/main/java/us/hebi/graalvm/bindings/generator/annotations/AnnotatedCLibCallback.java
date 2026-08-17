@@ -68,9 +68,11 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
 
     /**
      * The allow-list is GraalVM's, not ours. {@code @InvokeCFunctionPointer} accepts only
-     * primitive types, word types and {@code @CEnum} types, so a handle, a by-value struct
-     * or a plain Java enum fails the image build rather than this processor. Rejecting them
-     * here turns a stage 1 failure into a diagnostic on the offending declaration.
+     * primitive types, word types and {@code @CEnum} types, so a handle or a plain Java enum
+     * fails the image build rather than this processor. Rejecting them here turns a stage 1
+     * failure into a diagnostic on the offending declaration. A struct view is a word type, so
+     * it crosses as a pointer to the caller's struct and is fine as a parameter. Only the
+     * return stays out, because the callee has no memory to point it at.
      */
     private TypeDescription toCallbackType(AnnotatedClibType type, boolean isReturn) {
         DataType dataType;
@@ -82,17 +84,18 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
         if (dataType == DataType.ENUM) {
             throw javaEnum(type, isReturn);
         }
-        if (!(isReturn && dataType == DataType.VOID) && !isSupportedType(dataType)) {
+        if (!(isReturn && dataType == DataType.VOID) && !isSupportedType(dataType, isReturn)) {
             throw unsupported(type, isReturn);
         }
         return type.toDescription();
     }
 
-    private static boolean isSupportedType(DataType type) {
+    private static boolean isSupportedType(DataType type, boolean isReturn) {
         return switch (type) {
             case BOOL, CHAR16, INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, SIZE_T -> true;
             case VOID_POINTER, CHAR_POINTER, CHAR_POINTER_POINTER, UINT8_POINTER, INT16_POINTER,
                  INT32_POINTER, INT64_POINTER, FLOAT32_POINTER, FLOAT64_POINTER -> true;
+            case STRUCT -> !isReturn;
             default -> false;
         };
     }

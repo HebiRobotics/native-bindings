@@ -620,6 +620,21 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual(3.75, result)
 
+    def test_double_span_to_scalar_callback(self):
+        # Each span carries its own length, and ctypes hands the callable a pointer to the
+        # private mirror struct because that is how a struct view crosses a function pointer
+        def sum_spans(a, b):
+            total = 0.0
+            for i in range(a.contents.length):
+                total += a.contents.data[i]
+            for i in range(b.contents.length):
+                total += b.contents.data[i]
+            return total
+
+        result = bindings_tests.Callbacks.invoke_double_span_to_scalar_callback(sum_spans, [1.0, 2.0, 3.0], [4.0, 5.0])
+
+        self.assertEqual(15.0, result)
+
     def test_callback_with_raw_pointer_arguments(self):
         # The solver-objective shape. The callback's pointers carry no length, which is
         # why MATLAB excludes the method, so the count is agreed on out of band.

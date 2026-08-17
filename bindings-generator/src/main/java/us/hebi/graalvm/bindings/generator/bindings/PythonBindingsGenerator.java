@@ -247,13 +247,15 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
     /**
      * The ctypes prototype a caller wraps its function around. Parameter names have no place
-     * in a CFUNCTYPE, so only the types survive from the invoke signature.
+     * in a CFUNCTYPE, so only the types survive from the invoke signature. A struct view crosses
+     * a function pointer as a pointer to the caller's struct rather than by value.
      */
     private static String getPythonCallbackType(CallbackDescription callback) {
         var types = new StringJoiner(", ");
         types.add(TypeMap.toCPython(callback.getReturnType()));
         for (var parameter : callback.getParameters()) {
-            types.add(TypeMap.toCPython(parameter));
+            types.add(parameter.getDataType() == DataType.STRUCT
+                    ? "POINTER(" + TypeMap.toCPython(parameter) + ")" : TypeMap.toCPython(parameter));
         }
         return String.format("%s = CFUNCTYPE(%s)", callback.getName(), types);
     }
@@ -704,7 +706,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
     /**
      * A callback parameter is described by the signature the library calls back with rather
      * than by the CFUNCTYPE name, because the wrapper accepts any callable. ctypes hands a
-     * void* argument to the callable as a plain address or None, so it shows up as Any.
+     * void* argument to the callable as a plain address or None, and a struct view as a pointer
+     * to the private mirror struct, so both show up as Any.
      */
     private static String getPythonTypeHint(LibraryDescription lib, TypeDescription type) {
         if (type.getDataType() != DataType.CALLBACK) {
@@ -714,8 +717,10 @@ public class PythonBindingsGenerator extends BindingGenerator {
             if (!callback.getName().equals(type.getTypeName())) continue;
             var args = new StringJoiner(", ", "[", "]");
             for (var parameter : callback.getParameters()) {
-                args.add(parameter.getDataType() == DataType.VOID_POINTER
-                        ? "Any" : TypeMap.toPythonTypeHint(parameter));
+                args.add(switch (parameter.getDataType()) {
+                    case VOID_POINTER, STRUCT -> "Any";
+                    default -> TypeMap.toPythonTypeHint(parameter);
+                });
             }
             return "Callable[%s, %s]".formatted(args, TypeMap.toPythonTypeHint(callback.getReturnType()));
         }

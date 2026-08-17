@@ -705,6 +705,20 @@ static double sum(double a, double b) {
     return a + b;
 }
 
+/* Each span carries its own length, so no count is agreed on out of band. Both arrive as
+   pointers to the caller's structs, which is how a struct view crosses a function pointer. */
+static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests_DoubleSpan* b) {
+    double total = 0.0;
+    size_t i;
+    for (i = 0; i < a->length; i++) {
+        total += a->data[i];
+    }
+    for (i = 0; i < b->length; i++) {
+        total += b->data[i];
+    }
+    return total;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
@@ -714,6 +728,10 @@ static void test_callbacks(void) {
     bindings_tests_PlainStoredPtr plain_stored;
     double source[TRANSFORM_COUNT];
     double target[TRANSFORM_COUNT];
+    double left[3];
+    double right[2];
+    bindings_tests_DoubleSpan a;
+    bindings_tests_DoubleSpan b;
     int released;
     int i;
 
@@ -763,6 +781,18 @@ static void test_callbacks(void) {
 
     /* A binary operator with no context at all: both arguments and the result cross as plain doubles. */
     assert(bindings_tests_Callbacks_invokeDoubleCallback(&sum, 1.5, 2.25) == 3.75);
+
+    /* Spans cross by value into the method and by pointer into the callback. */
+    left[0] = 1.0;
+    left[1] = 2.0;
+    left[2] = 3.0;
+    right[0] = 4.0;
+    right[1] = 5.0;
+    a.data = left;
+    a.length = 3;
+    b.data = right;
+    b.length = 2;
+    assert(bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(&sum_spans, a, b) == 15.0);
 
     /* A callback whose own arguments are raw pointers, the shape a solver objective has.
        Only the MATLAB face cannot express it, C hands the pointers straight through. */

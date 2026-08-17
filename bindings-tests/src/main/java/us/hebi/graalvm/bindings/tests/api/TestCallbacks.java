@@ -7,10 +7,8 @@ import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
-import us.hebi.graalvm.bindings.annotations.CLibClass;
-import us.hebi.graalvm.bindings.annotations.CLibComment;
-import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.annotations.CSizeType;
+import us.hebi.graalvm.bindings.annotations.*;
+import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
 
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 
@@ -36,6 +34,19 @@ public class TestCallbacks {
 
     @CLibMethod(flags = Noexcept)
     public static double invokeDoubleCallback(DoubleCallbackFunction func, double a, double b) {
+        return func.invoke(a, b);
+    }
+
+    // A span argument carries its length, so unlike TransformCallbackFunction the MEX trampoline
+    // can size the mxArray. Every face gets the span by pointer, which is how a struct view crosses.
+    @CLibCallback("DoubleSpanToScalarCallbackFunc")
+    public interface DoubleSpanToScalarCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer
+        double invoke(DoubleSpan a, DoubleSpan b);
+    }
+
+    @CLibMethod(flags = Noexcept)
+    public static double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunction func, DoubleSpan a, DoubleSpan b) {
         return func.invoke(a, b);
     }
 

@@ -61,8 +61,9 @@ class MatlabCallbackGenerator {
 
     /**
      * The gateway does not include the public C header, so it repeats the callback typedefs the
-     * same way it repeats the error struct. The token they fill sits at the end of an existing
-     * line, so a library without callbacks renders the template unchanged.
+     * same way it repeats the error struct, spelled against its own struct copies. The token they
+     * fill sits at the end of the struct helpers, which is where those copies are declared, so a
+     * library without callbacks renders the template unchanged.
      */
     String createCallbackTypedefs() {
         if (lib.getCallbacks().length() == 0) {
@@ -70,9 +71,18 @@ class MatlabCallbackGenerator {
         }
         var out = new IndentingTextRenderer().add("\n");
         for (var callback : lib.getCallbacks()) {
-            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback));
+            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback, MatlabCallbackGenerator::getMexCallbackType));
         }
         return out.render();
+    }
+
+    /**
+     * The gateway declares layout-compatible copies of the user structs under the bare type name,
+     * so a signature naming one may not use the prefixed name of the public C header.
+     */
+    private static String getMexCallbackType(TypeDescription type) {
+        return type.getDataType() == DataType.STRUCT
+                ? type.getTypeName() : CBindingsGenerator.getQualifiedCType(type);
     }
 
     /**
@@ -383,8 +393,11 @@ class MatlabCallbackGenerator {
             var params = new ArrayList<String>();
             var mexArgs = new ArrayList<String>();
             for (var parameter : callback.getParameters()) {
-                params.add(CBindingsGenerator.getQualifiedCType(parameter) + " " + parameter.getParamName());
-                mexArgs.add(cToMex.apply(parameter).replace("%%RETURN_VALUE%%", parameter.getParamName()));
+                boolean isStruct = parameter.getDataType() == DataType.STRUCT;
+                params.add(CBindingsGenerator.getCallbackParameterType(parameter, MatlabCallbackGenerator::getMexCallbackType)
+                           + " " + parameter.getParamName());
+                mexArgs.add(cToMex.apply(parameter).replace("%%RETURN_VALUE%%",
+                        isStruct ? "*" + parameter.getParamName() : parameter.getParamName()));
             }
 
             // feval takes the handle as its first argument. A void callback asks for no output, so
