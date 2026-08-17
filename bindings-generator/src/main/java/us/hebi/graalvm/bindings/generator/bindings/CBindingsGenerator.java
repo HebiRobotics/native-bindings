@@ -245,7 +245,7 @@ public class CBindingsGenerator extends BindingGenerator {
     private static void writeStructDefinition(IndentingTextRenderer out, StructDescription struct) {
         // Note: the names have no effect on the memory layout, so each language can use their matching convention
         out.addLine();
-        struct.tryGetComment().ifPresent(comment -> out.add(DocumentationUtil.generateLineComments("", comment)));
+        struct.tryGetComment().ifPresent(comment -> out.add(DocumentationUtil.generateLineComments(comment)));
         out.beginControlFlow("typedef struct {");
         for (var field : struct.getFields()) {
             out.addLine(TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";");

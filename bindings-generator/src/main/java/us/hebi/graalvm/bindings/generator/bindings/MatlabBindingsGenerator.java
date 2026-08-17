@@ -633,7 +633,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         content.add("\n");
 
         if (apiClass.getType().hasComment()) {
-            content.add(DocumentationUtil.generateMatlabdoc("", apiClass.getType()));
+            content.add(DocumentationUtil.generateMatlabdoc(apiClass.getType()));
         }
 
         content.indent();
@@ -831,7 +831,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         // Build the internal function
         content.add("function ").add(wrapOutputAssignment(params.externalOutput)).addLine("%%FUNC_NAME%%(%%EXTERNAL_ARGS%%)").indent();
         if (method.hasDocumentation()) {
-            content.addLine(DocumentationUtil.generateMatlabdoc("", method));
+            content.addLine(DocumentationUtil.generateMatlabdoc(method));
         }
 
         // Anything that has to happen before the call
@@ -870,7 +870,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         help.append("Not supported from MATLAB: %%REASON%%.");
 
         content.beginControlFlow("function %%OUTPUT%% = %%FUNC_NAME%%(varargin)");
-        content.addLine(DocumentationUtil.wrapInMatlabDoc("", help.toString()));
+        content.addLine(DocumentationUtil.wrapInMatlabDoc(help.toString()));
         content.addLine("error('%%LIB_NAME%%:NotSupported', \"'%%FUNC_NAME%%' is not supported from MATLAB: %%REASON%%.\");");
         content.endControlFlow("end\n");
     }

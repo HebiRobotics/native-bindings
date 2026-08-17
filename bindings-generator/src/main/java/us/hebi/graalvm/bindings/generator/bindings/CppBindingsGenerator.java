@@ -190,7 +190,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                 continue;
             }
             if (struct.hasComment()) {
-                decl.add(DocumentationUtil.generateLineComments("", struct.getComment()));
+                decl.add(DocumentationUtil.generateLineComments(struct.getComment()));
             } else {
                 decl.addLine("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible");
             }
@@ -256,7 +256,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         def.addLine("// %%CLASS%%");
 
         if (apiClass.getType().hasComment()) {
-            decl.add(DocumentationUtil.generateDoxygen("", apiClass.getType()));
+            decl.addLine().add(DocumentationUtil.generateDoxygen(apiClass.getType()));
         }
 
         if (scope.useNamespace) {
@@ -293,7 +293,7 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     private void writeMethod(MethodScope m, boolean useDynamicLookup) {
         if (m.method.hasDocumentation()) {
-            m.decl.add(DocumentationUtil.generateDoxygen("", m.method));
+            m.decl.addLine().add(DocumentationUtil.generateDoxygen(m.method));
         }
         if (m.method.getIsConstructor()) {
             writeConstructor(m, useDynamicLookup);

@@ -71,7 +71,8 @@ public class CocoaFeature implements FeatureGenerator {
 
     @Override
     public String getPythonWrapper() {
-        return render("""
+        if (prefix == null) return "";
+        var out = renderer().add("""
 
                 # ==== Cocoa utilities for supporting macOS ====
                 # C function signature
@@ -80,14 +81,17 @@ public class CocoaFeature implements FeatureGenerator {
                 %%LIB_FIELD%%.%%RUN_APPLICATION%%.restype = c_int
 
                 # Python wrapper. We ignore the C args as Python can just use a global namespace
-                def run_application(callback_fn, *args, **kwargs):
-                %%PYDOC%%
-                    def c_callback_wrapper(argc, argv):
-                        callback_fn(*args, **kwargs)
-                        return 0
-                    c_callback = %%MAIN_FUNC_T%%(c_callback_wrapper)
-                    return %%LIB_FIELD%%.%%RUN_APPLICATION%%(c_callback, 0, (c_char_p * 0)())
                 """);
+        out.beginControlFlow("def run_application(callback_fn, *args, **kwargs):");
+        out.addLine(DocumentationUtil.wrapInPydoc(documentation));
+        out.add("""
+                def c_callback_wrapper(argc, argv):
+                    callback_fn(*args, **kwargs)
+                    return 0
+                c_callback = %%MAIN_FUNC_T%%(c_callback_wrapper)
+                return %%LIB_FIELD%%.%%RUN_APPLICATION%%(c_callback, 0, (c_char_p * 0)())
+                """);
+        return out.render();
     }
 
     private static final String documentation = """
@@ -237,20 +241,22 @@ public class CocoaFeature implements FeatureGenerator {
     }
 
     /**
-     * The prefixed names and the documentation in each language's own form. Empty when the
-     * feature is disabled, tokens of the surrounding file pass through.
+     * Empty when the feature is disabled
      */
     private String render(String template) {
-        if (prefix == null) return "";
+        return prefix == null ? "" : renderer().add(template).render();
+    }
+
+    /**
+     * The prefixed names. Tokens of the surrounding file pass through.
+     */
+    private IndentingTextRenderer renderer() {
         String noClass = "";
         return new IndentingTextRenderer()
                 .set("MAIN_FUNC_T", AnnotatedCLibClass.getCEntryName(false, prefix, "MainCallbackFunction", ""))
                 .set("RUN_APPLICATION", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "runApplication"))
                 .set("APP_DELEGATE", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "AppDelegate"))
-                .set("DOXYGEN", DocumentationUtil.wrapInDoxygen("", documentation).trim())
-                .set("PYDOC", DocumentationUtil.wrapInPydoc("    ", documentation))
-                .add(template)
-                .render();
+                .set("DOXYGEN", DocumentationUtil.wrapInDoxygen(documentation).trim());
     }
 
     public CocoaFeature(EnvProcessor.GeneratorOptions options) {

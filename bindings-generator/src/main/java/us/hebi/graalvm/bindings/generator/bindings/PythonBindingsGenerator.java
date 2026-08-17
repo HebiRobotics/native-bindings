@@ -356,7 +356,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 : "class %%CLASS_NAME%%:");
 
         if (apiClass.getType().hasComment()) {
-            out.add(generatePydoc("", apiClass.getType())).addLine().addLine();
+            out.add(generatePydoc(apiClass.getType())).addLine().addLine();
         }
 
         // Fixed slots (fields) to prevent dynamic fields and dictionary overhead
@@ -515,7 +515,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
         out.beginControlFlow("def %%METHOD%%(%%PARAMS%%)%%HINT%%:");
         if (method.hasDocumentation()) {
-            out.addLine(escapeBackslashes(generatePydoc("", method)));
+            out.addLine(escapeBackslashes(generatePydoc(method)));
         }
         out.addLineIf(usesNumpy, "np = _require_numpy()");
         out.addLineIf(!body.isEmpty(), body);

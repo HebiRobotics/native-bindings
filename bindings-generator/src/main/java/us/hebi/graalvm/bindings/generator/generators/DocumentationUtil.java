@@ -12,11 +12,11 @@ import static us.hebi.graalvm.bindings.generator.bindings.BindingGenerator.*;
  */
 public class DocumentationUtil {
 
-    public static String generateMatlabdoc(String indent, TypeDescription type) {
-        return wrapInMatlabDoc(indent, type.getComment().trim()) + "\n";
+    public static String generateMatlabdoc(TypeDescription type) {
+        return wrapInMatlabDoc(type.getComment().trim()) + "\n";
     }
 
-    public static String generateMatlabdoc(String indent, MethodDescription methodDesc) {
+    public static String generateMatlabdoc(MethodDescription methodDesc) {
         StringBuilder out = new StringBuilder(methodDesc.getDocumentation().trim());
 
         if (methodDesc.getParameters().length() > 0) {
@@ -39,19 +39,19 @@ public class DocumentationUtil {
             out.append("\n").append(INDENT).append("Error " + methodDesc.tryGetThrowsOn().orElse(DEFAULT_THROWS_ON));
         }
 
-        return wrapInMatlabDoc(indent, out.toString());
+        return wrapInMatlabDoc(out.toString());
     }
 
-    public static String wrapInMatlabDoc(String indent, String comment) {
+    public static String wrapInMatlabDoc(String comment) {
         // First line uses 1 space, next lines use 3 spaces
-        return indent + "% " + comment.trim().replaceAll("\n", indent + "\n%   ");
+        return "% " + comment.trim().replaceAll("\n", "\n%   ");
     }
 
-    public static String generatePydoc(String indent, TypeDescription type) {
-        return wrapInPydoc(indent, type.getComment().trim());
+    public static String generatePydoc(TypeDescription type) {
+        return wrapInPydoc(type.getComment().trim());
     }
 
-    public static String generatePydoc(String indent, MethodDescription methodDesc) {
+    public static String generatePydoc(MethodDescription methodDesc) {
         StringBuilder out = new StringBuilder();
         out.append(methodDesc.getDocumentation().trim());
 
@@ -80,23 +80,17 @@ public class DocumentationUtil {
             out.append("\n").append(INDENT).append("Exception: " + methodDesc.tryGetThrowsOn().orElse(DEFAULT_THROWS_ON));
         }
 
-        return wrapInPydoc(indent, out.toString());
+        return wrapInPydoc(out.toString());
     }
 
-    public static String wrapInPydoc(String indent, String comment) {
-        StringBuilder out = new StringBuilder();
-        out.append(indent).append(TRIPPLE_QUOTES);
-
+    /**
+     * A one-line docstring, or a multi-line one with the closing quotes on their own line
+     */
+    public static String wrapInPydoc(String comment) {
         comment = comment.trim();
-        if (comment.contains("\n")) {
-            comment = comment.replaceAll("\n", "\n" + indent);
-            out.append(comment).append("\n").append(indent);
-        } else {
-            out.append(comment);
-        }
-
-        out.append(TRIPPLE_QUOTES);
-        return out.toString();
+        return comment.contains("\n")
+                ? TRIPPLE_QUOTES + comment + "\n" + TRIPPLE_QUOTES
+                : TRIPPLE_QUOTES + comment + TRIPPLE_QUOTES;
     }
 
     private static final String TRIPPLE_QUOTES = "\"\"\"";
@@ -106,25 +100,25 @@ public class DocumentationUtil {
      * Plain line comments, wrapped the way the comment was authored. Used where a definition
      * carries documentation but no doxygen block, i.e. the C and C++ struct typedefs.
      */
-    public static String generateLineComments(String indent, String comment) {
+    public static String generateLineComments(String comment) {
         var out = new StringBuilder();
         for (String line : comment.trim().split("\n")) {
             line = line.stripTrailing();
-            out.append(indent).append(line.isEmpty() ? "//" : "// " + line).append("\n");
+            out.append(line.isEmpty() ? "//" : "// " + line).append("\n");
         }
         return out.toString();
     }
 
-    public static String wrapInDoxygen(String indent, String comment) {
-        return finishDoxygenBlock(indent, startDoxygenBlock(indent, comment.trim()));
+    public static String wrapInDoxygen(String comment) {
+        return finishDoxygenBlock(startDoxygenBlock(comment.trim()));
     }
 
-    public static String generateDoxygen(String indent, TypeDescription type) {
-        return finishDoxygenBlock(indent, startDoxygenBlock(indent, type.getComment().trim()));
+    public static String generateDoxygen(TypeDescription type) {
+        return finishDoxygenBlock(startDoxygenBlock(type.getComment().trim()));
     }
 
-    public static String generateDoxygen(String indent, MethodDescription methodDesc) {
-        var out = startDoxygenBlock(indent, methodDesc.getDocumentation().trim());
+    public static String generateDoxygen(MethodDescription methodDesc) {
+        var out = startDoxygenBlock(methodDesc.getDocumentation().trim());
         if (methodDesc.getParameters().length() > 0 || hasReturnComment(methodDesc)) {
             out.append("\n *");
             for (TypeDescription parameter : methodDesc.getParameters()) {
@@ -140,7 +134,7 @@ public class DocumentationUtil {
         if (isThrowing(methodDesc)) {
             out.append("\n * @throw " + methodDesc.tryGetThrowsOn().orElse(DEFAULT_THROWS_ON));
         }
-        return finishDoxygenBlock(indent, out);
+        return finishDoxygenBlock(out);
     }
 
     /**
@@ -152,11 +146,7 @@ public class DocumentationUtil {
     }
 
     /**
-     * We need to escape some '\' in comments to avoid omitting them when e.g. being used in
-     * a replaceAll replacement.
-     *
-     * @param input string
-     * @return escaped string
+     * Doubles backslashes so a comment survives inside a Python string literal
      */
     public static String escapeBackslashes(String input) {
         if (input.length() > 0 && input.contains("\\")) {
@@ -165,11 +155,11 @@ public class DocumentationUtil {
         return input;
     }
 
-    private static StringBuilder startDoxygenBlock(String indent, String comment) {
+    private static StringBuilder startDoxygenBlock(String comment) {
         StringBuilder out = new StringBuilder();
         var isBrief = !comment.contains("\n");
         comment = comment.trim();
-        out.append(indent).append("/**");
+        out.append("/**");
 
         if (isBrief) {
             out.append("\n * @brief ").append(comment);
@@ -182,9 +172,8 @@ public class DocumentationUtil {
         return out;
     }
 
-    private static String finishDoxygenBlock(String indent, StringBuilder out) {
-        out.append("\n */");
-        return "\n" + out.toString().replaceAll("\n", "\n" + indent) + "\n";
+    private static String finishDoxygenBlock(StringBuilder out) {
+        return out.append("\n */\n").toString();
     }
 
     private static final String DEFAULT_THROWS_ON = "on internal errors";
