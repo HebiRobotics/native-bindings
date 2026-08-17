@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.*;
 
@@ -19,7 +20,7 @@ import static com.google.common.base.Preconditions.*;
 public class IndentingTextRenderer {
 
     /**
-     * Wraps an already indented block for %%KEY%% substitution only.
+     * A renderer holding the text, for setting the tokens afterwards
      */
     public static IndentingTextRenderer of(String content) {
         return new IndentingTextRenderer().add(content);
@@ -74,16 +75,22 @@ public class IndentingTextRenderer {
         return set(key, Integer.toString(value));
     }
 
-    public IndentingTextRenderer remove(String key) {
-        variables.remove("%%" + key + "%%");
-        return this;
+    /**
+     * Sets the value to the comma separated arguments
+     */
+    public IndentingTextRenderer setArgs(String key, Iterable<String> args) {
+        return set(key, String.join(", ", args));
     }
 
     /**
-     * Removes all variables.
+     * Sets the value if the condition holds, and to an empty string otherwise
      */
-    public IndentingTextRenderer clearVariables() {
-        variables.clear();
+    public IndentingTextRenderer setIf(String key, boolean condition, String value) {
+        return set(key, condition ? value : "");
+    }
+
+    public IndentingTextRenderer remove(String key) {
+        variables.remove("%%" + key + "%%");
         return this;
     }
 
@@ -114,12 +121,23 @@ public class IndentingTextRenderer {
         return add(text).addLine();
     }
 
+    public IndentingTextRenderer addLineIf(boolean condition, String text) {
+        return condition ? addLine(text) : this;
+    }
+
+    /**
+     * For text that is only valid to build when the condition holds
+     */
+    public IndentingTextRenderer addLineIf(boolean condition, Supplier<String> text) {
+        return condition ? addLine(text.get()) : this;
+    }
+
     public IndentingTextRenderer add(String text) {
         if (text == null || text.isEmpty()) {
             return this;
         }
 
-        text = applyVariables(text);
+        text = resolveVariables(text);
         final int len = text.length();
 
         for (int i = 0; i < len; i++) {
@@ -154,7 +172,7 @@ public class IndentingTextRenderer {
         return this;
     }
 
-    public IndentingTextRenderer stripTrailingSpaces() {
+    private IndentingTextRenderer stripTrailingSpaces() {
         while (removeLastCharIf(c -> c == ' ' || c == '\t')) ;
         return this;
     }
@@ -173,12 +191,17 @@ public class IndentingTextRenderer {
     }
 
     public String render() {
-        // do multiple iterations in case we have circular references
-        String string = buffer.toString();
-        while (needsReplacement(string)) {
-            string = applyVariables(string);
+        return resolveVariables(buffer.toString());
+    }
+
+    /**
+     * Substitutes until nothing is left, so a value may itself carry tokens
+     */
+    private String resolveVariables(String text) {
+        while (needsReplacement(text)) {
+            text = applyVariables(text);
         }
-        return string;
+        return text;
     }
 
     private boolean needsReplacement(String text) {
@@ -223,8 +246,9 @@ public class IndentingTextRenderer {
         buffer = new StringBuilder();
     }
 
-    public void setIndentString(String indentString) {
+    public IndentingTextRenderer setIndentString(String indentString) {
         this.indentString = indentString;
+        return this;
     }
 
     private final StringBuilder buffer;

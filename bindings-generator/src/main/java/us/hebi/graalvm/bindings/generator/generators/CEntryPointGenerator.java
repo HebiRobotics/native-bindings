@@ -9,6 +9,7 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibMethod;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotatedClibType;
 import us.hebi.graalvm.bindings.generator.bindings.TypeMap;
 
 import java.util.TreeSet;
@@ -81,8 +82,6 @@ public class CEntryPointGenerator extends AbstractGenerator {
     }
 
     TypeSpec generateEntryPointWrapper(AnnotatedCLibClass apiClass) {
-
-        // Generate simple class
         final TypeSpec.Builder cEntriesClass = TypeSpec.classBuilder(apiClass.getWrapperType())
                 .addModifiers(PUBLIC, FINAL);
 
@@ -91,106 +90,99 @@ public class CEntryPointGenerator extends AbstractGenerator {
             generateInstanceMethods(apiClass, cEntriesClass);
         }
 
-        // Add method wrappers
         for (var method : apiClass.getPublicApiMethods()) {
-            final MethodSpec.Builder builder = createCEntryPoint(method.getCEntryPointName());
+            cEntriesClass.addMethod(generateEntryPoint(apiClass, method));
+        }
+        return cEntriesClass.build();
+    }
 
-            // Anything that can throw reports through a caller-provided struct. It goes ahead
-            // of the instance handle so that it is argument zero of every public C signature
-            if (method.isThrowing()) {
-                builder.addParameter(ErrorInfo, ERROR_OUT_PARAM);
-            }
-
-            CodeBlock.Builder invocation = CodeBlock.builder();
-            CodeBlock.Builder invocationClose = CodeBlock.builder();
-
-            // Handle conversions with return types. A marshalled return stays void: the
-            // entry point fills a trailing out-struct instead (see below).
-            var returnType = method.getReturnType();
-            var allocatingReturn = returnType.getAllocatingReturn();
-            if (!returnType.isVoid() && allocatingReturn.isEmpty()) {
-                builder.returns(returnType.getCEntryType());
-
-                // Wrap known Java types as handles if needed
-                returnType.getApiTypeWrapperClass().ifPresent(wrapperClass -> {
-                    invocation.add("$T.$N(", wrapperClass, getRegisterMethod);
-                    invocationClose.add(")");
-                });
-                returnType.getGeneratedCEnumType().ifPresent(cEnumClass -> {
-                    invocation.add("$T.$N(", cEnumClass, CEnumGenerator.fromJavaMethod);
-                    invocationClose.add(")");
-                });
-                if (returnType.isString()) {
-                    invocation.add("$T.toTempCharPointer(", CPointers);
-                    invocationClose.add(")");
-                }
-
-            }
-
-            // Instance methods pass themselves as the first argument
-            if (method.isStatic()) {
-                invocation.add("$T.$N(", apiClass.getJavaType(), method.getJavaMethodName());
-                invocationClose.add(")");
-            } else {
-                builder.addParameter(ObjectHandle.class, "_obj");
-                invocation.add("$N(_obj).$N(", getInstanceMethod, method.getJavaMethodName());
-                invocationClose.add(")");
-            }
-
-            // Add all additional arguments
-            int i = 0;
-            for (var param : method.getParameters()) {
-                if (i++ > 0) invocation.add(", ");
-                if (param.isIsolateThread()) {
-                    // Pass the existing isolate parameter
-                    invocation.add("$N", ISOLATE_NAME);
-                } else {
-                    builder.addParameter(param.getCEntryType(), param.getName());
-                    var apiTypeWrapper = param.getApiTypeWrapperClass();
-                    var generatedCEnum = param.getGeneratedCEnumType();
-                    if (apiTypeWrapper.isPresent()) {
-                        // convert handle to java object
-                        invocation.add("$T.$N($N)", apiTypeWrapper.get(), getInstanceMethod, param.getName());
-                    } else if (generatedCEnum.isPresent()) {
-                        // convert generated wrapper to Java enum
-                        invocation.add("$T.$N($N)", generatedCEnum.get(), CEnumGenerator.toJavaMethod, param.getName());
-                    } else if (param.isString()) {
-                        // convert from char*
-                        invocation.add("$T.utf8ToJavaString($N)", RuntimeClasses.CPointers, param.getName());
-                    } else if (param.isSizeType()) {
-                        if (param.getJavaType() == TypeName.LONG) {
-                            invocation.add("$T.capSizeToLong($N)", RuntimeClasses.CPointers, param.getName());
-                        } else {
-                            invocation.add("$T.capSizeToInt($N)", RuntimeClasses.CPointers, param.getName());
-                        }
-                    } else {
-                        // forward as is
-                        invocation.add("$N", param.getName());
-                    }
-                }
-            }
-
-            // A marshalled return fills a trailing caller-provided struct
-            if (allocatingReturn.isPresent()) {
-                builder.addParameter(returnType.getStructViewType().get(), STRUCT_OUT);
-            }
-
-            // Add guards
-            addGuardedInvocation(
-                    builder,
-                    invocation.add(invocationClose.build()).build(),
-                    method.getReturnType().getDataType(),
-                    allocatingReturn.orElse(null),
-                    method.isThrowing() ? getErrorIdPrefix() : null,
-                    getOutStructZeroing(method)
-            );
-            cEntriesClass.addMethod(builder.build());
-
+    /**
+     * Converts the C arguments, forwards to the Java method and converts the result back. The
+     * error struct goes ahead of the instance handle so it is argument zero of every public
+     * C signature.
+     */
+    private MethodSpec generateEntryPoint(AnnotatedCLibClass apiClass, AnnotatedCLibMethod method) {
+        final MethodSpec.Builder builder = createCEntryPoint(method.getCEntryPointName());
+        if (method.isThrowing()) {
+            builder.addParameter(ErrorInfo, ERROR_OUT_PARAM);
         }
 
-        // Build class
-        return cEntriesClass.build();
+        // The Java call, wrapped in whatever converts the result. A marshalled return stays
+        // void, the entry point fills a trailing out-struct instead.
+        CodeBlock.Builder invocation = CodeBlock.builder();
+        CodeBlock.Builder invocationClose = CodeBlock.builder();
+        var returnType = method.getReturnType();
+        var allocatingReturn = returnType.getAllocatingReturn();
+        if (!returnType.isVoid() && allocatingReturn.isEmpty()) {
+            builder.returns(returnType.getCEntryType());
+            returnType.getApiTypeWrapperClass().ifPresent(wrapperClass -> {
+                invocation.add("$T.$N(", wrapperClass, getRegisterMethod);
+                invocationClose.add(")");
+            });
+            returnType.getGeneratedCEnumType().ifPresent(cEnumClass -> {
+                invocation.add("$T.$N(", cEnumClass, CEnumGenerator.fromJavaMethod);
+                invocationClose.add(")");
+            });
+            if (returnType.isString()) {
+                invocation.add("$T.toTempCharPointer(", CPointers);
+                invocationClose.add(")");
+            }
+        }
 
+        // Instance methods pass themselves as the first argument
+        if (method.isStatic()) {
+            invocation.add("$T.$N(", apiClass.getJavaType(), method.getJavaMethodName());
+        } else {
+            builder.addParameter(ObjectHandle.class, "_obj");
+            invocation.add("$N(_obj).$N(", getInstanceMethod, method.getJavaMethodName());
+        }
+        invocationClose.add(")");
+
+        int i = 0;
+        for (var param : method.getParameters()) {
+            if (i++ > 0) invocation.add(", ");
+            if (param.isIsolateThread()) {
+                invocation.add("$N", ISOLATE_NAME);
+            } else {
+                builder.addParameter(param.getCEntryType(), param.getName());
+                invocation.add(getArgumentConversion(param));
+            }
+        }
+
+        // A marshalled return fills a trailing caller-provided struct
+        if (allocatingReturn.isPresent()) {
+            builder.addParameter(returnType.getStructViewType().get(), STRUCT_OUT);
+        }
+
+        addGuardedInvocation(
+                builder,
+                invocation.add(invocationClose.build()).build(),
+                returnType.getDataType(),
+                allocatingReturn.orElse(null),
+                method.isThrowing() ? getErrorIdPrefix() : null,
+                getOutStructZeroing(method)
+        );
+        return builder.build();
+    }
+
+    /**
+     * The C argument as the Java method takes it
+     */
+    private static CodeBlock getArgumentConversion(AnnotatedClibType param) {
+        var apiTypeWrapper = param.getApiTypeWrapperClass();
+        var generatedCEnum = param.getGeneratedCEnumType();
+        if (apiTypeWrapper.isPresent()) {
+            return CodeBlock.of("$T.$N($N)", apiTypeWrapper.get(), getInstanceMethod, param.getName());
+        } else if (generatedCEnum.isPresent()) {
+            return CodeBlock.of("$T.$N($N)", generatedCEnum.get(), CEnumGenerator.toJavaMethod, param.getName());
+        } else if (param.isString()) {
+            return CodeBlock.of("$T.utf8ToJavaString($N)", CPointers, param.getName());
+        } else if (param.isSizeType()) {
+            String cap = param.getJavaType() == TypeName.LONG ? "capSizeToLong" : "capSizeToInt";
+            return CodeBlock.of("$T.$N($N)", CPointers, cap, param.getName());
+        } else {
+            return CodeBlock.of("$N", param.getName());
+        }
     }
 
     /**

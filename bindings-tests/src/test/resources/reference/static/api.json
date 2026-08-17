@@ -1404,7 +1404,7 @@
       }],
       "cppOverloads": [{
         "parameters": "const std::vector<int>& values, int factor",
-        "body": "int sum = 0; for (int v : values) { sum += v; }",
+        "body": "int sum = 0;\nfor (int v : values) { sum += v; }\n",
         "call": "sum, factor"
       }],
       "pythonOverload": {

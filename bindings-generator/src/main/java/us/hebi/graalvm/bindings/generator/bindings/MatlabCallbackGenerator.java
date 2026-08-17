@@ -5,9 +5,12 @@ import us.hebi.graalvm.bindings.model.*;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+
+import static com.google.common.base.Preconditions.*;
 
 /**
  * Emits the callback support of the MEX gateway: one RAII scope class per callback typedef whose
@@ -32,18 +35,17 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The gateway does not include the public C header, so it repeats the typedefs of the callbacks
-     * it can dispatch against its own struct copies. The token sits at the end of the struct helpers.
+     * The typedefs of the dispatched callbacks, against the gateway's own struct copies
      */
     String createCallbackTypedefs() {
         var visible = getVisibleCallbacks();
         if (visible.isEmpty()) {
             return "";
         }
-        var out = new IndentingTextRenderer().add("\n");
+        var out = new IndentingTextRenderer().addLine();
         for (var callback : lib.getCallbacks()) {
             if (!visible.contains(callback.getName())) continue;
-            out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback, MatlabCallbackGenerator::getMexCallbackType));
+            out.addLine().add(CBindingsGenerator.getCCallbackTypedef(callback, MatlabCallbackGenerator::getMexCallbackType));
         }
         return out.render();
     }
@@ -57,7 +59,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The shared callback support plus the call site enum. The token sits at the end of a line.
+     * The shared callback support plus the call site enum
      */
     String createCallbackSupport() {
         var sites = getCallbackSites();
@@ -113,16 +115,14 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * One scope class per callback typedef a MATLAB-visible method takes. The token sits at the end
-     * of a line, after the createMex helpers they call.
+     * One scope class per dispatched callback typedef, after the createMex helpers they call
      */
     String createCallbackScopes() {
         var visible = getVisibleCallbacks();
         if (visible.isEmpty()) {
             return "";
         }
-        // The clean-room mex-sdk has no mxCreateString, so this goes through the gateway's own
-        // createMexString, which is why it sits here rather than with the other callback support
+        // Sits here rather than with the other support because it needs the gateway's createMexString
         var out = new IndentingTextRenderer().add("""
 
 
@@ -141,130 +141,142 @@ class MatlabCallbackGenerator {
                 }""");
         for (var callback : lib.getCallbacks()) {
             if (!visible.contains(callback.getName())) continue;
-            var returnType = callback.getReturnType();
-            boolean returnsValue = !TypeMap.isVoid(returnType.getDataType());
-            var cReturnType = CBindingsGenerator.getQualifiedCType(returnType);
-            if (returnsValue && !isScalar(returnType.getDataType())) {
-                throw new IllegalStateException("Callback '" + callback.getName() + "' returns a value that the MEX gateway cannot hand back to the library");
-            }
-            var params = new ArrayList<String>();
-            var mexArgs = new ArrayList<String>();
-            for (var parameter : callback.getParameters()) {
-                boolean isStruct = parameter.getDataType() == DataType.STRUCT;
-                params.add(CBindingsGenerator.getCallbackParameterType(parameter, MatlabCallbackGenerator::getMexCallbackType)
-                           + " " + parameter.getParamName());
-                mexArgs.add(cToMex.apply(parameter).replace("%%RETURN_VALUE%%",
-                        isStruct ? "*" + parameter.getParamName() : parameter.getParamName()));
-            }
-
-            // A void callback asks feval for no output, a value callback for one. A skipped invocation
-            // returns a value-initialized result, its error is raised after the call anyway.
-            var content = out.snapshot()
-                    .set("CALLBACK", callback.getName())
-                    .set("SCOPE", getCallbackScopeName(callback.getName()))
-                    .set("TYPEDEF", callback.getCPrefix() + callback.getName())
-                    .set("RETURN_TYPE", cReturnType)
-                    .set("PARAMS", BindingGenerator.joiner.join(params))
-                    .set("ARG_COUNT", String.valueOf(mexArgs.size() + 1))
-                    .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + BindingGenerator.joiner.join(mexArgs))
-                    .set("SKIP", returnsValue ? "return " + cReturnType + "{};" : "return;");
-            content.add("""
-
-
-                    // Wrapper handle for %%CALLBACK%% (alive for one call)
-                    template <CallbackSite Site>
-                    struct %%SCOPE%% {
-                        static %%SCOPE%%* current;
-                        const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
-                        %%SCOPE%%* const previous;
-                        mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
-                        std::atomic<int> dropped{0};    // invocations that never reached MATLAB
-
-                        explicit %%SCOPE%%(const mxArray* handle) : handle(handle), previous(current) { current = this; }
-                        ~%%SCOPE%%() { current = previous; }
-                        %%SCOPE%%(const %%SCOPE%%&) = delete;
-
-                        %%TYPEDEF%% function() const { return handle != nullptr ? &invoke : nullptr; }
-
-                        CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
-
-                        // Errors are trapped rather than raised, a longjmp from here would tear down the
-                        // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
-                        static %%RETURN_TYPE%% invoke(%%PARAMS%%) {
-                            %%SCOPE%%* scope = current;
-                            // An unsupported fire after the scope closed means the library kept the pointer past the call
-                            if (scope == nullptr || scope->error != nullptr) {
-                                %%SKIP%%
-                            }
-                            if (std::this_thread::get_id() != matlabThread) {
-                                scope->dropped.fetch_add(1, std::memory_order_relaxed);
-                                %%SKIP%%
-                            }
-                            mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(scope->handle)%%MEX_ARGS%%};
-                    """).indentBy(2);
-            if (returnsValue) {
-                content.add("""
-                        %%RETURN_TYPE%% value{};
-                        mxArray* result = nullptr;
-                        mxArray* error = mexCallMATLABWithTrap(1, &result, %%ARG_COUNT%%, args, "feval");
-                        if (error == nullptr) {
-                            error = checkCallbackResult(result, "%%CALLBACK%%");
-                            if (error == nullptr) {
-                                value = static_cast<%%RETURN_TYPE%%>(mxGetScalar(result));
-                            }
-                            mxDestroyArray(result);
-                        }
-                        scope->error = error;
-                        """);
-            } else {
-                content.add("""
-                        mxArray* error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
-                        scope->error = error;
-                        """);
-            }
-            for (int i = 0; i < mexArgs.size(); i++) {
-                content.addLine("mxDestroyArray(args[" + (i + 1) + "]);");
-            }
-            if (returnsValue) {
-                content.addLine("return value;");
-            }
-            content.unindentBy(2).add("""
-                        }
-                    };
-                    template <CallbackSite Site>
-                    %%SCOPE%%<Site>* %%SCOPE%%<Site>::current = nullptr;""");
+            addCallbackScope(out.snapshot(), callback);
         }
         return out.render();
     }
 
+    private void addCallbackScope(IndentingTextRenderer content, CallbackDescription callback) {
+        var returnType = callback.getReturnType();
+        boolean returnsValue = !TypeMap.isVoid(returnType.getDataType());
+        checkState(!returnsValue || isScalar(returnType.getDataType()),
+                "Callback '%s' returns a value that the MEX gateway cannot hand back to the library", callback.getName());
+
+        // Struct parameters arrive by pointer, see getCallbackParameterType
+        var params = new ArrayList<String>();
+        var mexArgs = new ArrayList<String>();
+        for (var parameter : callback.getParameters()) {
+            String name = parameter.getParamName();
+            params.add(CBindingsGenerator.getCallbackParameterType(parameter, MatlabCallbackGenerator::getMexCallbackType) + " " + name);
+            String value = parameter.getDataType() == DataType.STRUCT ? "*" + name : name;
+            mexArgs.add(cToMex.apply(parameter).replace("%%RETURN_VALUE%%", value));
+        }
+
+        // A void callback asks feval for no output, a value callback for one. A skipped invocation
+        // returns a value-initialized result, its error is raised after the call anyway.
+        String cReturnType = CBindingsGenerator.getQualifiedCType(returnType);
+        content.set("CALLBACK", callback.getName())
+                .set("SCOPE", getCallbackScopeName(callback.getName()))
+                .set("TYPEDEF", callback.getCPrefix() + callback.getName())
+                .set("RETURN_TYPE", cReturnType)
+                .setArgs("PARAMS", params)
+                .set("ARG_COUNT", mexArgs.size() + 1)
+                .set("MEX_ARGS", mexArgs.isEmpty() ? "" : ", " + String.join(", ", mexArgs))
+                .set("SKIP", returnsValue ? "return " + cReturnType + "{};" : "return;");
+        content.add("""
+
+
+                // Wrapper handle for %%CALLBACK%% (alive for one call)
+                template <CallbackSite Site>
+                struct %%SCOPE%% {
+                    static %%SCOPE%%* current;
+                    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+                    %%SCOPE%%* const previous;
+                    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+                    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+                    explicit %%SCOPE%%(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+                    ~%%SCOPE%%() { current = previous; }
+                    %%SCOPE%%(const %%SCOPE%%&) = delete;
+
+                    %%TYPEDEF%% function() const { return handle != nullptr ? &invoke : nullptr; }
+
+                    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+                    // Errors are trapped rather than raised, a longjmp from here would tear down the
+                    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+                    static %%RETURN_TYPE%% invoke(%%PARAMS%%) {
+                        %%SCOPE%%* scope = current;
+                        // An unsupported fire after the scope closed means the library kept the pointer past the call
+                        if (scope == nullptr || scope->error != nullptr) {
+                            %%SKIP%%
+                        }
+                        if (std::this_thread::get_id() != matlabThread) {
+                            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+                            %%SKIP%%
+                        }
+                        mxArray* args[%%ARG_COUNT%%] = {const_cast<mxArray*>(scope->handle)%%MEX_ARGS%%};
+                """).indentBy(2);
+        if (returnsValue) {
+            content.add("""
+                    %%RETURN_TYPE%% value{};
+                    mxArray* result = nullptr;
+                    mxArray* error = mexCallMATLABWithTrap(1, &result, %%ARG_COUNT%%, args, "feval");
+                    if (error == nullptr) {
+                        error = checkCallbackResult(result, "%%CALLBACK%%");
+                        if (error == nullptr) {
+                            value = static_cast<%%RETURN_TYPE%%>(mxGetScalar(result));
+                        }
+                        mxDestroyArray(result);
+                    }
+                    scope->error = error;
+                    """);
+        } else {
+            content.add("""
+                    mxArray* error = mexCallMATLABWithTrap(0, nullptr, %%ARG_COUNT%%, args, "feval");
+                    scope->error = error;
+                    """);
+        }
+        for (int i = 1; i <= mexArgs.size(); i++) {
+            content.addLine("mxDestroyArray(args[" + i + "]);");
+        }
+        content.addLineIf(returnsValue, "return value;");
+        content.unindentBy(2).add("""
+                    }
+                };
+                template <CallbackSite Site>
+                %%SCOPE%%<Site>* %%SCOPE%%<Site>::current = nullptr;""");
+    }
+
     /**
-     * Callback typedefs that a MATLAB-visible method takes
+     * Every callback parameter of every dispatched method, in dispatch order
      */
-    private Set<String> getVisibleCallbacks() {
-        var names = new LinkedHashSet<String>();
+    private List<CallbackParameter> getCallbackParameters() {
+        var parameters = new ArrayList<CallbackParameter>();
         for (var apiClass : lib.getClasses()) {
             for (var method : apiClass.getMethods()) {
                 if (getMatlabExclusionReason(method).isPresent()) continue;
                 for (var param : method.getParameters()) {
-                    if (param.getDataType() == DataType.CALLBACK) names.add(param.getTypeName());
+                    if (param.getDataType() == DataType.CALLBACK) {
+                        parameters.add(new CallbackParameter(method, param));
+                    }
                 }
             }
+        }
+        return parameters;
+    }
+
+    private record CallbackParameter(MethodDescription method, TypeDescription param) {
+    }
+
+    /**
+     * The callback typedefs that dispatched methods take
+     */
+    private Set<String> getVisibleCallbacks() {
+        var names = new LinkedHashSet<String>();
+        for (var parameter : getCallbackParameters()) {
+            names.add(parameter.param().getTypeName());
         }
         return names;
     }
 
     /**
-     * Every callback parameter of every MATLAB-visible method, in dispatch order
+     * The enumerators of the call site enum
      */
     private Set<String> getCallbackSites() {
         var sites = new LinkedHashSet<String>();
-        for (var apiClass : lib.getClasses()) {
-            for (var method : apiClass.getMethods()) {
-                if (getMatlabExclusionReason(method).isPresent()) continue;
-                for (var param : method.getParameters()) {
-                    if (param.getDataType() == DataType.CALLBACK) sites.add(getCallbackSite(method, param));
-                }
-            }
+        for (var parameter : getCallbackParameters()) {
+            sites.add(getCallbackSite(parameter.method(), parameter.param()));
         }
         return sites;
     }

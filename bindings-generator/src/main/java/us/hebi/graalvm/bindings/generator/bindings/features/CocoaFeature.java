@@ -3,6 +3,7 @@ package us.hebi.graalvm.bindings.generator.bindings.features;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.EnvProcessor;
 import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
+import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.LibraryDescription;
 
 import java.util.Collections;
@@ -27,74 +28,70 @@ public class CocoaFeature implements FeatureGenerator {
     @Override
     public String getCHeader(boolean isCpp) {
         if (isCpp) {
-            return getReplacedText("""
-                      typedef int (*main_func_t)(int argc, char** argv);
-                      int runApplicationC(main_func_t callback, int argc, char** argv);
-                    """
-            );
+            return render("""
+                    typedef int (*%%MAIN_FUNC_T%%)(int argc, char** argv);
+                    int %%RUN_APPLICATION%%(%%MAIN_FUNC_T%% callback, int argc, char** argv);
+                    """);
         } else {
-            return getReplacedText("""
+            return render("""
 
                     // ==== Cocoa utilities for supporting macOS ====
-                    typedef int (*main_func_t)(int argc, char** argv);
-                    DLL_PUBLIC int runApplicationC(main_func_t callback, int argc, char** argv);
-                    """
-            );
+                    typedef int (*%%MAIN_FUNC_T%%)(int argc, char** argv);
+                    %%DLL_PUBLIC%%int %%RUN_APPLICATION%%(%%MAIN_FUNC_T%% callback, int argc, char** argv);
+                    """);
         }
     }
 
     @Override
     public String getCppWrapper(boolean useDynamicLookup) {
         if (!useDynamicLookup) {
-            return getReplacedText("""
+            return render("""
                     // ==== Cocoa utilities for supporting macOS ====
-                    %%DOCUMENTATION%%
-                    inline int runApplicationCpp(main_func_t callback, int argc, char** argv) {
-                      return runApplicationC(callback, argc, argv);
+                    %%DOXYGEN%%
+                    inline int runApplication(%%MAIN_FUNC_T%% callback, int argc, char** argv) {
+                      return %%RUN_APPLICATION%%(callback, argc, argv);
                     }
-                    """
-                    .replaceAll("%%DOCUMENTATION%%", DocumentationUtil.wrapInDoxygen("", documentation).trim())
-            );
+                    """);
         } else {
             // Call directly in case the library is not available
-            return getReplacedText("""
+            return render("""
                     // ==== Cocoa utilities for supporting macOS ====
-                    typedef int (*main_func_t)(int argc, char** argv);
-                    %%DOCUMENTATION%%
-                    inline int runApplicationCpp(main_func_t callback, int argc, char** argv) {
+                    typedef int (*%%MAIN_FUNC_T%%)(int argc, char** argv);
+                    %%DOXYGEN%%
+                    inline int runApplication(%%MAIN_FUNC_T%% callback, int argc, char** argv) {
                       if (!DynamicLookup::instance().isLoaded()) {
                         return callback(argc, argv);
                       }
-                      static auto runApplicationC = DynamicLookup::instance().getFunc<int(*)(main_func_t, int, char**)>("runApplicationC");
-                      return runApplicationC(callback, argc, argv);
+                      static auto %%RUN_APPLICATION%% = DynamicLookup::instance().getFunc<int(*)(%%MAIN_FUNC_T%%, int, char**)>("%%RUN_APPLICATION%%");
+                      return %%RUN_APPLICATION%%(callback, argc, argv);
                     }
-                    """
-                    .replaceAll("%%DOCUMENTATION%%", DocumentationUtil.wrapInDoxygen("", documentation).trim())
-            );
+                    """);
         }
     }
 
     @Override
     public String getPythonWrapper() {
-        return getReplacedText("""
+        if (prefix == null) return "";
+        var out = renderer().add("""
 
                 # ==== Cocoa utilities for supporting macOS ====
                 # C function signature
-                main_func_t = CFUNCTYPE(c_int, c_int, POINTER(c_char_p))
-                %%LIB_FIELD%%.runApplicationC.argtypes = [main_func_t, c_int, POINTER(c_char_p)]
-                %%LIB_FIELD%%.runApplicationC.restype = c_int
+                %%MAIN_FUNC_T%% = CFUNCTYPE(c_int, c_int, POINTER(c_char_p))
+                %%LIB_FIELD%%.%%RUN_APPLICATION%%.argtypes = [%%MAIN_FUNC_T%%, c_int, POINTER(c_char_p)]
+                %%LIB_FIELD%%.%%RUN_APPLICATION%%.restype = c_int
 
                 # Python wrapper. We ignore the C args as Python can just use a global namespace
-                def runApplicationPy(callback_fn, *args, **kwargs):
-                %%DOCUMENTATION%%
-                    def c_callback_wrapper(argc, argv):
-                        callback_fn(*args, **kwargs)
-                        return 0
-                    c_callback = main_func_t(c_callback_wrapper)
-                    return %%LIB_FIELD%%.runApplicationC(c_callback, 0, (c_char_p * 0)())
-                """)
-                .replaceAll("%%DOCUMENTATION%%", DocumentationUtil.wrapInPydoc("    ", documentation));
-
+                """);
+        out.beginControlFlow("def run_application(callback_fn, *args, **kwargs):");
+        out.addLine(DocumentationUtil.wrapInPydoc(documentation));
+        out.add("""
+                def c_callback_wrapper(argc, argv):
+                    callback_fn(*args, **kwargs)
+                    return 0
+                c_callback = %%MAIN_FUNC_T%%(c_callback_wrapper)
+                return %%LIB_FIELD%%.%%RUN_APPLICATION%%(c_callback, 0, (c_char_p * 0)())
+                """);
+        return out.render();
     }
 
     private static final String documentation = """
@@ -108,9 +105,9 @@ public class CocoaFeature implements FeatureGenerator {
 
     @Override
     public String getCSource() {
-        return getReplacedText("""
+        return render("""
                 #if !defined(__APPLE__)
-                int runApplicationC(main_func_t callback, int argc, char** argv) {
+                int %%RUN_APPLICATION%%(%%MAIN_FUNC_T%% callback, int argc, char** argv) {
                   return callback(argc, argv); // Run immediately on same thread
                 }
                 #endif
@@ -119,20 +116,20 @@ public class CocoaFeature implements FeatureGenerator {
 
     @Override
     public String getObjCSource() {
-        return getReplacedText("""
+        return render("""
                 #import <Cocoa/Cocoa.h>
                 #include <signal.h>
 
-                typedef int (*main_func_t)(int argc, char** argv);
+                typedef int (*%%MAIN_FUNC_T%%)(int argc, char** argv);
                 typedef void (*user_func_t)(void* user_data);
 
-                @interface AppDelegate : NSObject <NSApplicationDelegate>
+                @interface %%APP_DELEGATE%% : NSObject <NSApplicationDelegate>
                 @property (nonatomic, assign) int argc;
                 @property (nonatomic, assign) char **argv;
-                @property (nonatomic, assign) main_func_t callback;
+                @property (nonatomic, assign) %%MAIN_FUNC_T%% callback;
                 @end
 
-                @implementation AppDelegate
+                @implementation %%APP_DELEGATE%%
 
                 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification  {
                     // NSLog(@"Cocoa finished launching");
@@ -207,12 +204,12 @@ public class CocoaFeature implements FeatureGenerator {
 
                 }
 
-                int runApplicationC(main_func_t callback, int argc, char** argv) {
+                int %%RUN_APPLICATION%%(%%MAIN_FUNC_T%% callback, int argc, char** argv) {
                     // NSLog(@"Launching Cocoa framework");
                     @autoreleasepool {
 
                         // The main method gets called once the framework finished launching
-                        AppDelegate* delegate = [[AppDelegate alloc] init];
+                        %%APP_DELEGATE%%* delegate = [[%%APP_DELEGATE%% alloc] init];
                         delegate.argc = argc;
                         delegate.argv = argv;
                         delegate.callback = callback;
@@ -243,16 +240,23 @@ public class CocoaFeature implements FeatureGenerator {
         return List.of("\"-framework Cocoa\"");
     }
 
-    private String getReplacedText(String input) {
-        if (prefix == null) return "";
+    /**
+     * Empty when the feature is disabled
+     */
+    private String render(String template) {
+        return prefix == null ? "" : renderer().add(template).render();
+    }
+
+    /**
+     * The prefixed names. Tokens of the surrounding file pass through.
+     */
+    private IndentingTextRenderer renderer() {
         String noClass = "";
-        return input
-                .replaceAll("main_func_t", AnnotatedCLibClass.getCEntryName(false, prefix, "MainCallbackFunction", ""))
-                .replaceAll("runApplicationPy", "run_application")
-                .replaceAll("runApplicationCpp", "runApplication")
-                .replaceAll("runApplicationC", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "runApplication"))
-                .replaceAll("AppDelegate", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "AppDelegate"))
-                ;
+        return new IndentingTextRenderer()
+                .set("MAIN_FUNC_T", AnnotatedCLibClass.getCEntryName(false, prefix, "MainCallbackFunction", ""))
+                .set("RUN_APPLICATION", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "runApplication"))
+                .set("APP_DELEGATE", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "AppDelegate"))
+                .set("DOXYGEN", DocumentationUtil.wrapInDoxygen(documentation).trim());
     }
 
     public CocoaFeature(EnvProcessor.GeneratorOptions options) {

@@ -199,13 +199,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
     }
 
     /**
-     * The annotation value names the type in every target language, so two declarations
-     * sharing one produce duplicate C symbols, wrapper files that overwrite each other and
-     * an unstable sort in the descriptor. Unlike the generated Java names, these are the
-     * author's own and no mangling can keep them apart, so the only fix is to reject them.
-     * Without this check the first symptom is a swallowed FilerException from
-     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file". Names taken
-     * by a different kind are rejected in {@code LibraryDescriptionGenerator}, which is where
+     * Two declarations sharing a name would emit duplicate C symbols and wrapper files that
+     * overwrite each other, first visible as a swallowed FilerException ("Attempt to recreate
+     * a file"). Names taken by another kind are rejected in LibraryDescriptionGenerator, where
      * all four kinds are known.
      */
     private void checkNamesAreUnique(AnnotatedCLibClass apiClass) {

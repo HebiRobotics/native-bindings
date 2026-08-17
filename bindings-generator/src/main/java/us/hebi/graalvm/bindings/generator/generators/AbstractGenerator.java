@@ -1,6 +1,5 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.TypeSpec;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;

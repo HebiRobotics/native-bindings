@@ -11,6 +11,7 @@ import java.util.List;
  */
 public interface FeatureGenerator {
 
+    /** The C declarations. For C++ these are the lines of the extern "C" block, indented by the caller */
     String getCHeader(boolean isCpp);
 
     String getCSource();

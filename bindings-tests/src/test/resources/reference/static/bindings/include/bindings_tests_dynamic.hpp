@@ -127,7 +127,7 @@ public:
   /**
    * @brief Creates a counter starting at the given value, or at zero by default.
    *
-   * @param start 
+   * @param start
    * @return A mutable counter, used to check handle creation and release.
    * @throw on internal errors
    */
@@ -143,7 +143,7 @@ public:
   bool isClosed() const noexcept;
 
   /**
-   * @details 
+   * @details
    * Total number of counters that have been released so far in this isolate.
    * Increments exactly once per released handle, so tests can verify that the
    * generated destructor ran.
@@ -172,7 +172,7 @@ public:
   /**
    * @brief Creates an instance holding the given value, or zero by default.
    *
-   * @param startValue 
+   * @param startValue
    * @return A counter exported under a custom prefix in snake case.
    * @throw on internal errors
    */
@@ -186,8 +186,8 @@ public:
   /**
    * @brief A static method, so the conversion is pinned for both kinds of call.
    *
-   * @param first 
-   * @param second 
+   * @param first
+   * @param second
    */
   static int addTwoNumbers(int first, int second) noexcept;
   Naming(Naming&& from) noexcept;
@@ -277,12 +277,12 @@ private:
 namespace arrays {
 
 /**
- * @details 
+ * @details
  * A const input buffer. Besides the const in the C header, this is what makes the
  * C++ generator add a std::vector<double> overload next to the raw pointer one.
  *
- * @param values 
- * @param count 
+ * @param values
+ * @param count
  */
 double sumFloat64(const double* values, size_t count) noexcept;
 double sumFloat64(const std::vector<double>& values, size_t count) noexcept;
@@ -290,30 +290,30 @@ double sumFloat64(const std::vector<double>& values, size_t count) noexcept;
 /**
  * @brief Const on a non-double pointer, which gets the const but no vector overload.
  *
- * @param values 
- * @param count 
+ * @param values
+ * @param count
  */
 int sumInt32(const int* values, size_t count) noexcept;
 
 /**
  * @brief Writes value into every element of target. Checks output buffer handling.
  *
- * @param target 
- * @param count 
- * @param value 
+ * @param target
+ * @param count
+ * @param value
  */
 void fillFloat64(double* target, size_t count, double value) noexcept;
 
 /**
- * @details 
+ * @details
  * Writes the running total of source into target. Both buffers must hold at
  * least count elements. Passing the same buffer for both is supported. One const
  * and one mutable pointer in the same signature, so only the source picks up the
  * vector overload.
  *
- * @param source 
- * @param target 
- * @param count 
+ * @param source
+ * @param target
+ * @param count
  */
 void cumulativeSum(const double* source, double* target, size_t count) noexcept;
 void cumulativeSum(const std::vector<double>& source, double* target, size_t count) noexcept;
@@ -321,16 +321,16 @@ void cumulativeSum(const std::vector<double>& source, double* target, size_t cou
 /**
  * @brief Reverses the buffer in place.
  *
- * @param values 
- * @param count 
+ * @param values
+ * @param count
  */
 void reverseFloat64(double* values, size_t count) noexcept;
 
 /**
  * @brief Dot product of two spans. The lengths ride along in the spans, so a mismatch is checked once here rather than in every language wrapper.
  *
- * @param x 
- * @param y 
+ * @param x
+ * @param y
  * @throw mismatched lengths
  */
 double dotProduct(internal::DoubleSpan x, internal::DoubleSpan y);
@@ -339,8 +339,8 @@ double dotProduct(const std::vector<double>& x, const std::vector<double>& y);
 /**
  * @brief Returns a new array with the offset added to every element. Checks a span in and an array out.
  *
- * @param values 
- * @param offset 
+ * @param values
+ * @param offset
  */
 std::vector<double> addOffset(internal::DoubleSpan values, double offset) noexcept;
 std::vector<double> addOffset(const std::vector<double>& values, double offset) noexcept;
@@ -348,8 +348,8 @@ std::vector<double> addOffset(const std::vector<double>& values, double offset) 
 /**
  * @brief Returns a new array with the offset added to every element. Checks an int32 span in and an array out.
  *
- * @param values 
- * @param offset 
+ * @param values
+ * @param offset
  */
 std::vector<int32_t> addOffsetInt32(internal::IntSpan values, int offset) noexcept;
 std::vector<int32_t> addOffsetInt32(const std::vector<int32_t>& values, int offset) noexcept;
@@ -357,8 +357,8 @@ std::vector<int32_t> addOffsetInt32(const std::vector<int32_t>& values, int offs
 /**
  * @brief Returns a new array with the offset added to every element. Checks a float span in and an array out.
  *
- * @param values 
- * @param offset 
+ * @param values
+ * @param offset
  */
 std::vector<float> addOffsetFloat32(internal::FloatSpan values, float offset) noexcept;
 std::vector<float> addOffsetFloat32(const std::vector<float>& values, float offset) noexcept;
@@ -366,26 +366,26 @@ std::vector<float> addOffsetFloat32(const std::vector<float>& values, float offs
 /**
  * @brief Sum of the unsigned byte values. Checks the raw uint8 pointer with an explicit count, the shape an image row uses.
  *
- * @param values 
- * @param count 
+ * @param values
+ * @param count
  */
 int sumUint8(uint8_t* values, size_t count) noexcept;
 
 /**
  * @brief Returns a new array with the offset added to every element. Checks a byte span in and an array out, including embedded zeros that would truncate a string.
  *
- * @param values 
- * @param offset 
+ * @param values
+ * @param offset
  */
 std::vector<uint8_t> addOffsetUint8(internal::ByteSpan values, char offset) noexcept;
 std::vector<uint8_t> addOffsetUint8(const std::vector<uint8_t>& values, char offset) noexcept;
 
 /**
- * @details 
+ * @details
  * Returns 0, 1, .. count-1. A count of zero returns an empty array, and a count
  * over 128 forces the per-thread scratch buffer to grow, mirroring Strings.repeat.
  *
- * @param count 
+ * @param count
  */
 std::vector<double> getSequence(size_t count) noexcept;
 } // namespace arrays
@@ -400,71 +400,71 @@ double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, int
 double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept;
 
 /**
- * @details 
+ * @details
  * Invokes the callback exactly 'times' times with indices 0 to times-1, then
  * returns. A null function pointer is ignored, and a non-positive count does
  * nothing.
  *
- * @param func 
- * @param userData 
- * @param times 
+ * @param func
+ * @param userData
+ * @param times
  */
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
 
 /**
- * @details 
+ * @details
  * Invokes the callback once with the two buffers and returns after it completes.
  * Both buffers stay owned by the caller, and how many elements they hold is
  * between the caller and the callback, since a raw pointer carries no length.
  * The input is not verified! A null function pointer leaves output untouched.
  *
- * @param func 
- * @param userData 
- * @param input 
- * @param output 
+ * @param func
+ * @param userData
+ * @param input
+ * @param output
  */
 void transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept;
 void transformOnce(TransformCallbackFunction func, void* userData, const std::vector<double>& input, double* output) noexcept;
 
 /**
- * @details 
+ * @details
  * Invokes the callback exactly 'times' times with indices 0 to times-1, then
  * returns. A null function pointer is ignored, and a non-positive count does
  * nothing.
  *
- * @param func 
- * @param times 
+ * @param func
+ * @param times
  */
 void invokePlainTimes(PlainIndexCallbackFunction func, size_t times) noexcept;
 
 /**
- * @details 
+ * @details
  * Invokes the callback once with the given index, then throws if the index is
  * negative. The invocation happens before the validation on purpose, so that a
  * caller can observe both failures in one call.
  *
- * @param func 
- * @param index 
+ * @param func
+ * @param index
  * @throw index is negative
  */
 void invokePlainChecked(PlainIndexCallbackFunction func, int index);
 
 /**
- * @details 
+ * @details
  * Invokes the callback once with the given index on a worker thread, and joins that
  * thread before returning. The invocation therefore completes within the call but not
  * on the calling thread, which is the shape a solver has when it fans an objective
  * out to workers. The callback must be thread safe.
  *
- * @param func 
- * @param index 
+ * @param func
+ * @param index
  */
 void invokePlainOnWorkerThread(PlainIndexCallbackFunction func, int index) noexcept;
 
 /**
  * @brief Invokes the callback once. Returns after it completes.
  *
- * @param func 
+ * @param func
  */
 void notifyPlainOnce(PlainNotifyCallbackFunction func) noexcept;
 } // namespace callbacks
@@ -478,7 +478,7 @@ namespace errors {
 /**
  * @brief Throws when value is negative, otherwise does nothing.
  *
- * @param value 
+ * @param value
  * @throw value is negative
  */
 void requireNonNegative(int value);
@@ -486,8 +486,8 @@ void requireNonNegative(int value);
 /**
  * @brief Integer division. Returns 0 through the ABI when it throws.
  *
- * @param a 
- * @param b 
+ * @param a
+ * @param b
  * @throw divisor is zero
  */
 int divideInt32(int a, int b);
@@ -495,7 +495,7 @@ int divideInt32(int a, int b);
 /**
  * @brief Returns 0.0 through the ABI when it throws.
  *
- * @param shouldFail 
+ * @param shouldFail
  * @throw shouldFail is true
  */
 double failingFloat64(bool shouldFail);
@@ -503,7 +503,7 @@ double failingFloat64(bool shouldFail);
 /**
  * @brief Returns false through the ABI when it throws.
  *
- * @param shouldFail 
+ * @param shouldFail
  * @throw shouldFail is true
  */
 bool failingBool(bool shouldFail);
@@ -511,7 +511,7 @@ bool failingBool(bool shouldFail);
 /**
  * @brief Returns a null pointer through the ABI when it throws.
  *
- * @param shouldFail 
+ * @param shouldFail
  * @throw shouldFail is true
  */
 std::string failingString(bool shouldFail);
@@ -535,52 +535,52 @@ void neverThrows() noexcept;
 namespace indices {
 
 /**
- * @details 
+ * @details
  * Returns the index unchanged. Both directions are marked, so a one-based caller
  * passes a value and gets the same value back.
  *
- * @param index 
+ * @param index
  */
 int echo(int index) noexcept;
 
 /**
  * @brief Index in, plain number out, so only the input converts.
  *
- * @param index 
+ * @param index
  */
 int countUpTo(int index) noexcept;
 
 /**
  * @brief Plain number in, index out, so only the output converts.
  *
- * @param count 
+ * @param count
  */
 int lastIndexOf(int count) noexcept;
 
 /**
- * @details 
+ * @details
  * Two indices that default to the first element. The default is written zero based
  * here and each one-based wrapper shifts it, so an omitted argument converts the
  * same way a supplied one does.
  *
- * @param row 
- * @param col 
+ * @param row
+ * @param col
  */
 int offsetFrom(int row = 0, int col = 0) noexcept;
 
 /**
- * @details 
+ * @details
  * An index whose default is not zero, which is what catches a default that gets
  * converted twice. Omitting the argument has to reach Java as 5 in every language.
  *
- * @param row 
+ * @param row
  */
 int fromRow(int row = 5) noexcept;
 
 /**
  * @brief A size_t index, so the size bridge and the index conversion have to compose.
  *
- * @param index 
+ * @param index
  */
 size_t echoSize(size_t index) noexcept;
 } // namespace indices
@@ -611,7 +611,7 @@ bool negate(bool value) noexcept;
 /**
  * @brief Returns the next UTF-16 code unit. 'A' becomes 'B'.
  *
- * @param value 
+ * @param value
  */
 unsigned short nextChar(unsigned short value) noexcept;
 char addInt8(char a, char b) noexcept;
@@ -621,8 +621,8 @@ int addInt32(int a, int b) noexcept;
 /**
  * @brief Uses values above 2^32 to catch platforms that truncate long to 32 bit.
  *
- * @param a 
- * @param b 
+ * @param a
+ * @param b
  */
 long long addInt64(long long a, long long b) noexcept;
 float addFloat32(float a, float b) noexcept;
@@ -631,15 +631,15 @@ double addFloat64(double a, double b) noexcept;
 /**
  * @brief size_t in and size_t out. Bridged through int64 on the Java side.
  *
- * @param a 
- * @param b 
+ * @param a
+ * @param b
  */
 size_t addSize(size_t a, size_t b) noexcept;
 
 /**
  * @brief Takes a size_t that is capped to a 32 bit Java int on the way in.
  *
- * @param value 
+ * @param value
  */
 int sizeToInt32(size_t value) noexcept;
 
@@ -663,16 +663,16 @@ namespace overloads {
 /**
  * @brief Both parameters have defaults, so wrappers may call this with no arguments.
  *
- * @param value 
- * @param factor 
+ * @param value
+ * @param factor
  */
 int scale(int value = 1, int factor = 10) noexcept;
 
 /**
  * @brief A trailing default only, which is the common case.
  *
- * @param name 
- * @param greeting 
+ * @param name
+ * @param greeting
  */
 std::string greet(const char* name, const char* greeting = "Hello") noexcept;
 std::string greet(const std::string& name, const std::string& greeting = "Hello") noexcept;
@@ -680,39 +680,39 @@ std::string greet(const std::string& name, const std::string& greeting = "Hello"
 /**
  * @brief Takes a pre-summed total. Each language gets a wrapper that sums a collection for you.
  *
- * @param sum 
- * @param factor 
+ * @param sum
+ * @param factor
  */
 int total(int sum, int factor) noexcept;
 int total(const std::vector<int>& values, int factor) noexcept;
 
 /**
- * @details 
+ * @details
  * A boolean default and a double default in scientific notation. Each wrapper has
  * to render both in its own syntax, which is where they tend to go wrong.
  *
- * @param invert 
- * @param scale 
+ * @param invert
+ * @param scale
  */
 double gain(bool invert = false, double scale = 1e-3) noexcept;
 
 /**
- * @details 
+ * @details
  * Returns the index unchanged. MATLAB converts to zero based indexing on the way
  * in and back to one based on the way out, so it sees the value it passed in.
  * Python clamps negatives instead, which matches C for every valid index.
  *
- * @param index 
+ * @param index
  */
 int echoIndex(int index) noexcept;
 
 /**
- * @details 
+ * @details
  * The C++ wrapper body is hand written and never calls into the library, so
  * this is the one method where the C++ result may legitimately differ from
  * the others. Kept deliberately obvious.
  *
- * @param multiplier 
+ * @param multiplier
  */
 int answer(int multiplier) noexcept;
 
@@ -731,7 +731,7 @@ namespace palette {
 /**
  * @brief Cycles Red to Green to Blue and back to Red.
  *
- * @param color 
+ * @param color
  * @return A named color. Values are ordinals, starting at zero.
  */
 Color next(Color color) noexcept;
@@ -741,15 +741,15 @@ int ordinalOf(Color color) noexcept;
 /**
  * @brief Takes both enums at once, so the two generated types have to coexist in one signature.
  *
- * @param color 
- * @param marker 
+ * @param color
+ * @param marker
  */
 std::string describe(Color color, Marker marker) noexcept;
 
 /**
  * @brief Returns the enum with the given ordinal, or Red if it is out of range.
  *
- * @param ordinal 
+ * @param ordinal
  * @return A named color. Values are ordinals, starting at zero.
  */
 Color fromOrdinal(int ordinal) noexcept;
@@ -764,7 +764,7 @@ namespace strings {
 /**
  * @brief Returns the input unchanged. Round trips UTF-8 through Java's UTF-16.
  *
- * @param value 
+ * @param value
  */
 std::string echo(const char* value) noexcept;
 std::string echo(const std::string& value) noexcept;
@@ -774,7 +774,7 @@ std::string concat(const std::string& a, const std::string& b) noexcept;
 /**
  * @brief Length in UTF-8 bytes, which differs from the Java String length for non-ASCII input.
  *
- * @param value 
+ * @param value
  */
 size_t utf8Length(const char* value) noexcept;
 size_t utf8Length(const std::string& value) noexcept;
@@ -782,7 +782,7 @@ size_t utf8Length(const std::string& value) noexcept;
 /**
  * @brief Number of UTF-16 code units, i.e. the Java String length.
  *
- * @param value 
+ * @param value
  */
 size_t utf16Length(const char* value) noexcept;
 size_t utf16Length(const std::string& value) noexcept;
@@ -800,9 +800,9 @@ std::string nullString() noexcept;
 /**
  * @brief Joins a char* array with a separator. Checks const char** parameter handling.
  *
- * @param values 
+ * @param values
  * @param count number of entries in values
- * @param separator 
+ * @param separator
  */
 std::string join(const char** values, size_t count, const char* separator) noexcept;
 std::string join(const char** values, size_t count, const std::string& separator) noexcept;
@@ -810,8 +810,8 @@ std::string join(const char** values, size_t count, const std::string& separator
 /**
  * @brief Returns a string longer than the initial scratch buffer, forcing it to grow.
  *
- * @param value 
- * @param times 
+ * @param value
+ * @param times
  */
 std::string repeat(const char* value, size_t times) noexcept;
 std::string repeat(const std::string& value, size_t times) noexcept;
@@ -824,42 +824,42 @@ std::string repeat(const std::string& value, size_t times) noexcept;
 namespace structs {
 
 /**
- * @details 
+ * @details
  * Fills the out parameter from the arguments. Pins the field types StatusInfo
  * leaves out: the char code unit crosses as uint16, the pointers pass through
  * untouched so the caller can verify them against what it handed in.
  *
- * @param unit 
- * @param shorts 
- * @param longs 
- * @param context 
+ * @param unit
+ * @param shorts
+ * @param longs
+ * @param context
  */
 FieldTypes fillFieldTypes(unsigned short unit, short* shorts, long long int* longs, void* context) noexcept;
 
 /**
- * @details 
+ * @details
  * Power draw in watts for the given current. Returns zero unless the actuator is
  * enabled and in the running state (2), so all three fields decide the result.
  *
- * @param status 
- * @param currentAmps 
+ * @param status
+ * @param currentAmps
  */
 double totalPower(StatusInfo status, double currentAmps) noexcept;
 
 /**
  * @brief Bus voltage in volts. Returns 0.0 through the ABI when it throws.
  *
- * @param status 
+ * @param status
  * @throw the actuator is disabled
  */
 double checkedVoltage(StatusInfo status);
 
 /**
- * @details 
+ * @details
  * Fills the out parameter with a canned reading for the given index: index 0
  * reads (48.0, running, enabled), every other index reads (12.5, 1, disabled).
  *
- * @param index 
+ * @param index
  * @return Status reading for the given index.
  */
 StatusInfo getStatus(int index) noexcept;
@@ -867,7 +867,7 @@ StatusInfo getStatus(int index) noexcept;
 /**
  * @brief Same readings as getStatus. Every field of the out parameter reads as zero through the ABI when it throws.
  *
- * @param index 
+ * @param index
  * @throw the index is negative
  */
 StatusInfo getCheckedStatus(int index);
@@ -1398,7 +1398,9 @@ inline int overloads::total(int sum, int factor) noexcept {
   return bindings_tests_Overloads_total(sum, factor);
 }
 inline int overloads::total(const std::vector<int>& values, int factor) noexcept {
-  int sum = 0; for (int v : values) { sum += v; }return total(sum, factor);
+  int sum = 0;
+  for (int v : values) { sum += v; }
+  return total(sum, factor);
 }
 inline double overloads::gain(bool invert, double scale) noexcept {
   static auto bindings_tests_Overloads_gain = DynamicLookup::instance().getFunc<double(*)(int, double)>("bindings_tests_Overloads_gain");
@@ -1410,7 +1412,7 @@ inline int overloads::echoIndex(int index) noexcept {
 }
 inline int overloads::answer(int multiplier) noexcept {
   static auto bindings_tests_Overloads_answer = DynamicLookup::instance().getFunc<int(*)(int)>("bindings_tests_Overloads_answer");
-return 21 * multiplier;
+  return 21 * multiplier;
   return bindings_tests_Overloads_answer(multiplier);
 }
 inline int overloads::renamed() noexcept {

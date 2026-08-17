@@ -7,15 +7,12 @@ import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
 import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
 import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
-import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
-import java.io.StringWriter;
 import java.io.Writer;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 import static us.hebi.graalvm.bindings.generator.bindings.TypeMap.*;
@@ -45,48 +42,60 @@ public class CppBindingsGenerator extends BindingGenerator {
         writer.write(loadTemplateWithLibVars("cpp/libName.cmake").render());
     }
 
-    private void writeApiDefinition(Writer out, boolean useDynamicLookup) throws IOException {
-        // Sort utility classes to the end
+    /**
+     * The header declares the whole API first and defines it at the end, so declarations
+     * and out-of-line definitions build up in two renderers.
+     */
+    private void writeApiDefinition(Writer writer, boolean useDynamicLookup) throws IOException {
         var apiClasses = getApiClasses();
+        var decl = newRenderer();
+        var def = newRenderer();
 
-        // Forward declare the whole API. Write the implementations at the end
-        StringWriter impl = new StringWriter();
-
-        writeIncludes(out, useDynamicLookup);
+        writeIncludes(decl, useDynamicLookup);
 
         // Single namespaces require C++17, so write them in the old style
-        out.write(getCppNamespace(lib, true));
-        out.write("\n\n");
+        decl.add(getCppNamespace(lib, true)).addLine().addLine();
 
-        writeEnumDefinitions(out);
-        writeStructDefinitions(out);
-        writeForwardDeclarations(out, apiClasses, useDynamicLookup);
-        writeExceptionClass(out);
+        writeEnumDefinitions(decl);
+        writeStructDefinitions(decl);
+        writeForwardDeclarations(decl, apiClasses, useDynamicLookup);
+        writeExceptionClass(decl);
 
-        out.write("// ==== Class Wrappers ====\n");
+        decl.addLine("// ==== Class Wrappers ====");
         for (ClassDescription apiClass : apiClasses) {
-            writeClassWrapper(new ClassScope(apiClass), out, impl, useDynamicLookup);
+            writeClassWrapper(new ClassScope(apiClass, decl, def), useDynamicLookup);
         }
 
-        writeCLibraryAccess(out, apiClasses, useDynamicLookup);
+        writeCLibraryAccess(decl, apiClasses, useDynamicLookup);
 
-        out.write("// ==== C++ Implementations ====\n");
-        out.write(impl.toString());
+        decl.addLine("// ==== C++ Implementations ====");
         for (FeatureGenerator feature : features) {
-            out.write(feature.getCppWrapper(useDynamicLookup));
+            def.add(feature.getCppWrapper(useDynamicLookup));
         }
-
-        // Write cross-platform implementations for dynamic lookup
         if (useDynamicLookup) {
-            writeDynamicLookupImplementations(out);
+            writeDynamicLookupImplementations(def);
         }
+        def.add(getCppNamespace(lib, false));
 
-        out.write(getCppNamespace(lib, false));
-
+        writer.write(decl.render());
+        writer.write(def.render());
     }
 
-    private void writeIncludes(Writer out, boolean useDynamicLookup) throws IOException {
-        out.write("#pragma once\n\n");
+    /**
+     * Two space indent like the hand-written C++, plus the names every section refers to
+     */
+    private IndentingTextRenderer newRenderer() {
+        return new IndentingTextRenderer()
+                .setIndentString("  ")
+                .set("LIB_NAME", lib.getName())
+                .set("INTERNAL", INTERNAL_POINTER_NAMESPACE)
+                .set("ERROR_STRUCT", ERROR_STRUCT_NAME)
+                .set("ERROR_TYPE", getErrorType())
+                .set("ERROR", ERROR_LOCAL_NAME);
+    }
+
+    private void writeIncludes(IndentingTextRenderer decl, boolean useDynamicLookup) {
+        decl.addLine("#pragma once").addLine();
 
         // One sorted set for the base headers and the marshaller contributions.
         // TODO: cppOverload blocks may need to add headers as well
@@ -97,12 +106,12 @@ public class CppBindingsGenerator extends BindingGenerator {
         }
         headers.addAll(getMarshallerIncludes());
         for (String header : headers) {
-            out.write("#include <" + header + ">\n");
+            decl.addLine("#include <" + header + ">");
         }
 
         if (useDynamicLookup) {
             // Load DLL
-            out.write("""
+            decl.add("""
 
                     #ifdef WIN32
                     #include <Windows.h>
@@ -133,8 +142,8 @@ public class CppBindingsGenerator extends BindingGenerator {
      * valid past the next call. checkError substitutes for NULL fields because it is
      * the only caller that can see one.
      */
-    private void writeExceptionClass(Writer out) throws IOException {
-        out.write("""
+    private void writeExceptionClass(IndentingTextRenderer decl) {
+        decl.add("""
                 class Exception : public std::runtime_error {
                 public:
                   explicit Exception(const char* message) : std::runtime_error(message) {}
@@ -144,427 +153,278 @@ public class CppBindingsGenerator extends BindingGenerator {
                 private:
                   std::string id_;
                 };
-                
-                inline void checkError(const %s& error) {
+
+                inline void checkError(const %%ERROR_TYPE%%& error) {
                   if (error.code != 0) {
                     const char* message = error.message != nullptr ? error.message : "unknown error";
                     const char* id = error.id != nullptr ? error.id : "";
                     throw Exception(message, id);
                   }
                 }
-                
+
                 inline void checkNotNull(const void* ptr, const char* message) {
                   if (!ptr) {
                     throw Exception(message);
                   }
                 }
-                """.formatted(getErrorType()));
-        out.write("\n");
+
+                """);
     }
 
     /**
      * Enum definitions, which are normally included via the C header.
      */
-    private void writeEnumDefinitions(Writer out) throws IOException {
+    private void writeEnumDefinitions(IndentingTextRenderer decl) {
         for (EnumDescription generatedEnum : lib.getEnums()) {
-            out.write(CEnumGenerator.getCppEnumDefinition(generatedEnum));
-            out.write("\n");
+            decl.add(CEnumGenerator.getCppEnumDefinition(generatedEnum)).addLine();
         }
     }
 
     /**
      * User structs are part of the public API, so they live in the library namespace
      */
-    private void writeStructDefinitions(Writer out) throws IOException {
+    private void writeStructDefinitions(IndentingTextRenderer decl) {
         for (StructDescription struct : lib.getStructs()) {
             // A marshalled struct has no public face, users see the language type it maps to
-            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isPresent()) {
+            if (isMarshalled(struct)) {
                 continue;
             }
             if (struct.hasComment()) {
-                out.write(DocumentationUtil.generateLineComments("", struct.getComment()));
+                decl.add(DocumentationUtil.generateLineComments(struct.getComment()));
             } else {
-                out.write("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible\n");
+                decl.addLine("// Plain data struct, passed by value. Layout changes are not ABI backwards compatible");
             }
-            out.write("struct " + struct.getName() + " {\n");
-            for (var field : struct.getFields()) {
-                out.write("  " + TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";\n");
-            }
-            out.write("};\n\n");
+            writeStructLayout(decl, struct.getName(), struct);
+            decl.addLine();
         }
     }
 
-    private void writeForwardDeclarations(Writer out, List<ClassDescription> apiClasses, boolean useDynamicLookup) throws IOException {
+    private static void writeStructLayout(IndentingTextRenderer decl, String name, StructDescription struct) {
+        decl.beginControlFlow("struct " + name + " {");
+        for (var field : struct.getFields()) {
+            decl.addLine(TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";");
+        }
+        decl.endControlFlow("};");
+    }
+
+    private void writeForwardDeclarations(IndentingTextRenderer decl, List<ClassDescription> apiClasses, boolean useDynamicLookup) {
         // Forward declare struct/pointer types in case we have early references
-        out.write("// ==== Forward Declarations ====\n");
+        decl.addLine("// ==== Forward Declarations ====");
         for (ClassDescription apiClass : apiClasses) {
             if (!apiClass.getInstantiable()) continue;
-            String cppClassName = apiClass.getType().getTypeName();
-            out.write(String.format("class %s;\n", cppClassName));
+            decl.addLine("class " + apiClass.getType().getTypeName() + ";");
         }
 
-        // Forward declare opaque pointers in an internal namespace
-        out.write("\nnamespace %s {\n".formatted(INTERNAL_POINTER_NAMESPACE));
+        // Opaque pointers, layout mirrors and the error struct live in an internal namespace
+        decl.addLine().addLine("namespace %%INTERNAL%% {");
         if (useDynamicLookup || OMIT_C_HEADER) {
             for (ClassDescription apiClass : apiClasses) {
                 if (apiClass.getInstantiable()) {
                     String ptrType = apiClass.getType().getTypeName() + C_PTR_SUFFIX;
-                    out.write("using %s = struct %s_*;\n".formatted(ptrType, getCppClassName(apiClass.getType())));
+                    decl.addLine("using " + ptrType + " = struct " + getCppClassName(apiClass.getType()) + "_*;");
                 }
             }
         }
-
-        // Struct layouts for the internal mapping
         for (StructDescription struct : lib.getStructs()) {
-            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isEmpty()) continue;
-            out.write("struct %s {\n".formatted(getInternalStructName(struct.getName())));
-            for (var field : struct.getFields()) {
-                out.write("  " + TypeMap.toStructFieldC(field.getDataType(), field.getIsConst()) + " " + field.getLowerUnderscoreName() + ";\n");
+            if (isMarshalled(struct)) {
+                writeStructLayout(decl, getInternalStructName(struct.getName()), struct);
             }
-            out.write("};\n");
         }
+        decl.add("""
+                struct %%ERROR_STRUCT%% {
+                  const char* message;
+                  const char* id;
+                  int32_t code;
+                };
+                }
 
-        // Error struct
-        out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
-        out.write("}\n\n");
+                """);
 
         // Emitted after the internal namespace to allow callbacks with structs
         if (lib.getCallbacks().length() > 0) {
             for (var callback : lib.getCallbacks()) {
-                out.write(getCppCallbackAlias(callback));
-                out.write("\n");
+                decl.addLine(getCppCallbackAlias(callback));
             }
-            out.write("\n");
+            decl.addLine();
         }
     }
 
-    private void writeClassWrapper(ClassScope scope, Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
+    private void writeClassWrapper(ClassScope scope, boolean useDynamicLookup) {
         var apiClass = scope.apiClass;
-        impl.write("// " + scope.cppClassName + "\n");
+        var decl = scope.decl;
+        var def = scope.def;
+        def.addLine("// %%CLASS%%");
 
         if (apiClass.getType().hasComment()) {
-            out.write(DocumentationUtil.generateDoxygen("", apiClass.getType()));
+            decl.addLine().add(DocumentationUtil.generateDoxygen(apiClass.getType()));
         }
 
-        if (apiClass.getInstantiable()) {
-
-            if (apiClass.hasParent()) {
-                out.write(String.format("class %s : public %s {\n", scope.cppClassName, getCppClassName(apiClass.getParent())));
-            } else {
-                out.write(String.format("class %s {\n", scope.cppClassName));
-            }
-
-            for (String friendClass : getFriendClasses(lib, apiClass)) {
-                out.write("  friend class %s;\n".formatted(friendClass));
-            }
-
-            out.write("public:\n");
-
+        if (scope.useNamespace) {
+            decl.addLine("namespace %%NAMESPACE%% {");
         } else {
-
-            out.write("namespace %s {\n".formatted(scope.cppNamespace));
-
+            decl.addLine(apiClass.hasParent() ? "class %%CLASS%% : public %%PARENT%% {" : "class %%CLASS%% {");
+            decl.indent();
+            for (String friendClass : getFriendClasses(lib, apiClass)) {
+                decl.addLine("friend class " + friendClass + ";");
+            }
+            writeAccessLabel(decl, "public:");
         }
 
         for (MethodDescription method : scope.methods) {
-            writeMethod(scope, method, out, impl, useDynamicLookup);
+            writeMethod(new MethodScope(scope, method), useDynamicLookup);
         }
 
-        if (apiClass.getInstantiable()) {
-            writeHandleBoilerplate(scope, out, impl, useDynamicLookup);
-        }
-
-        out.write("}");
         if (scope.useNamespace) {
-            out.write(" // namespace " + scope.namespace);
+            decl.addLine("} // namespace %%NAMESPACE%%");
         } else {
-            out.write(";");
+            writeHandleBoilerplate(scope, useDynamicLookup);
+            decl.unindent().addLine("};");
         }
-        out.write("\n\n");
-        impl.write("\n");
+        decl.addLine();
+        def.addLine();
     }
 
     /**
-     * The three parameter lists a method needs: the arguments forwarded to the C symbol,
-     * the C++ signature used for the out-of-line definition, and the same signature with
-     * default values, which may only appear in the declaration.
+     * Access specifiers sit one level out from the members they introduce
      */
-    private final class MethodParams {
-
-        MethodParams(MethodDescription method) {
-            // error out-struct, ahead of the instance so it is argument zero everywhere
-            if (isThrowing(method)) {
-                cParams.add("&" + ERROR_LOCAL_NAME);
-            }
-
-            // instance reference
-            if (!method.getIsStatic()) {
-                cParams.add("ptr_");
-            }
-
-            // other arguments
-            for (TypeDescription parameter : method.getParameters()) {
-                cParams.add(parameter.getParamName());
-                paramNames.add(parameter.getParamName());
-                String value = String.format("%s %s",
-                        getCppType(parameter),
-                        parameter.getParamName()
-                );
-                cppParams.add(value);
-                if (parameter.hasDefaultValue()) {
-                    value += " = " + parameter.getDefaultValue();
-                }
-                cppHeaderParams.add(value);
-            }
-        }
-
-        final List<String> cParams = new ArrayList<>();
-        final List<String> cppParams = new ArrayList<>();
-        final List<String> cppHeaderParams = new ArrayList<>();
-        final List<String> paramNames = new ArrayList<>(); // declared-only, for the delegating constructor -> factory
-
+    private static void writeAccessLabel(IndentingTextRenderer decl, String label) {
+        decl.unindent().addLine(label).indent();
     }
 
-    private void writeMethod(ClassScope scope, MethodDescription method, Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
-        var params = new MethodParams(method);
-
-        // C++ function signature
-        if (method.hasDocumentation()) {
-            out.write(DocumentationUtil.generateDoxygen(scope.indent, method));
+    private void writeMethod(MethodScope m, boolean useDynamicLookup) {
+        if (m.method.hasDocumentation()) {
+            m.decl.addLine().add(DocumentationUtil.generateDoxygen(m.method));
         }
-        if (!scope.useNamespace) {
-            out.write("  ");
-        }
-        if (method.getIsConstructor()) {
-            writeConstructor(scope, method, params, out, impl, useDynamicLookup);
+        if (m.method.getIsConstructor()) {
+            writeConstructor(m, useDynamicLookup);
         } else {
-            writeFunction(scope, method, params, out, impl, useDynamicLookup);
+            writeFunction(m, useDynamicLookup);
         }
 
         // Add user-friendly overloads to the bottom
-        addCppOverloads(scope.apiClass, scope.namespace, method, out, impl);
+        writeCppOverloads(m);
     }
 
-    private void writeConstructor(ClassScope scope, MethodDescription method, MethodParams params,
-                                  Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
-        var apiClass = scope.apiClass;
-        String cppClassName = scope.cppClassName;
-        List<String> cParams = params.cParams;
-        List<String> cppParams = params.cppParams;
-        List<String> cppHeaderParams = params.cppHeaderParams;
-        out.write("%s(%s);\n".formatted(cppClassName, joiner.join(cppHeaderParams)));
-        if (apiClass.hasParent()) {
-            // The base class has no default constructor, so the value constructor has to delegate
-            // to the pointer constructor that initializes the inherited part. Base initializers run
-            // before the constructor body, so the null check moves into a factory that runs
-            // while the delegated arguments get evaluated. It is a free function in the internal
-            // namespace rather than a class member so that it cannot collide with a wrapped method.
-            var factoryName = getConstructorFactoryName(apiClass.getType());
-            impl.write("namespace %s {\n".formatted(INTERNAL_POINTER_NAMESPACE));
-            impl.write("// The null check happens here because the base class gets initialized before the constructor body runs\n");
-            impl.write("inline %s %s(%s) {\n".formatted(
-                    getCppType(apiClass.getType()), factoryName, joiner.join(cppParams)));
-            if (useDynamicLookup) {
-                impl.write(getDynamicFunctionLookup(apiClass, method));
+    private void writeConstructor(MethodScope m, boolean useDynamicLookup) {
+        var def = m.def;
+        m.decl.addLine("%%CLASS%%(%%PARAMS_WITH_DEFAULTS%%);");
+
+        if (m.apiClass.hasParent()) {
+            // Base initializers run before the constructor body, so the null check lives in a factory
+            // the delegating constructor calls. A free function in the internal namespace cannot
+            // collide with a wrapped method.
+            def.set("FACTORY", getConstructorFactoryName(m.apiClass.getType()));
+            def.addLine("namespace %%INTERNAL%% {");
+            def.addLine("// The null check happens here because the base class gets initialized before the constructor body runs");
+            def.beginControlFlow("inline %%CTYPE%% %%FACTORY%%(%%PARAMS%%) {");
+            writeCallSetup(m, useDynamicLookup);
+            def.addLine("auto ptr = %%CNAME%%(%%ARGS%%);");
+            if (isThrowing(m.method)) {
+                def.addLine("checkError(%%ERROR%%);");
+                def.addLine("checkNotNull(ptr, \"Could not create %%CLASS%%\");");
             }
-            if (isThrowing(method)) {
-                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
-            }
-            impl.write("  auto ptr = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
-            if (isThrowing(method)) {
-                impl.write(getErrorCheck());
-                impl.write("""
-                          checkNotNull(ptr, "Could not create %s");
-                        """.formatted(getCppClassName(apiClass.getType())));
-            }
-            impl.write("  return ptr;\n");
-            impl.write("}\n");
-            impl.write("}\n");
+            def.addLine("return ptr;");
+            def.endControlFlow("}");
+            def.addLine("}");
             // The delegation forwards the declared arguments, not the C call arguments, which
             // carry the error struct and the receiver.
-            impl.write("inline %s::%s(%s) : %s(%s::%s(%s)) {}\n".formatted(
-                    cppClassName, cppClassName, joiner.join(cppParams),
-                    cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, joiner.join(params.paramNames)));
+            def.addLine("inline %%CLASS%%::%%CLASS%%(%%PARAMS%%) : %%CLASS%%(%%INTERNAL%%::%%FACTORY%%(%%ARG_NAMES%%)) {}");
         } else {
-            impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, joiner.join(cppParams)));
-            if (useDynamicLookup) {
-                impl.write(getDynamicFunctionLookup(apiClass, method));
+            def.beginControlFlow("inline %%CLASS%%::%%CLASS%%(%%PARAMS%%) {");
+            writeCallSetup(m, useDynamicLookup);
+            def.addLine("ptr_ = %%CNAME%%(%%ARGS%%);");
+            if (isThrowing(m.method)) {
+                def.addLine("checkError(%%ERROR%%);");
+                def.addLine("checkNotNull(ptr_, \"Could not create %%CLASS%%\");");
             }
-            if (isThrowing(method)) {
-                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
-            }
-            impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
-            if (isThrowing(method)) {
-                impl.write(getErrorCheck());
-                impl.write("""
-                          checkNotNull(ptr_, "Could not create %s");
-                        """.formatted(getCppClassName(apiClass.getType())));
-            }
-            impl.write("}\n");
+            def.endControlFlow("}");
         }
     }
 
-    private void writeFunction(ClassScope scope, MethodDescription method, MethodParams params,
-                               Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
-        var apiClass = scope.apiClass;
-        String namespace = scope.namespace;
-        String indent = scope.indent;
-        List<String> cParams = params.cParams;
-        List<String> cppParams = params.cppParams;
-        List<String> cppHeaderParams = params.cppHeaderParams;
+    private void writeFunction(MethodScope m, boolean useDynamicLookup) {
+        var method = m.method;
+        var def = m.def;
+        m.decl.addLine("%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS_WITH_DEFAULTS%%)%%CONST%%%%NOEXCEPT%%;");
+        def.beginControlFlow("inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {");
 
-        if (method.getIsStatic() && !scope.useNamespace) {
-            out.write("static ");
-        }
+        def.addLineIf(useDynamicLookup, getDynamicLookup(m.apiClass, method));
+        def.addLineIf(method.hasCppBody(), method.getCppBody().strip());
 
-        String cppReturnType = getCppReturnType(method);
-        String constkw = hasFlag(method, MethodFlag.Const) ? " const" : "";
-        String noexcept = hasFlag(method, MethodFlag.Noexcept) ? " noexcept" : "";
-
-        String headerSignature = String.format("%s(%s)",
-                method.getName(),
-                joiner.join(cppHeaderParams));
-        out.write(cppReturnType + " " + headerSignature + constkw + noexcept + ";\n");
-
-        String methodSignature = String.format("%s(%s)",
-                method.getName(),
-                joiner.join(cppParams));
-        impl.write("inline " + cppReturnType + " " + namespace + "::" + methodSignature + constkw + noexcept + " {\n");
-
-        // Add dynamic lookup where needed
-        if (useDynamicLookup) {
-            impl.write(getDynamicFunctionLookup(apiClass, method));
-        }
-
-        // Add custom bodies
-        if (method.hasCppBody()) {
-            impl.write(GeneratorUtil.indent(method.getCppBody().strip(), indent));
-            impl.write("\n");
-        }
-
-        // The struct the call reports through. A plain value return has to be captured
-        // rather than returned directly, because the check comes after the call.
+        // A plain value return has to be captured rather than returned directly, because
+        // the error check comes after the call.
         boolean throwing = isThrowing(method);
-        if (throwing) {
-            impl.write(String.format("  %s %s = {};\n", getErrorType(), ERROR_LOCAL_NAME));
-        }
-
-        // Forwarding call
-        impl.write("  ");
-
-        // return
+        def.addLineIf(throwing, "%%ERROR_TYPE%% %%ERROR%% = {};");
+        var returnType = method.getReturnType().getDataType();
         var marshaller = getCppMarshaller(method.getReturnType());
-        switch (method.getReturnType().getDataType()) {
-            case VOID -> {
-            }
-            case OBJECT_HANDLE, CHAR_POINTER -> impl.write("auto ptr = ");
-            default -> {
-                // The layout mirror has to be captured, the public type is built from it below
-                if (marshaller.isPresent()) {
-                    impl.write("auto " + STRUCT_LOCAL_NAME + " = ");
-                } else {
-                    impl.write(throwing ? "auto result_ = " : "return ");
-                }
-            }
-        }
+        String capture = switch (returnType) {
+            case VOID -> "";
+            case OBJECT_HANDLE, CHAR_POINTER -> "auto ptr = ";
+            // The layout mirror has to be captured, the public type is built from it below
+            default -> marshaller.isPresent() ? "auto " + STRUCT_LOCAL_NAME + " = " : throwing ? "auto result_ = " : "return ";
+        };
+        def.addLine(capture + "%%CNAME%%(%%ARGS%%);");
 
-        // Call C method
-        impl.write(String.format("%s(%s);\n",
-                method.getCName(),
-                joiner.join(cParams)));
-
-        // Check for errors
         if (throwing) {
-            impl.write(getErrorCheck());
-            switch (method.getReturnType().getDataType()) {
-                case OBJECT_HANDLE -> impl.write("""
-                          checkNotNull(ptr, "Could not create %s in %s::%s");
-                        """.formatted(getCppClassName(method.getReturnType()), getCppClassName(apiClass.getType()), method.getName()));
-            }
+            def.addLine("checkError(%%ERROR%%);");
+            def.addLineIf(returnType == DataType.OBJECT_HANDLE, "checkNotNull(ptr, \"Could not create %%RETURN_TYPE%% in %%CLASS%%::%%NAME%%\");");
         }
 
         // Convert pointers to objects
-        switch (method.getReturnType().getDataType()) {
-            case OBJECT_HANDLE -> impl.write("""
-                      return %s(ptr);
-                    """.formatted(getCppClassName(method.getReturnType())));
-            case CHAR_POINTER -> impl.write("""
-                      return !ptr ? std::string() : std::string(ptr); // copy utf8
-                    """);
+        switch (returnType) {
+            case OBJECT_HANDLE -> def.addLine("return %%RETURN_TYPE%%(ptr);");
+            case CHAR_POINTER -> def.addLine("return !ptr ? std::string() : std::string(ptr); // copy utf8");
             case VOID -> {
             }
             default -> {
                 if (marshaller.isPresent()) {
-                    impl.write(marshaller.get().unpack(STRUCT_LOCAL_NAME));
+                    def.addLine(marshaller.get().unpack(STRUCT_LOCAL_NAME));
                 } else if (throwing) {
-                    impl.write("  return result_;\n");
+                    def.addLine("return result_;");
                 }
             }
         }
+        def.endControlFlow("}");
+    }
 
-        // end
-        impl.write("}\n");
-
+    /**
+     * The dynamic symbol lookup and the error struct a throwing call reports through
+     */
+    private void writeCallSetup(MethodScope m, boolean useDynamicLookup) {
+        m.def.addLineIf(useDynamicLookup, getDynamicLookup(m.apiClass, m.method));
+        m.def.addLineIf(isThrowing(m.method), "%%ERROR_TYPE%% %%ERROR%% = {};");
     }
 
     /**
      * Move, assign, destroy and the raw pointer field. Only instantiable classes own a
      * handle, so this is what turns the wrapper into an RAII type.
      */
-    private void writeHandleBoilerplate(ClassScope scope, Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
+    private void writeHandleBoilerplate(ClassScope scope, boolean useDynamicLookup) {
         var apiClass = scope.apiClass;
-        String cppClassName = scope.cppClassName;
+        var decl = scope.decl;
+        var def = scope.def;
 
-        // Shared by the class declaration and its out-of-line definitions. The lookup value
-        // expands to further tokens, which the renderer resolves in a second pass.
-        var tokens = new LinkedHashMap<String, String>();
-        tokens.put("CLASS", cppClassName);
-        tokens.put("C_DESTRUCTOR_LOOKUP", !useDynamicLookup ? "" :
-                "\n    static auto %%C_DESTRUCTOR%% = DynamicLookup::instance().getFunc<void(*)(%%CTYPE%%)>(\"%%C_DESTRUCTOR%%\");");
-        tokens.put("C_DESTRUCTOR", apiClass.getCDestructorName());
-        tokens.put("CTYPE", getCppType(apiClass.getType()));
-        tokens.put("VIRTUAL_DESTRUCTOR", apiClass.hasChildren() ? "virtual " : "");
-
-        Function<String, String> replace = input -> {
-            var renderer = IndentingTextRenderer.of(input);
-            tokens.forEach(renderer::set);
-            return renderer.render();
-        };
-
-        // Header
-        String classDef = """
-                  %%CLASS%%(%%CLASS%%&& from) noexcept;
-                  %%CLASS%%& operator=(%%CLASS%%&& from) noexcept;
-                """;
-        final String classImpl;
+        decl.addLine("%%CLASS%%(%%CLASS%%&& from) noexcept;");
+        decl.addLine("%%CLASS%%& operator=(%%CLASS%%&& from) noexcept;");
 
         if (!apiClass.hasParent()) {
-            classDef += "  %%VIRTUAL_DESTRUCTOR%%~%%CLASS%%() noexcept;\n";
+            decl.addLine(apiClass.hasChildren() ? "virtual ~%%CLASS%%() noexcept;" : "~%%CLASS%%() noexcept;");
             if (apiClass.hasChildren()) {
-                classDef += """
-                        protected:
-                          explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}
-                        """;
+                writeAccessLabel(decl, "protected:");
+                decl.addLine("explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
             }
-            classDef += """
-                    private:
-                      void cleanup() noexcept;
-                    """;
+            writeAccessLabel(decl, "private:");
+            decl.addLine("void cleanup() noexcept;");
+            decl.addLineIf(!apiClass.hasChildren() && !scope.hasDedicatedConstructor,
+                    "explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
+            decl.addLine("%%CTYPE%% ptr_{};");
 
-            if (!apiClass.hasChildren() && !scope.hasDedicatedConstructor) {
-                classDef += """
-                          explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}
-                        """;
-            }
-            classDef += """
-                      %%CTYPE%% ptr_{};
-                    """;
-            classImpl = """
-                    inline void %%CLASS%%::cleanup() noexcept {
-                      if (ptr_ != nullptr) {%%C_DESTRUCTOR_LOOKUP%%
-                        %%C_DESTRUCTOR%%(ptr_);
-                      }
-                    }
+            def.beginControlFlow("inline void %%CLASS%%::cleanup() noexcept {");
+            def.beginControlFlow("if (ptr_ != nullptr) {");
+            def.addLineIf(useDynamicLookup, getDynamicLookup(apiClass.getCDestructorName(), "void", scope.cType));
+            def.addLine(apiClass.getCDestructorName() + "(ptr_);");
+            def.endControlFlow("}");
+            def.endControlFlow("}");
+            def.add("""
                     inline %%CLASS%%::%%CLASS%%(%%CLASS%%&& from) noexcept : ptr_(from.ptr_) {
                       from.ptr_ = nullptr;
                     };
@@ -577,31 +437,21 @@ public class CppBindingsGenerator extends BindingGenerator {
                     inline %%CLASS%%::~%%CLASS%%() noexcept {
                       cleanup();
                     }
-                    """;
+                    """);
         } else {
-            tokens.put("PARENT", getCppClassName(apiClass.getParent()));
-            tokens.put("PARENT_CTYPE", getCppType(apiClass.getParent()));
-            tokens.put("CAST", apiClass.getToParentCastMethod().getCName());
+            writeAccessLabel(decl, apiClass.hasChildren() ? "protected:" : "private:");
+            decl.addLine("explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept;");
             if (apiClass.hasChildren()) {
-                classDef += """
-                        protected:
-                          explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept;
-                        private:
-                          static %%PARENT_CTYPE%% get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept;
-                          %%CTYPE%% ptr_{};
-                        """;
-            } else {
-                classDef += """
-                        private:
-                          explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept;
-                          static %%PARENT_CTYPE%% get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept;
-                          %%CTYPE%% ptr_{};
-                        """;
+                writeAccessLabel(decl, "private:");
             }
-            classImpl = """
-                    inline %%PARENT_CTYPE%% %%CLASS%%::get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept {%%DYNAMIC_LOOKUP%%
-                      return %%CAST%%(cPointer);
-                    }
+            decl.addLine("static %%PARENT_CTYPE%% get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept;");
+            decl.addLine("%%CTYPE%% ptr_{};");
+
+            def.beginControlFlow("inline %%PARENT_CTYPE%% %%CLASS%%::get%%PARENT%%Pointer(%%CTYPE%% cPointer) noexcept {");
+            def.addLineIf(useDynamicLookup, getDynamicLookup(scope.castToParent, scope.parentCType, scope.cType));
+            def.addLine("return %%CAST%%(cPointer);");
+            def.endControlFlow("}");
+            def.add("""
                     inline %%CLASS%%::%%CLASS%%(%%CTYPE%% cPointer) noexcept : %%PARENT%%(get%%PARENT%%Pointer(cPointer)), ptr_(cPointer) {}
                     inline %%CLASS%%::%%CLASS%%(%%CLASS%%&& from) noexcept : %%PARENT%%(std::move(from)), ptr_(from.ptr_) {
                       from.ptr_ = nullptr;
@@ -612,69 +462,79 @@ public class CppBindingsGenerator extends BindingGenerator {
                       from.ptr_ = nullptr;
                       return *this;
                     };
-                    """;
-            tokens.put("DYNAMIC_LOOKUP", !useDynamicLookup ? "" :
-                    "\n  static auto %%CAST%% = DynamicLookup::instance().getFunc<%%PARENT_CTYPE%%(*)(%%CTYPE%%)>(\"%%CAST%%\");");
+                    """);
         }
-
-        out.write(replace.apply(classDef));
-        impl.write(replace.apply(classImpl));
-
     }
 
     /**
      * How the wrapper reaches the C symbols: either a dynamic lookup helper, or plain
      * extern "C" declarations when the C header is not included.
      */
-    private void writeCLibraryAccess(Writer out, List<ClassDescription> apiClasses, boolean useDynamicLookup) throws IOException {
+    private void writeCLibraryAccess(IndentingTextRenderer decl, List<ClassDescription> apiClasses, boolean useDynamicLookup) {
         if (useDynamicLookup) {
             // Lookup class (first thing after the API definitions)
-            out.write("// ==== C Library Lookup ====\n");
-            out.write("namespace {\n");
-            writeDynamicLookupClass(out);
-            out.write("} // namespace\n\n");
+            decl.addLine("// ==== C Library Lookup ====");
+            decl.addLine("namespace {");
+            writeDynamicLookupClass(decl);
+            decl.addLine("} // namespace").addLine();
         } else if (OMIT_C_HEADER) {
-            out.write("// ==== C Library Functions ====\n");
-            out.write("extern \"C\" {\n");
+            decl.addLine("// ==== C Library Functions ====");
+            decl.beginControlFlow("extern \"C\" {");
             for (ClassDescription apiClass : apiClasses) {
                 for (MethodDescription method : apiClass.getMethods()) { // TODO: make C method use int for enums. Maybe void* for all pointers, so we get around `using`
-                    writeCFuncSignature(apiClass, method, out);
+                    decl.addLine(getCFuncSignature(apiClass, method, isThrowing(method)));
                 }
                 var cast = apiClass.tryGetToParentCastMethod();
                 if (cast.isPresent()) {
                     // A cast is generated plumbing rather than an API call and never throws
-                    writeCFuncSignature(apiClass, cast.get(), out, false);
+                    decl.addLine(getCFuncSignature(apiClass, cast.get(), false));
                 } else if (apiClass.getInstantiable()) {
-                    out.write("  void %s(%s);\n".formatted(apiClass.getCDestructorName(), getCppType(apiClass.getType())));
+                    decl.addLine("void " + apiClass.getCDestructorName() + "(" + getCppType(apiClass.getType()) + ");");
                 }
             }
             for (FeatureGenerator feature : features) {
-                out.write(feature.getCHeader(true));
+                decl.add(feature.getCHeader(true));
             }
-            out.write("}\n\n");
+            decl.endControlFlow("}").addLine();
         }
     }
 
     /**
-     * Per-class naming and layout decisions. An instantiable class becomes a C++ class with
-     * member functions, everything else becomes a namespace of free functions, and nearly
-     * every step below has to branch on which of the two it is.
+     * Per-class naming and layout decisions, plus the declaration and definition renderers
+     * with the class names set. An instantiable class becomes a C++ class with member
+     * functions, everything else becomes a namespace of free functions, and nearly every
+     * step has to branch on which of the two it is.
      */
     private final class ClassScope {
 
-        ClassScope(ClassDescription apiClass) {
+        ClassScope(ClassDescription apiClass, IndentingTextRenderer decl, IndentingTextRenderer def) {
             this.apiClass = apiClass;
             this.useNamespace = !apiClass.getInstantiable();
             this.cppClassName = apiClass.getType().getTypeName();
             this.cppNamespace = CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, cppClassName);
             this.namespace = useNamespace ? cppNamespace : cppClassName;
-            this.indent = useNamespace ? "" : "  ";
+            this.cType = getCppType(apiClass.getType());
+            this.parentCType = apiClass.hasParent() ? getCppType(apiClass.getParent()) : null;
+            this.castToParent = apiClass.hasParent() ? apiClass.getToParentCastMethod().getCName() : null;
 
             // Move constructors to the top
             this.methods = StreamSupport.stream(apiClass.getMethods().spliterator(), false)
                     .sorted(Comparator.comparing(MethodDescription::getIsConstructor).reversed())
                     .toList();
             this.hasDedicatedConstructor = methods.stream().anyMatch(MethodDescription::getIsConstructor);
+
+            this.decl = decl.snapshot();
+            this.def = def.snapshot();
+            for (var renderer : List.of(this.decl, this.def)) {
+                renderer.set("CLASS", cppClassName)
+                        .set("NAMESPACE", namespace)
+                        .set("CTYPE", cType);
+                if (apiClass.hasParent()) {
+                    renderer.set("PARENT", getCppClassName(apiClass.getParent()))
+                            .set("PARENT_CTYPE", parentCType)
+                            .set("CAST", castToParent);
+                }
+            }
         }
 
         final ClassDescription apiClass;
@@ -682,9 +542,67 @@ public class CppBindingsGenerator extends BindingGenerator {
         final String cppClassName;
         final String cppNamespace;
         final String namespace;
-        final String indent;
+        final String cType;
+        final String parentCType;
+        final String castToParent;
         final List<MethodDescription> methods;
         final boolean hasDedicatedConstructor;
+        final IndentingTextRenderer decl;
+        final IndentingTextRenderer def;
+
+    }
+
+    /**
+     * The class renderers with one method's names set. The C++ parameter list carries default
+     * values only in the declaration, and the C call passes the error struct and the receiver
+     * ahead of the declared arguments.
+     */
+    private final class MethodScope {
+
+        MethodScope(ClassScope scope, MethodDescription method) {
+            this.apiClass = scope.apiClass;
+            this.method = method;
+
+            var cArgs = new ArrayList<String>();
+            var params = new ArrayList<String>();
+            var paramsWithDefaults = new ArrayList<String>();
+            var argNames = new ArrayList<String>();
+
+            // error out-struct, ahead of the instance so it is argument zero everywhere
+            if (isThrowing(method)) {
+                cArgs.add("&" + ERROR_LOCAL_NAME);
+            }
+            if (!method.getIsStatic()) {
+                cArgs.add("ptr_");
+            }
+            for (TypeDescription parameter : method.getParameters()) {
+                String name = parameter.getParamName();
+                cArgs.add(name);
+                argNames.add(name);
+                params.add(getCppType(parameter) + " " + name);
+                paramsWithDefaults.add(getCppType(parameter) + " " + name + getDefaultParamInit(parameter));
+            }
+
+            this.decl = scope.decl.snapshot();
+            this.def = scope.def.snapshot();
+            for (var renderer : List.of(decl, def)) {
+                renderer.set("NAME", method.getName())
+                        .set("CNAME", method.getCName())
+                        .set("RETURN_TYPE", getCppReturnType(method))
+                        .setIf("STATIC", method.getIsStatic() && !scope.useNamespace, "static ")
+                        .setIf("CONST", hasFlag(method, MethodFlag.Const), " const")
+                        .setIf("NOEXCEPT", hasFlag(method, MethodFlag.Noexcept), " noexcept")
+                        .setArgs("PARAMS", params)
+                        .setArgs("PARAMS_WITH_DEFAULTS", paramsWithDefaults)
+                        .setArgs("ARGS", cArgs)
+                        .setArgs("ARG_NAMES", argNames);
+            }
+        }
+
+        final ClassDescription apiClass;
+        final MethodDescription method;
+        final IndentingTextRenderer decl;
+        final IndentingTextRenderer def;
 
     }
 
@@ -696,14 +614,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             } else {
                 out.append("} // namespace ").append(name).append("\n");
             }
-        }
-        return out.toString();
-    }
-
-    public static String getCppNamespaceQualifier(LibraryDescription lib) {
-        StringBuilder out = new StringBuilder();
-        for (String s : lib.getNamespace()) {
-            out.append(s).append("::");
         }
         return out.toString();
     }
@@ -731,9 +641,12 @@ public class CppBindingsGenerator extends BindingGenerator {
         return getCppType(method.getReturnType(), false);
     }
 
-
     private String getCReturnType(MethodDescription method) {
         return getCType(method.getReturnType());
+    }
+
+    private static boolean isMarshalled(StructDescription struct) {
+        return StructMarshallers.resolve(struct).flatMap(StructMarshaller::cpp).isPresent();
     }
 
     private static Optional<StructMarshaller.CppStructMarshaller> getCppMarshaller(TypeDescription type) {
@@ -745,13 +658,12 @@ public class CppBindingsGenerator extends BindingGenerator {
      * The C header's function pointer as an alias. Parameter names are kept for readability.
      */
     private static String getCppCallbackAlias(CallbackDescription callback) {
-        var parameters = new StringJoiner(", ");
+        var parameters = new ArrayList<String>();
         for (var parameter : callback.getParameters()) {
             parameters.add(CBindingsGenerator.getCallbackParameterType(parameter, CppBindingsGenerator::getCType)
                     + " " + parameter.getParamName());
         }
-        return String.format("using %s = %s (*)(%s);",
-                callback.getName(), getCType(callback.getReturnType()), parameters);
+        return "using " + callback.getName() + " = " + getCType(callback.getReturnType()) + " (*)(" + String.join(", ", parameters) + ");";
     }
 
     private static String getCType(TypeDescription type) {
@@ -795,56 +707,21 @@ public class CppBindingsGenerator extends BindingGenerator {
         return INTERNAL_POINTER_NAMESPACE + "::" + ERROR_STRUCT_NAME;
     }
 
-    private static String getErrorCheck() {
-        return "  checkError(%s);\n".formatted(ERROR_LOCAL_NAME);
-    }
-
     /**
-     * Name of the factory that value constructors of child classes delegate through. It carries the
-     * class name and lives in the internal namespace, so it cannot collide with a wrapped method.
+     * The C++ helper a child class's value constructor delegates through, see writeConstructor.
+     * It carries the class name and lives in the internal namespace, so it cannot collide with
+     * a wrapped method.
      */
     private static String getConstructorFactoryName(TypeDescription type) {
         return "create" + getCppClassName(type) + "Pointer";
     }
 
-    interface OverloadWriter {
-        void write(String params, String body, String call) throws IOException;
-    }
-
-    private void addCppOverloads(ClassDescription apiClass, String namespace, MethodDescription method, Writer out, Writer impl) throws IOException {
-        final boolean useNamespace = !apiClass.getInstantiable();
-
-        OverloadWriter overloadWriter = (params, body, call) -> {
-
-            Function<String, String> replaceTokens = input -> IndentingTextRenderer.of(input)
-                    .set("CONST", hasFlag(method, MethodFlag.Const) ? " const" : "")
-                    .set("NOEXCEPT", hasFlag(method, MethodFlag.Noexcept) ? " noexcept" : "")
-                    .set("STATIC", apiClass.getInstantiable() && method.getIsStatic() ? "static " : "")
-                    .set("INDENT", useNamespace ? "" : "  ")
-                    .set("NAMESPACE", namespace)
-                    .set("NAME", method.getName())
-                    .set("RETURN_TYPE", getCppReturnType(method))
-                    .set("RETURN", TypeMap.isVoid(method.getReturnType().getDataType()) ? "" : "return ")
-                    .set("PARAMS", params)
-                    .set("PARAMS_IMPL", params.replaceAll(" = [^,)]*", "")) // no default args in impl
-                    .set("BODY", body.replaceAll("\n", "\n  "))
-                    .set("CALL", call)
-                    .render();
-
-            out.write(replaceTokens.apply("""
-                    %%INDENT%%%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%%;
-                    """));
-            impl.write(replaceTokens.apply("""
-                    inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS_IMPL%%)%%CONST%%%%NOEXCEPT%% {
-                      %%BODY%%%%RETURN%%%%NAME%%(%%CALL%%);
-                    }
-                    """));
-
-        };
+    private void writeCppOverloads(MethodScope m) {
+        var method = m.method;
 
         // User-supplied overloads
         for (MethodOverload overload : method.getCppOverloads()) {
-            overloadWriter.write(overload.getParameters(), overload.getBody(), overload.getCall());
+            writeCppOverload(m, overload.getParameters(), overload.getBody(), overload.getCall());
         }
 
         // Don't generate auto-overloads if we have manual ones
@@ -899,42 +776,32 @@ public class CppBindingsGenerator extends BindingGenerator {
         }
 
         if (needsDefaultOverload) {
-            overloadWriter.write(joiner.join(parameters), "", joiner.join(call));
+            writeCppOverload(m, String.join(", ", parameters), "", String.join(", ", call));
         }
 
     }
 
-    private String getDynamicFunctionLookup(ClassDescription apiClass, MethodDescription method) {
-        // Build parameters including obj reference
-        List<String> cParamTypes = new ArrayList<>();
-        if (isThrowing(method)) {
-            cParamTypes.add(getErrorType() + "*");
-        }
-        if (!method.getIsStatic()) {
-            cParamTypes.add(getCType(apiClass.getType()));
-        }
-        for (TypeDescription parameter : method.getParameters()) {
-            cParamTypes.add(getCType(parameter));
-        }
-        var allFunctionArgs = joiner.join(cParamTypes);
-
-        // Write the implementation
-        return "  static auto %s = DynamicLookup::instance().getFunc<%s(*)(%s)>(\"%s\");\n".formatted(
-                method.getCName(),
-                getCReturnType(method),
-                allFunctionArgs,
-                method.getCName()
-        );
-
+    /**
+     * A convenience signature that forwards to the wrapped method
+     */
+    private void writeCppOverload(MethodScope m, String params, String body, String call) {
+        var decl = m.decl.snapshot()
+                .set("PARAMS", params);
+        var def = m.def.snapshot()
+                .set("PARAMS", params.replaceAll(" = [^,)]*", "")) // no default args in impl
+                .set("CALL", call);
+        decl.addLine("%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%%;");
+        def.beginControlFlow("inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {");
+        def.addLineIf(!body.isBlank(), body.strip());
+        def.addLine(TypeMap.isVoid(m.method.getReturnType().getDataType()) ? "%%NAME%%(%%CALL%%);" : "return %%NAME%%(%%CALL%%);");
+        def.endControlFlow("}");
     }
 
-    private void writeCFuncSignature(ClassDescription apiClass, MethodDescription method, Writer impl) throws IOException {
-        writeCFuncSignature(apiClass, method, impl, isThrowing(method));
-    }
-
-    private void writeCFuncSignature(ClassDescription apiClass, MethodDescription method, Writer impl,
-                                     boolean throwing) throws IOException {
-        // TODO: C++ types due to enum mismatches. Properly handle C types w/ conversions?
+    /**
+     * The C signature the wrapper calls: the error struct and the receiver come before the
+     * declared parameters.
+     */
+    private String getCParamTypes(ClassDescription apiClass, MethodDescription method, boolean throwing) {
         List<String> cParamTypes = new ArrayList<>();
         if (throwing) {
             cParamTypes.add(getErrorType() + "*");
@@ -945,14 +812,23 @@ public class CppBindingsGenerator extends BindingGenerator {
         for (TypeDescription parameter : method.getParameters()) {
             cParamTypes.add(getCType(parameter));
         }
-        var allFunctionArgs = joiner.join(cParamTypes);
+        return String.join(", ", cParamTypes);
+    }
 
-        // Write the implementation
-        impl.write("  %s %s(%s);\n".formatted(
-                getCReturnType(method),
-                method.getCName(),
-                allFunctionArgs
-        ));
+    private String getDynamicLookup(ClassDescription apiClass, MethodDescription method) {
+        return getDynamicLookup(method.getCName(), getCReturnType(method), getCParamTypes(apiClass, method, isThrowing(method)));
+    }
+
+    /**
+     * Resolves the symbol once, on first use of the enclosing function
+     */
+    private static String getDynamicLookup(String symbol, String returnType, String paramTypes) {
+        return "static auto " + symbol + " = DynamicLookup::instance().getFunc<" + returnType + "(*)(" + paramTypes + ")>(\"" + symbol + "\");";
+    }
+
+    private String getCFuncSignature(ClassDescription apiClass, MethodDescription method, boolean throwing) {
+        // TODO: C++ types due to enum mismatches. Properly handle C types w/ conversions?
+        return getCReturnType(method) + " " + method.getCName() + "(" + getCParamTypes(apiClass, method, throwing) + ");";
     }
 
     /**
@@ -983,15 +859,8 @@ public class CppBindingsGenerator extends BindingGenerator {
         return friends;
     }
 
-    private void writeDynamicLookupDestructor(ClassDescription apiClass, Writer writer) throws IOException {
-        String cName = apiClass.getCDestructorName();
-        String cTypeName = getCppType(apiClass.getType());
-        writer.write("  static auto %s = DynamicLookup::instance().getFunc<void(*)(%s)>(\"%s\");\n"
-                .formatted(cName, cTypeName, cName, cTypeName));
-    }
-
-    private void writeDynamicLookupClass(Writer out) throws IOException {
-        out.write("""
+    private void writeDynamicLookupClass(IndentingTextRenderer decl) {
+        decl.add("""
                 struct DynamicLookup {
                 public:
                   static DynamicLookup& instance() {
@@ -1004,24 +873,27 @@ public class CppBindingsGenerator extends BindingGenerator {
                 #endif
                     return lib;
                   }
-                
+
                   bool isLoaded() const { return lib_ != nullptr; };
-                
+
                   template<typename FuncType> FuncType getFunc(const char* func) const;
                   DynamicLookup(const DynamicLookup&) = delete;
                   DynamicLookup &operator = (const DynamicLookup&) = delete;
-                
+
                 private:
                   explicit DynamicLookup(const std::string& path, const std::string& alt_path = "");
                   void* lib_{};
                   std::string path_{};
                 };
-                """.replaceAll("%%LIB_NAME%%", lib.getName()));
+                """);
     }
 
-    private void writeDynamicLookupImplementations(Writer out) throws IOException {
-        out.write("""
-                
+    private void writeDynamicLookupImplementations(IndentingTextRenderer def) {
+        // The version check carries the namespace token, so it has to land first
+        def.set("VERSION_CHECK", new LibraryInfoFeature(lib).getVersionCompatibilityCheckCpp());
+        def.set("CPP_NAMESPACE", Joiner.on("::").join(lib.getNamespace()));
+        def.add("""
+
                 template<typename FuncType> FuncType DynamicLookup::getFunc(const char* func) const {
                   assert(lib_ != nullptr && "Fatal error -- cannot call %%CPP_NAMESPACE%% functions on unloaded library");
                   if (!lib_) {
@@ -1039,7 +911,7 @@ public class CppBindingsGenerator extends BindingGenerator {
                   assert(symbol != nullptr);
                   return reinterpret_cast<FuncType>(symbol);
                 }
-                
+
                 DynamicLookup:: DynamicLookup(const std::string& path, const std::string& alt_path) {
                   path_ = path;
                 #ifdef WIN32
@@ -1064,15 +936,11 @@ public class CppBindingsGenerator extends BindingGenerator {
                     std::cerr << "%%CPP_NAMESPACE%% library not found! Include \\""<< path <<"\\" in library search path.\\n";
                     return;
                   }
-                
+
                 %%VERSION_CHECK%%
                 }
-                
-                """
-                .replaceAll("%%VERSION_CHECK%%", new LibraryInfoFeature(lib).getVersionCompatibilityCheckCpp())
-                .replaceAll("%%LIB_NAME%%", lib.getName())
-                .replaceAll("%%CPP_NAMESPACE%%", Joiner.on("::").join(lib.getNamespace()))
-        );
+
+                """);
     }
 
 }

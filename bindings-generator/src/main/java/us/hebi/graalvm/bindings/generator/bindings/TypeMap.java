@@ -66,10 +66,9 @@ public final class TypeMap {
     }
 
     /**
-     * @return C type of a struct field. Fixed width on purpose: the public header and the
-     * native-image probe header declare the same layout and must not disagree on a 32 bit target.
-     * Constness comes from the declaration, i.e. a GraalVM {@code @CConst} on the accessor. It is
-     * a statement to the external consumer only.
+     * @return C type of a struct field, fixed width so that the public header and the probe
+     * header agree on a 32 bit target. Const comes from a {@code @CConst} on the accessor and
+     * only speaks to the external consumer.
      */
     public static String toStructFieldC(DataType type, boolean isConst) {
         return (isConst ? "const " : "") + toStructFieldC(type);

@@ -7,11 +7,10 @@ import com.squareup.javapoet.TypeSpec;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibEnum;
 import us.hebi.graalvm.bindings.model.EnumDescription;
+import us.hebi.graalvm.bindings.model.EnumValueDescription;
 
 import javax.lang.model.element.Modifier;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.function.Function;
 
 /**
  * @author Florian Enner
@@ -45,8 +44,6 @@ public class CEnumGenerator extends AbstractGenerator {
         var values = AnnotatedCLibEnum.getValues(sourceEnum, env).stream()
                 .map(AnnotatedCLibEnum.EnumValue::getName)
                 .toList();
-
-        registry.addEnum(desc);
 
         // Java wrapper
         var targetEnumClass = getCEnumWrapperClassName(sourceEnum);
@@ -90,71 +87,34 @@ public class CEnumGenerator extends AbstractGenerator {
     }
 
     public static String getCEnumDefinition(EnumDescription desc) {
-        var values = desc.getValues();
-
-        StringBuilder out = new StringBuilder();
-        out.append("typedef enum %s {\n".formatted(desc.getCName()));
-
-        for (int i = 0; i < values.length(); i++) {
-            if (i > 0) {
-                out.append(",\n");
-            }
-            out.append("  ").append(values.get(i).getCName()).append(" = ").append(values.get(i).getCValue());
-        }
-
-        out.append("\n} %s;\n".formatted(desc.getCName()));
-        out.append("""
+        var out = new IndentingTextRenderer().set("NAME", desc.getCName());
+        out.beginControlFlow("typedef enum %%NAME%% {");
+        addValues(out, desc, EnumValueDescription::getCName);
+        out.endControlFlow("} %%NAME%%;");
+        out.add("""
                 #if defined(_MSC_VER) || defined(__cplusplus)
                 static_assert(sizeof(%%NAME%%) == 4, "error: unexpected size for %%NAME%% enum");
                 #else
                 _Static_assert(sizeof(%%NAME%%) == 4, "error: unexpected size for %%NAME%% enum");
                 #endif
-                """
-                .replaceAll("%%NAME%%", desc.getCName()));
-        return out.toString();
+                """);
+        return out.render();
     }
 
     public static String getCppEnumDefinition(EnumDescription desc) {
+        var out = new IndentingTextRenderer().setIndentString("  ");
+        out.beginControlFlow("enum class " + desc.getName() + " : int32_t {");
+        addValues(out, desc, EnumValueDescription::getName);
+        return out.endControlFlow("};").render();
+    }
+
+    private static void addValues(IndentingTextRenderer out, EnumDescription desc, Function<EnumValueDescription, String> name) {
         var values = desc.getValues();
-
-        StringBuilder out = new StringBuilder();
-        out.append("enum class %s : int32_t {\n".formatted(desc.getName()));
-
         for (int i = 0; i < values.length(); i++) {
-            if (i > 0) {
-                out.append(",\n");
-            }
-            out.append("  ").append(values.get(i).getName()).append(" = ").append(values.get(i).getCValue());
+            String separator = i < values.length() - 1 ? "," : "";
+            out.addLine(name.apply(values.get(i)) + " = " + values.get(i).getCValue() + separator);
         }
-
-        out.append("\n};\n");
-        return out.toString();
     }
-
-    static class CEnumRegistry {
-
-        void addEnum(EnumDescription desc) {
-            enumList.add(desc);
-        }
-
-        public String getAllEnumDefinitions() {
-            StringBuilder out = new StringBuilder();
-            enumList.stream()
-                    .sorted(Comparator.comparing(EnumDescription::getName))
-                    .map(CEnumGenerator::getCEnumDefinition)
-                    .forEach(def -> out.append(def).append("\n"));
-            return out.toString();
-        }
-
-        private final List<EnumDescription> enumList = new ArrayList<>();
-
-    }
-
-    public CEnumRegistry getRegistry() {
-        return registry;
-    }
-
-    private final CEnumRegistry registry = new CEnumRegistry();
 
     public static final String toJavaMethod = "toJava";
     public static final String fromJavaMethod = "fromJava";

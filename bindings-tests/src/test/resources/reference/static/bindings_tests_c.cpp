@@ -50,9 +50,9 @@ bindings_tests_IsolateThread* global() {
 }
 
 bindings_tests_IsolateThread* secondary() {
-     static bindings_tests_Isolate* isolate = createIsolate();
-     static thread_local ThreadHandle thread(isolate);
-     return thread.ptr;
+    static bindings_tests_Isolate* isolate = createIsolate();
+    static thread_local ThreadHandle thread(isolate);
+    return thread.ptr;
 }
 
 }
@@ -163,7 +163,7 @@ int bindings_tests_Circle_sideCount(bindings_tests_CirclePtr obj) {
     return __bindings_tests_Circle_sideCount(isolate::global(), obj);
 }
 bindings_tests_ShapePtr bindings_tests_Circle_to_Shape(bindings_tests_CirclePtr ptr) {
-  return reinterpret_cast<bindings_tests_ShapePtr>(ptr);
+    return reinterpret_cast<bindings_tests_ShapePtr>(ptr);
 }
 
 // ==== Square ====
@@ -184,7 +184,7 @@ int bindings_tests_Square_sideCount(bindings_tests_SquarePtr obj) {
     return __bindings_tests_Square_sideCount(isolate::global(), obj);
 }
 bindings_tests_ShapePtr bindings_tests_Square_to_Shape(bindings_tests_SquarePtr ptr) {
-  return reinterpret_cast<bindings_tests_ShapePtr>(ptr);
+    return reinterpret_cast<bindings_tests_ShapePtr>(ptr);
 }
 
 // ==== Arrays ====

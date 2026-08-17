@@ -9,7 +9,6 @@ import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Function;
 
 import static us.hebi.graalvm.bindings.generator.generators.DocumentationUtil.*;
 import static us.hebi.quickbuf.ProtoUtil.*;
@@ -20,119 +19,113 @@ import static us.hebi.quickbuf.ProtoUtil.*;
  */
 public class PythonBindingsGenerator extends BindingGenerator {
 
-    private final String libField;
 
     public PythonBindingsGenerator(LibraryDescription lib) {
         super(lib);
-        this.libField = "lib" + lib.getName();
     }
 
     @Override
     public void writeTo(Filer filer) throws IOException {
         // For now we only need a single Python file that can just live in the main binding directory
         filer.createFile("", "__init__.py", file -> file.write("from ." + lib.getName() + " import *"));
-        filer.createFile("", lib.getName() + ".py", file -> file.write(createLibLoaderSource()));
+        filer.createFile("", lib.getName() + ".py", file -> file.write(createModuleSource()));
     }
 
-    private String createLibLoaderSource() {
+    private String createModuleSource() {
         var apiClasses = getApiClasses();
-        var content = new StringBuilder();
-
-        appendLibLoader(content);
-        appendCStructDefinitions(content, apiClasses);
-        appendTypedefs(content);
-        appendCFunctionSignatures(content, apiClasses);
-        appendStructWrappers(content);
-        appendEnumWrappers(content);
-        appendClassWrappers(content, apiClasses);
-
-        for (FeatureGenerator feature : features) {
-            content.append(IndentingTextRenderer.of(feature.getPythonWrapper())
-                    .set("LIB_FIELD", libField)
-                    .render());
-        }
-
-        return content.toString();
-    }
-
-    private void appendLibLoader(StringBuilder content) {
-        content.append(IndentingTextRenderer.of("""
-                        from __future__ import annotations
-                        from ctypes import *%%STRUCT_IMPORT%%
-                        from enum import IntEnum
-                        import os
-                        import platform
-                        from typing import Sequence, Tuple, Any, Callable
-
-                        # Load the shared library relative to this file
-                        def load_library():
-                            lib_name = '%%LIB_NAME%%'
-                            version = '%%LIB_VERSION%%'
-                            build_number = '%%LIB_BUILD_NUMBER%%'
-
-                            architecture = platform.architecture()[0]  # gets '64bit' or '32bit'
-                            os_name = platform.system()  # gets 'Windows', 'Linux', 'Darwin'
-
-                            # Determine the current platform
-                            if os_name == 'Windows' and architecture == '64bit':
-                                lib_platform = 'win_amd64'
-                                lib_file = lib_name + '.dll'
-                                cache_home = os.getenv('LOCALAPPDATA')
-                            elif os_name == 'Linux' and architecture == '64bit':
-                                lib_platform = 'linux_amd64'
-                                lib_file = 'lib' + lib_name + '.so'
-                                cache_home = os.getenv('XDG_CACHE_HOME')
-                                if not cache_home:
-                                    cache_home = os.path.join(os.getenv('HOME'), '.cache')
-                            elif os_name == 'Darwin' and architecture == '64bit':  # Darwin is the underlying system for macOS.
-                                if platform.machine() in ['arm64', 'aarch64']:  # Apple Silicon
-                                    lib_platform = 'osx_arm64'
-                                else:  # Intel Mac
-                                    lib_platform = 'osx_amd64'
-                                lib_file = 'lib' + lib_name + '.dylib'
-                                cache_home = os.path.join(os.getenv('HOME'), 'Library', 'Caches')
-                            else:
-                                raise Exception('Unsupported system: ' + os_name + ' ' + platform.machine())
-
-                            # Prioritize locally bundled lib binaries
-                            this_file_dir = os.path.dirname(os.path.realpath(__file__))
-                            lib_path = os.path.join(this_file_dir, 'lib', lib_platform, lib_file)
-
-                            # Fall back to shared downloaded version in local cache
-                            if not os.path.exists(lib_path):
-                                download_dir = os.path.join(cache_home, lib_name, f'{version}-build{build_number}')
-                                lib_path = os.path.join(download_dir, lib_name, 'lib', lib_platform, lib_file)
-                        %%DOWNLOAD_BLOCK%%
-                            # Sanity check due to loadlibrary errors being harder to parse
-                            if not os.path.exists(lib_path):
-                                raise Exception(f'Required binary was not found: {lib_path}')
-
-                            # Load the library
-                            return cdll.LoadLibrary(lib_path)
-
-                        %%LIB_FIELD%% = load_library()
-
-                        # Optional lazy-loaded numpy dependency for bulk methods
-                        _numpy = None
-                        def _require_numpy():
-                            global _numpy
-                            if _numpy is None:
-                                try:
-                                    import numpy as np
-                                    _numpy = np
-                                except ImportError:
-                                    raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
-                            return _numpy
-
-                        # API definitions
-                        """)
+        var out = new IndentingTextRenderer()
+                .set("LIB_FIELD", "lib" + lib.getName())
                 .set("LIB_NAME", lib.getName())
                 .set("LIB_VERSION", lib.getVersion())
-                .set("LIB_BUILD_NUMBER", lib.getBuild())
-                .set("LIB_FIELD", libField)
-                .set("DOWNLOAD_BLOCK", createDownloadBlock())
-                .set("STRUCT_IMPORT", hasDataclassStructs() ? "\nfrom dataclasses import dataclass" : "") // in next line to leave libs without structs unchanged
-                .render());
+                .set("LIB_BUILD_NUMBER", lib.getBuild());
+
+        writeLibLoader(out);
+        writeCStructDefinitions(out, apiClasses);
+        writeCallbackTypes(out);
+        writeCFunctionSignatures(out, apiClasses);
+        writeStructWrappers(out);
+        writeEnumWrappers(out);
+        writeClassWrappers(out, apiClasses);
+
+        for (FeatureGenerator feature : features) {
+            out.add(feature.getPythonWrapper());
+        }
+        return out.render();
+    }
+
+    private void writeLibLoader(IndentingTextRenderer out) {
+        out.set("DOWNLOAD_BLOCK", createDownloadBlock());
+        out.setIf("STRUCT_IMPORT", hasDataclassStructs(), "\nfrom dataclasses import dataclass"); // in next line to leave libs without structs unchanged
+        out.add("""
+                from __future__ import annotations
+                from ctypes import *%%STRUCT_IMPORT%%
+                from enum import IntEnum
+                import os
+                import platform
+                from typing import Sequence, Tuple, Any, Callable
+
+                # Load the shared library relative to this file
+                def load_library():
+                    lib_name = '%%LIB_NAME%%'
+                    version = '%%LIB_VERSION%%'
+                    build_number = '%%LIB_BUILD_NUMBER%%'
+
+                    architecture = platform.architecture()[0]  # gets '64bit' or '32bit'
+                    os_name = platform.system()  # gets 'Windows', 'Linux', 'Darwin'
+
+                    # Determine the current platform
+                    if os_name == 'Windows' and architecture == '64bit':
+                        lib_platform = 'win_amd64'
+                        lib_file = lib_name + '.dll'
+                        cache_home = os.getenv('LOCALAPPDATA')
+                    elif os_name == 'Linux' and architecture == '64bit':
+                        lib_platform = 'linux_amd64'
+                        lib_file = 'lib' + lib_name + '.so'
+                        cache_home = os.getenv('XDG_CACHE_HOME')
+                        if not cache_home:
+                            cache_home = os.path.join(os.getenv('HOME'), '.cache')
+                    elif os_name == 'Darwin' and architecture == '64bit':  # Darwin is the underlying system for macOS.
+                        if platform.machine() in ['arm64', 'aarch64']:  # Apple Silicon
+                            lib_platform = 'osx_arm64'
+                        else:  # Intel Mac
+                            lib_platform = 'osx_amd64'
+                        lib_file = 'lib' + lib_name + '.dylib'
+                        cache_home = os.path.join(os.getenv('HOME'), 'Library', 'Caches')
+                    else:
+                        raise Exception('Unsupported system: ' + os_name + ' ' + platform.machine())
+
+                    # Prioritize locally bundled lib binaries
+                    this_file_dir = os.path.dirname(os.path.realpath(__file__))
+                    lib_path = os.path.join(this_file_dir, 'lib', lib_platform, lib_file)
+
+                    # Fall back to shared downloaded version in local cache
+                    if not os.path.exists(lib_path):
+                        download_dir = os.path.join(cache_home, lib_name, f'{version}-build{build_number}')
+                        lib_path = os.path.join(download_dir, lib_name, 'lib', lib_platform, lib_file)
+                %%DOWNLOAD_BLOCK%%
+                    # Sanity check due to loadlibrary errors being harder to parse
+                    if not os.path.exists(lib_path):
+                        raise Exception(f'Required binary was not found: {lib_path}')
+
+                    # Load the library
+                    return cdll.LoadLibrary(lib_path)
+
+                %%LIB_FIELD%% = load_library()
+
+                # Optional lazy-loaded numpy dependency for bulk methods
+                _numpy = None
+                def _require_numpy():
+                    global _numpy
+                    if _numpy is None:
+                        try:
+                            import numpy as np
+                            _numpy = np
+                        except ImportError:
+                            raise ImportError("This method requires 'numpy'. Please run: pip install numpy")
+                    return _numpy
+
+                # API definitions
+                """);
     }
 
     /**
@@ -143,51 +136,54 @@ public class PythonBindingsGenerator extends BindingGenerator {
         if (!lib.hasDownloadUrl()) {
             return "";
         }
-        return "\n" + IndentingTextRenderer.of("""
-                                # If necessary, start a new download it into a shared dir. All files are
-                                # kept so we can share a single download for all languages.
-                                if not os.path.exists(lib_path):
-                                    import urllib.request
-                                    import zipfile
-
-                                    # Build download url
-                                    dl_name = f"{lib_name}-{version}-{lib_platform}.zip"
-                                    url = f"%%DOWNLOAD_URL%%/{dl_name}"
-
-                                    # Download zip file
-                                    print(f"Downloading {url}")
-                                    os.makedirs(download_dir, exist_ok=True)
-                                    zip_path = os.path.join(download_dir, dl_name)
-
-                                    # urllib may fail on some platforms due to missing SSL certificates (e.g. macOS brew),
-                                    # so we provide a curl fallback that should be available on most systems.
-                                    try:
-                                        urllib.request.urlretrieve(
-                                            url,
-                                            zip_path,
-                                            lambda count, block_size, total_size: print(
-                                                f"\\rDownloading... {int(count * block_size * 100 / total_size)}% ", end="")
-                                        )
-                                        print('')
-                                    except Exception as e:
-                                        print(f"\\nurllib download failed ({e}), retrying with curl...")
-                                        import subprocess
-                                        subprocess.run(["curl", "-L", "-f", "-o", zip_path, url], check=True)
-
-                                    # Extract the entire archive
-                                    print(f'Extracting to {download_dir}')
-                                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                                        zip_ref.extractall(download_dir)
-
-                                    print(f'Removing temporary files')
-                                    os.remove(zip_path)
-                        """)
+        return new IndentingTextRenderer()
                 .set("DOWNLOAD_URL", lib.getDownloadUrl())
+                .indent(2)
+                .add("""
+
+                        # If necessary, start a new download it into a shared dir. All files are
+                        # kept so we can share a single download for all languages.
+                        if not os.path.exists(lib_path):
+                            import urllib.request
+                            import zipfile
+
+                            # Build download url
+                            dl_name = f"{lib_name}-{version}-{lib_platform}.zip"
+                            url = f"%%DOWNLOAD_URL%%/{dl_name}"
+
+                            # Download zip file
+                            print(f"Downloading {url}")
+                            os.makedirs(download_dir, exist_ok=True)
+                            zip_path = os.path.join(download_dir, dl_name)
+
+                            # urllib may fail on some platforms due to missing SSL certificates (e.g. macOS brew),
+                            # so we provide a curl fallback that should be available on most systems.
+                            try:
+                                urllib.request.urlretrieve(
+                                    url,
+                                    zip_path,
+                                    lambda count, block_size, total_size: print(
+                                        f"\\rDownloading... {int(count * block_size * 100 / total_size)}% ", end="")
+                                )
+                                print('')
+                            except Exception as e:
+                                print(f"\\nurllib download failed ({e}), retrying with curl...")
+                                import subprocess
+                                subprocess.run(["curl", "-L", "-f", "-o", zip_path, url], check=True)
+
+                            # Extract the entire archive
+                            print(f'Extracting to {download_dir}')
+                            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                                zip_ref.extractall(download_dir)
+
+                            print(f'Removing temporary files')
+                            os.remove(zip_path)
+                        """)
                 .render();
     }
 
-    private void appendCStructDefinitions(StringBuilder content, List<ClassDescription> apiClasses) {
-        content.append("""
+    private void writeCStructDefinitions(IndentingTextRenderer out, List<ClassDescription> apiClasses) {
+        out.add("""
                 class _ErrorInfo(Structure):
                     # Filled by every method that can throw. The strings stay valid only until
                     # this thread's next library call, so they get copied into the exception.
@@ -212,59 +208,51 @@ public class PythonBindingsGenerator extends BindingGenerator {
         for (var struct : lib.getStructs()) {
             List<String> fields = new ArrayList<>();
             for (var field : struct.getFields()) {
-                fields.add("(\"%s\", %s)".formatted(
-                        field.getLowerUnderscoreName(),
-                        TypeMap.toStructFieldCPython(field.getDataType())));
+                fields.add("(\"" + field.getLowerUnderscoreName() + "\", " + TypeMap.toStructFieldCPython(field.getDataType()) + ")");
             }
-            content.append(IndentingTextRenderer.of("""
+            out.set("STRUCT_NAME", struct.getName())
+                    .setArgs("FIELDS", fields)
+                    .add("""
                             class _%%STRUCT_NAME%%(Structure):
                                 # Layout of the by-value struct in the C ABI, mirroring %%STRUCT_NAME%%
                                 _fields_ = [%%FIELDS%%]
 
-                            """)
-                    .set("STRUCT_NAME", struct.getName())
-                    .set("FIELDS", joiner.join(fields))
-                    .render());
+                            """);
         }
         for (ClassDescription apiClass : apiClasses) {
-            content.append(IndentingTextRenderer.of("""
+            out.set("CLASS_NAME", apiClass.getType().getTypeName())
+                    .set("CPYTHON_TYPE", getCPythonType(apiClass.getType()))
+                    .add("""
                             class struct_%%CLASS_NAME%%_(Structure):
                                 pass
                             %%CPYTHON_TYPE%% = POINTER(struct_%%CLASS_NAME%%_)
 
-                            """)
-                    .set("CLASS_NAME", apiClass.getType().getTypeName())
-                    .set("CPYTHON_TYPE", getCPythonType(apiClass.getType()))
-                    .render());
-        }
-    }
-
-    private void appendTypedefs(StringBuilder content) {
-        for (var callback : lib.getCallbacks()) {
-            content.append(getPythonCallbackType(callback)).append("\n");
+                            """);
         }
     }
 
     /**
      * The ctypes prototype a callable gets wrapped in. Struct views arrive by pointer.
      */
-    private static String getPythonCallbackType(CallbackDescription callback) {
-        var types = new StringJoiner(", ");
-        types.add(TypeMap.toCPython(callback.getReturnType()));
-        for (var parameter : callback.getParameters()) {
-            types.add(parameter.getDataType() == DataType.STRUCT
-                    ? "POINTER(" + TypeMap.toCPython(parameter) + ")" : TypeMap.toCPython(parameter));
+    private void writeCallbackTypes(IndentingTextRenderer out) {
+        for (var callback : lib.getCallbacks()) {
+            var types = new ArrayList<String>();
+            types.add(TypeMap.toCPython(callback.getReturnType()));
+            for (var parameter : callback.getParameters()) {
+                types.add(parameter.getDataType() == DataType.STRUCT
+                        ? "POINTER(" + TypeMap.toCPython(parameter) + ")" : TypeMap.toCPython(parameter));
+            }
+            out.addLine(callback.getName() + " = CFUNCTYPE(" + String.join(", ", types) + ")");
         }
-        return String.format("%s = CFUNCTYPE(%s)", callback.getName(), types);
     }
 
-    private void appendCFunctionSignatures(StringBuilder content, List<ClassDescription> apiClasses) {
+    private void writeCFunctionSignatures(IndentingTextRenderer out, List<ClassDescription> apiClasses) {
         for (ClassDescription apiClass : apiClasses) {
-            content.append("\n# ==== ").append(apiClass.getType().getTypeName()).append(" ====\n");
+            out.addLine().addLine("# ==== " + apiClass.getType().getTypeName() + " ====");
+            out.set("CPYTHON_TYPE", getCPythonType(apiClass.getType()));
 
-            List<String> params = new ArrayList<>();
             for (MethodDescription method : apiClass.getMethods()) {
-                params.clear();
+                List<String> params = new ArrayList<>();
                 if (isThrowing(method)) {
                     params.add("POINTER(_ErrorInfo)");
                 }
@@ -274,39 +262,30 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 for (TypeDescription parameter : method.getParameters()) {
                     params.add(getCPythonType(parameter));
                 }
-
-                content.append(IndentingTextRenderer.of("""
+                out.set("CENTRY_NAME", method.getCName())
+                        .setArgs("ARG_TYPES", params)
+                        .set("RETURN_TYPE", getCPythonType(method.getReturnType()))
+                        .add("""
                                 %%LIB_FIELD%%.%%CENTRY_NAME%%.argtypes = [%%ARG_TYPES%%]
                                 %%LIB_FIELD%%.%%CENTRY_NAME%%.restype = %%RETURN_TYPE%%
-                                """)
-                        .set("LIB_FIELD", libField)
-                        .set("CENTRY_NAME", method.getCName())
-                        .set("ARG_TYPES", joiner.join(params))
-                        .set("RETURN_TYPE", getCPythonType(method.getReturnType()))
-                        .render());
+                                """);
             }
 
             if (apiClass.getInstantiable() && !apiClass.hasParent()) {
-                content.append(IndentingTextRenderer.of("""
+                out.set("C_DESTRUCTOR", apiClass.getCDestructorName())
+                        .add("""
                                 %%LIB_FIELD%%.%%C_DESTRUCTOR%%.argtypes = [%%CPYTHON_TYPE%%]
                                 %%LIB_FIELD%%.%%C_DESTRUCTOR%%.restype = None
-                                """)
-                        .set("LIB_FIELD", libField)
-                        .set("C_DESTRUCTOR", apiClass.getCDestructorName())
-                        .set("CPYTHON_TYPE", getCPythonType(apiClass.getType()))
-                        .render());
+                                """);
             }
 
             if (apiClass.hasParent()) {
-                content.append(IndentingTextRenderer.of("""
+                out.set("CAST", apiClass.getToParentCastMethod().getCName())
+                        .set("PARENT_TYPE", getCPythonType(apiClass.getParent()))
+                        .add("""
                                 %%LIB_FIELD%%.%%CAST%%.argtypes = [%%CPYTHON_TYPE%%]
                                 %%LIB_FIELD%%.%%CAST%%.restype = %%PARENT_TYPE%%
-                                """)
-                        .set("LIB_FIELD", libField)
-                        .set("CPYTHON_TYPE", getCPythonType(apiClass.getType()))
-                        .set("PARENT_TYPE", getCPythonType(apiClass.getParent()))
-                        .set("CAST", apiClass.getToParentCastMethod().getCName())
-                        .render());
+                                """);
             }
         }
     }
@@ -315,24 +294,23 @@ public class PythonBindingsGenerator extends BindingGenerator {
      * The public face of a user struct. Users build a dataclass and the call site packs it
      * into the ctypes mirror, so nothing in the API asks for ctypes types.
      */
-    private void appendStructWrappers(StringBuilder content) {
+    private void writeStructWrappers(IndentingTextRenderer out) {
         if (!hasDataclassStructs()) return;
 
-        content.append("\n# ==== Structs ====\n");
+        out.addLine().addLine("# ==== Structs ====");
         for (var struct : lib.getStructs()) {
             // A marshalled struct has no public face, users see the Python type it maps to
             if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::python).isPresent()) continue;
-            content.append("\n@dataclass\n");
-            content.append("class %s:\n".formatted(struct.getName()));
+            out.addLine().addLine("@dataclass");
+            out.beginControlFlow("class " + struct.getName() + ":");
             for (var field : struct.getFields()) {
                 // Pointer fields have no lifetime story here, only the layout mirror carries them
                 if (TypeMap.isPointerType(field.getDataType())) continue;
-                content.append("    %s: %s\n".formatted(
-                        field.getLowerUnderscoreName(),
-                        TypeMap.toStructFieldPythonHint(field.getDataType())));
+                out.addLine(field.getLowerUnderscoreName() + ": " + TypeMap.toStructFieldPythonHint(field.getDataType()));
             }
+            out.unindent();
         }
-        content.append("\n");
+        out.addLine();
     }
 
     /**
@@ -345,54 +323,50 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return false;
     }
 
-    private void appendEnumWrappers(StringBuilder content) {
+    private void writeEnumWrappers(IndentingTextRenderer out) {
         if (lib.getEnums().length() == 0) return;
 
-        content.append("\n# ==== Enum Wrappers ====\n");
+        out.addLine().addLine("# ==== Enum Wrappers ====");
         for (EnumDescription generatedEnum : lib.getEnums()) {
-            content.append("class %s(IntEnum):\n".formatted(generatedEnum.getName()));
-
+            out.beginControlFlow("class " + generatedEnum.getName() + "(IntEnum):");
             for (EnumValueDescription value : generatedEnum.getValues()) {
                 String pep8 = value.getName().toUpperCase(Locale.ENGLISH);
                 if (!pep8.equals(value.getName())) {
                     pep8 = CaseFormat.UPPER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, value.getName());
                 }
-                content.append("    %s = %d\n".formatted(pep8, value.getCValue()));
+                out.addLine(pep8 + " = " + value.getCValue());
             }
-
-            content.append("\n");
+            out.unindent().addLine();
         }
     }
 
-    private void appendClassWrappers(StringBuilder content, List<ClassDescription> apiClasses) {
-        content.append("\n# ==== Class Wrappers ====");
+    private void writeClassWrappers(IndentingTextRenderer out, List<ClassDescription> apiClasses) {
+        out.addLine().add("# ==== Class Wrappers ====");
         for (ClassDescription apiClass : apiClasses) {
-            content.append(createClassWrapperSource(apiClass));
+            writeClassWrapper(new ClassScope(apiClass, out));
         }
     }
 
-    private String createClassWrapperSource(ClassDescription apiClass) {
-        String className = apiClass.getType().getTypeName();
-        String refField = !apiClass.hasParent() ? "ptr" : "ref_" + className;
-        String parentSuffix = apiClass.hasParent() ? "(" + apiClass.getParent().getTypeName() + ")" : "";
-
-        var content = new StringBuilder();
-        content.append("\n");
-        content.append("class ").append(className).append(parentSuffix).append(":\n");
+    private void writeClassWrapper(ClassScope scope) {
+        var apiClass = scope.apiClass;
+        var out = scope.out;
+        out.addLine();
+        out.beginControlFlow(apiClass.hasParent()
+                ? "class %%CLASS_NAME%%(" + apiClass.getParent().getTypeName() + "):"
+                : "class %%CLASS_NAME%%:");
 
         if (apiClass.getType().hasComment()) {
-            content.append(generatePydoc("    ", apiClass.getType())).append("\n\n");
+            out.add(generatePydoc(apiClass.getType())).addLine().addLine();
         }
 
         // Fixed slots (fields) to prevent dynamic fields and dictionary overhead
         if (apiClass.getInstantiable()) {
-            content.append("    __slots__ = ('%s',)\n\n".formatted(refField));
+            out.addLine("__slots__ = ('%%REF_FIELD%%',)").addLine();
         } else if (apiClass.hasChildren() || apiClass.hasParent()) {
-            content.append("    __slots__ = ()\n\n"); // dummy to prevent __dict__ creation
+            out.addLine("__slots__ = ()").addLine(); // dummy to prevent __dict__ creation
         }
 
-        // Constructor / init
-        content.append(buildConstructor(apiClass, className, refField));
+        writeConstructor(scope);
 
         // Methods and properties
         Set<String> getters = new HashSet<>();
@@ -404,72 +378,70 @@ public class PythonBindingsGenerator extends BindingGenerator {
             } else if (GeneratorUtil.isSetter(method)) {
                 boolean needsDummyGetter = getters.add(method.getPropertyName());
                 if (needsDummyGetter) {
-                    String propName = getPropertyName(method);
-                    content.append(IndentingTextRenderer.of("""
-                                @property
-                                def %%PROP%%(self):
-                                    raise AttributeError("Property '%%PROP%%' is write-only")
+                    out.set("PROP", getPropertyName(method)).add("""
+                            @property
+                            def %%PROP%%(self):
+                                raise AttributeError("Property '%%PROP%%' is write-only")
 
-                            """).set("PROP", propName).render());
+                            """);
                 }
             }
-
-            content.append(getWrapperMethod(apiClass, method, refField));
+            writeMethod(new MethodScope(scope, method));
         }
-
-        return IndentingTextRenderer.of(content.toString())
-                .set("LIB_FIELD", libField)
-                .set("REF_FIELD", refField)
-                .set("CLASS_NAME", className)
-                .render();
+        out.unindent();
     }
 
-    private String buildConstructor(ClassDescription apiClass, String className, String refField) {
+    private void writeConstructor(ClassScope scope) {
+        var apiClass = scope.apiClass;
+        var out = scope.out;
         if (!apiClass.getInstantiable()) {
-            return """
-                        def __new__(cls, *args, **kwargs):
-                            raise TypeError('Class is not instantiable')
+            out.add("""
+                    def __new__(cls, *args, **kwargs):
+                        raise TypeError('Class is not instantiable')
 
-                    """;
+                    """);
+            return;
         }
 
         // Check for a defined constructor first - it gets its own wrapper method
-        final String initMethod;
         var constructor = GeneratorUtil.getConstructor(apiClass);
         if (constructor.isPresent()) {
             // A defined constructor means that users instantiate this class by themselves. Currently
             // this means that we do not have a raw ptr argument and thus can't support being called
             // from child constructors
             checkArgument(!apiClass.hasChildren(), "Constructors are currently not supported parent classes");
-            List<MethodDescription> props = getConstructionProperties(lib, constructor.get());
             // Note: the base initialization is part of the generated __init__ body (see getReturnTemplate)
-            initMethod = getWrapperMethod(apiClass, constructor.get(), refField);
+            writeMethod(new MethodScope(scope, constructor.get()));
         } else {
             // Not defining a constructor means that this class can't be instantiated by users
             // and that we only need to support an 'internal' constructor for generating wrappers
-            initMethod = """
-                        def __init__(self, %%REF%%: %%CLASS_PTR%%):
-                            if not isinstance(%%REF%%, %%CLASS_PTR%%):
-                                raise TypeError(f'Expected %%CLASS_PTR%%, got {type(%%REF%%).__name__}')
-                            self.%%REF%% = %%REF%%%%SUPER_INIT%%
+            out.setIf("SUPER_INIT", apiClass.hasParent(), "\n    super().__init__(%%LIB_FIELD%%.%%CAST%%(%%REF_FIELD%%))");
+            out.add("""
+                    def __init__(self, %%REF_FIELD%%: %%CLASS_PTR%%):
+                        if not isinstance(%%REF_FIELD%%, %%CLASS_PTR%%):
+                            raise TypeError(f'Expected %%CLASS_PTR%%, got {type(%%REF_FIELD%%).__name__}')
+                        self.%%REF_FIELD%% = %%REF_FIELD%%%%SUPER_INIT%%
 
-                    """;
+                    """);
         }
-        final String superInit = apiClass.hasParent() ? "\n        super().__init__(%%LIB%%.%%CAST%%(%%REF%%))" : "";
 
         // Always add a destructor
-        final var delMethod = !apiClass.hasParent() ? """
+        if (!apiClass.hasParent()) {
+            out.add("""
                     def __del__(self):
-                        if self.%%REF%% is not None:
-                            %%LIB%%.%%DESTR%%(self.%%REF%%)
-                        self.%%REF%% = None
+                        if self.%%REF_FIELD%% is not None:
+                            %%LIB_FIELD%%.%%DESTR%%(self.%%REF_FIELD%%)
+                        self.%%REF_FIELD%% = None
 
-                """ : """
+                    """);
+        } else {
+            out.add("""
                     def __del__(self):
                         super().__del__()
-                        self.%%REF%% = None
+                        self.%%REF_FIELD%% = None
 
-                """;
+                    """);
+        }
 
         // Create a __repr__ method for text display, e.g., Axis(min={self.min}, max={self.max})
         List<String> getProp = new ArrayList<>();
@@ -477,53 +449,33 @@ public class PythonBindingsGenerator extends BindingGenerator {
             String prop = getPropertyName(getter);
             getProp.add(prop + "={self." + prop + "!r}");
         }
-        final var reprMethod = """
-                    def __repr__(self):
-                        return f"{self.__class__.__name__}(%%PROPGET%%)"
+        out.setArgs("PROPGET", getProp).add("""
+                def __repr__(self):
+                    return f"{self.__class__.__name__}(%%PROPGET%%)"
 
-                """
-                .replace("%%PROPGET%%", String.join(", ", getProp));
-
-        return IndentingTextRenderer.of(initMethod + delMethod + reprMethod)
-                .set("SUPER_INIT", superInit)
-                .set("DESTR", apiClass.getCDestructorName())
-                .set("CLASS_PTR", getCPythonType(apiClass.getType()))
-                .set("CAST", apiClass.getToParentCastMethod().getCName())
-                .set("LIB", libField)
-                .set("REF", refField)
-                .render();
+                """);
     }
 
     private static String getPropertyName(MethodDescription method) {
         return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getPropertyName());
     }
 
-    private String getWrapperMethod(ClassDescription apiClass, MethodDescription method, String refField) {
-        var paramLists = new ParameterLists(lib, method);
-
-        var content = new StringBuilder();
-        Function<String, String> indent = str -> str.replace("\n", "\n        ");
+    private void writeMethod(MethodScope m) {
+        var method = m.method;
+        var out = m.out;
+        var params = new ParameterLists(lib, method);
 
         // Decorators
-        if (method.getIsStatic() && !method.getIsConstructor()) {
-            content.append("    @classmethod\n");
-        }
-
-        // Documentation
-        String docs = method.hasDocumentation()
-                ? escapeBackslashes(indent.apply("\n" + generatePydoc("", method)))
-                : "";
-
+        out.addLineIf(method.getIsStatic() && !method.getIsConstructor(), "@classmethod");
         String funcName;
         String propName = getPropertyName(method);
         String returnHint = " -> " + TypeMap.toPythonTypeHint(method.getReturnType());
-
         if (GeneratorUtil.isSetter(method)) {
-            content.append("    @").append(propName).append(".setter\n");
+            out.addLine("@" + propName + ".setter");
             funcName = propName;
             returnHint = "";
         } else if (GeneratorUtil.isGetter(method)) {
-            content.append("    @property\n");
+            out.addLine("@property");
             funcName = propName;
         } else if (method.getIsConstructor()) {
             funcName = "__init__";
@@ -537,57 +489,41 @@ public class PythonBindingsGenerator extends BindingGenerator {
         var receiver = getReceiverName(method);
         var parameters = overload.tryGetParameters()
                 .map(string -> receiver + ", " + string)
-                .map(indent)
-                .orElseGet(() -> joiner.join(paramLists.externalInput));
+                .orElseGet(() -> String.join(", ", params.externalInput));
         var callArgs = overload.tryGetCall()
-                .map(string -> method.getIsStatic() ? string : "self." + refField + ", " + string)
-                .map(indent)
-                .orElseGet(() -> joiner.join(paramLists.internalInput));
-        // The statements that follow are appended directly, so both blocks have to end on a
-        // newline. The conversions built above already do, an annotation value never does.
-        var body = overload.tryGetBody().map(appendNewline).map(indent).orElse("");
-        var conversions = indent.apply(paramLists.inputConversions);
-        var postBody = overload.tryGetPostBody().map(appendNewline).map(indent).orElse("");
+                .map(string -> method.getIsStatic() ? string : "self.%%REF_FIELD%%, " + string)
+                .orElseGet(() -> String.join(", ", params.internalInput));
 
-        // C call and type conversion. A throwing method fills a local struct and wraps the
-        // call in the check, which keeps every return template a single expression.
+        // A throwing method fills a local struct and wraps the call in the check, which keeps
+        // every return template a single expression
         boolean throwing = isThrowing(method);
         if (throwing) {
             callArgs = callArgs.isEmpty() ? "byref(error_)" : "byref(error_), " + callArgs;
         }
-        var returnTemplate = indent.apply(getReturnTemplate(apiClass, method)
-                .set("CALL", throwing
-                        ? "_checked(error_, %%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%))"
-                        : "%%LIB_FIELD%%.%%CNAME%%(%%CALL_ARGS%%)")
-                .render());
-        var errorInit = throwing ? indent.apply("error_ = _ErrorInfo()\n") : "";
-        var numpy = isUsingNumpy(body, conversions, postBody, returnTemplate) ? indent.apply("np = _require_numpy()\n") : "";
-
-        // Build the full method body
-        content.append(IndentingTextRenderer.of("""
-                            def %%METHOD%%(%%PARAMS%%)%%HINT%%:%%DOCS%%
-                                %%NUMPY%%%%BODY%%%%CONVERSIONS%%%%POST_BODY%%%%ERROR_INIT%%%%RETURN%%
-
-                        """)
-                .set("ERROR_INIT", errorInit)
-                .set("RETURN", returnTemplate)
-
-                .set("METHOD", funcName)
+        String call = "%%LIB_FIELD%%.%%CNAME%%(" + callArgs + ")";
+        out.set("METHOD", funcName)
                 .set("PARAMS", parameters)
                 .set("HINT", returnHint)
-                .set("DOCS", docs)
+                .set("CALL", throwing ? "_checked(error_, " + call + ")" : call);
 
-                .set("NUMPY", numpy)
-                .set("BODY", body)
-                .set("CONVERSIONS", conversions)
-                .set("POST_BODY", postBody)
+        // The overload snippets, the conversions and the return template
+        var body = overload.tryGetBody().map(String::stripTrailing).orElse("");
+        var conversions = params.preCallActions.render().stripTrailing();
+        var postBody = overload.tryGetPostBody().map(String::stripTrailing).orElse("");
+        var returnTemplate = getReturnTemplate(m.apiClass, method);
+        boolean usesNumpy = isUsingNumpy(body, conversions, postBody, returnTemplate);
 
-                .set("LIB_FIELD", libField)
-                .set("CNAME", method.getCName())
-                .set("CALL_ARGS", callArgs)
-                .render());
-
-        return content.toString();
+        out.beginControlFlow("def %%METHOD%%(%%PARAMS%%)%%HINT%%:");
+        if (method.hasDocumentation()) {
+            out.addLine(escapeBackslashes(generatePydoc(method)));
+        }
+        out.addLineIf(usesNumpy, "np = _require_numpy()");
+        out.addLineIf(!body.isEmpty(), body);
+        out.addLineIf(!conversions.isEmpty(), conversions);
+        out.addLineIf(!postBody.isEmpty(), postBody);
+        out.addLineIf(throwing, "error_ = _ErrorInfo()");
+        out.addLine(returnTemplate);
+        out.unindent().addLine();
     }
 
     private boolean isUsingNumpy(String... snippets) {
@@ -599,33 +535,36 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return false;
     }
 
-    private IndentingTextRenderer getReturnTemplate(ClassDescription apiClass, MethodDescription desc) {
+    /**
+     * The statements that turn the C result into the Python return, ending on the call for a
+     * void method. Not yet rendered: the tokens belong to the method scope.
+     */
+    private String getReturnTemplate(ClassDescription apiClass, MethodDescription desc) {
         final boolean isConstructor = desc.getIsConstructor();
         final var props = getConstructionProperties(lib, desc);
-        String string = switch (desc.getReturnType().getDataType()) {
+        String template = switch (desc.getReturnType().getDataType()) {
             case OBJECT_HANDLE -> {
-                String template = """
+                String string = """
                         ptr_ = %%CALL%%
                         if not ptr_:
                             raise RuntimeError('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%')
                         """;
                 if (isConstructor) {
-                    template += "self.%%REF_FIELD%% = ptr_\n";
+                    string += "self.%%REF_FIELD%% = ptr_\n";
                     if (apiClass.hasParent()) {
                         // The inherited part has to be set up before any properties get applied because
-                        // inherited setters access the parent pointer. CAST is resolved by the same
-                        // render that handles the pointer __init__, so the name is not built here.
-                        template += "super().__init__(%%LIB_FIELD%%.%%CAST%%(ptr_))\n";
+                        // inherited setters access the parent pointer
+                        string += "super().__init__(%%LIB_FIELD%%.%%CAST%%(ptr_))\n";
                     }
-                    template += getPropertySetBlock(props, "self", "");
+                    string += getPropertySetBlock(props, "self", "");
                 } else if (!props.isEmpty()) {
-                    template += "obj_ = %%RETURN_TYPE%%(ptr_)\n"
-                                + getPropertySetBlock(props, "obj_", "")
-                                + "return obj_";
+                    string += "obj_ = %%RETURN_TYPE%%(ptr_)\n"
+                              + getPropertySetBlock(props, "obj_", "")
+                              + "return obj_";
                 } else {
-                    template += "return %%RETURN_TYPE%%(ptr_)\n";
+                    string += "return %%RETURN_TYPE%%(ptr_)\n";
                 }
-                yield template;
+                yield string;
             }
             case CHAR_POINTER -> """
                     ptr_ = %%CALL%%
@@ -634,21 +573,14 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // The mirror carries the C layout, so the public dataclass gets unpacked field by field
             case STRUCT -> getPythonMarshaller(desc.getReturnType())
                     .map(marshaller -> marshaller.unpack(STRUCT_LOCAL_NAME))
-                    .orElseGet(() -> IndentingTextRenderer.of("""
-                                    %%VAR%% = %%CALL%%
-                                    return %%RETURN_TYPE%%(%%FIELDS%%)
-                                    """)
-                            .set("VAR", STRUCT_LOCAL_NAME)
-                            .set("FIELDS", getStructUnpackArgs(desc.getReturnType(), STRUCT_LOCAL_NAME))
-                            .render());
+                    .orElseGet(() -> STRUCT_LOCAL_NAME + " = %%CALL%%\n"
+                                     + "return %%RETURN_TYPE%%(" + getStructUnpackArgs(desc.getReturnType(), STRUCT_LOCAL_NAME) + ")\n");
             case ENUM -> "return %%RETURN_TYPE%%(%%CALL%%)";
             case BOOL -> "return %%CALL%% != 0";
             case VOID -> "%%CALL%%";
             default -> "return %%CALL%%";
         };
-
-        return IndentingTextRenderer.of(string.stripTrailing())
-                .set("RETURN_TYPE", desc.getReturnType().getTypeName());
+        return template.stripTrailing().replace("%%RETURN_TYPE%%", desc.getReturnType().getTypeName());
     }
 
     /**
@@ -662,7 +594,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             String value = local + "." + field.getLowerUnderscoreName();
             args.add(field.getDataType() == DataType.BOOL ? "bool(" + value + ")" : value);
         }
-        return joiner.join(args);
+        return String.join(", ", args);
     }
 
     private static Optional<StructMarshaller.PyStructMarshaller> getPythonMarshaller(TypeDescription type) {
@@ -689,14 +621,14 @@ public class PythonBindingsGenerator extends BindingGenerator {
         }
         for (var callback : lib.getCallbacks()) {
             if (!callback.getName().equals(type.getTypeName())) continue;
-            var args = new StringJoiner(", ", "[", "]");
+            var args = new ArrayList<String>();
             for (var parameter : callback.getParameters()) {
                 args.add(switch (parameter.getDataType()) {
                     case VOID_POINTER, STRUCT -> "Any";
                     default -> TypeMap.toPythonTypeHint(parameter);
                 });
             }
-            return "Callable[%s, %s]".formatted(args, TypeMap.toPythonTypeHint(callback.getReturnType()));
+            return "Callable[[" + String.join(", ", args) + "], " + TypeMap.toPythonTypeHint(callback.getReturnType()) + "]";
         }
         return TypeMap.toPythonTypeHint(type);
     }
@@ -751,7 +683,6 @@ public class PythonBindingsGenerator extends BindingGenerator {
         return TypeMap.toPythonTypeHint(setter.getParameters().get(0));
     }
 
-
     static List<String> getPropertyInputParams(List<MethodDescription> properties) {
         if (properties.isEmpty()) return Collections.emptyList();
         List<String> params = new ArrayList<>();
@@ -782,11 +713,46 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private static final String STRUCT_LOCAL_NAME = "struct_";
 
     /**
-     * Annotation values are written without a trailing newline, but the generated code
-     * appends the next statement directly after them.
+     * The module renderer with one class's names set and the class body indented
      */
-    private static final Function<String, String> appendNewline =
-            block -> block.endsWith("\n") ? block : block + "\n";
+    private final class ClassScope {
+
+        ClassScope(ClassDescription apiClass, IndentingTextRenderer module) {
+            this.apiClass = apiClass;
+            this.out = module.snapshot()
+                    .set("CLASS_NAME", apiClass.getType().getTypeName())
+                    .set("CLASS_PTR", getCPythonType(apiClass.getType()))
+                    .set("REF_FIELD", apiClass.hasParent() ? "ref_" + apiClass.getType().getTypeName() : "ptr");
+            if (apiClass.getInstantiable()) {
+                out.set("DESTR", apiClass.getCDestructorName());
+            }
+            if (apiClass.hasParent()) {
+                out.set("CAST", apiClass.getToParentCastMethod().getCName());
+            }
+        }
+
+        final ClassDescription apiClass;
+        final IndentingTextRenderer out;
+
+    }
+
+    /**
+     * The class renderer with one method's names set
+     */
+    private final class MethodScope {
+
+        MethodScope(ClassScope scope, MethodDescription method) {
+            this.apiClass = scope.apiClass;
+            this.method = method;
+            this.out = scope.out.snapshot()
+                    .set("CNAME", method.getCName());
+        }
+
+        final ClassDescription apiClass;
+        final MethodDescription method;
+        final IndentingTextRenderer out;
+
+    }
 
     /**
      * Builds the external (Python signature) and internal (C call) parameter lists,
@@ -795,12 +761,9 @@ public class PythonBindingsGenerator extends BindingGenerator {
     static class ParameterLists {
         final List<String> externalInput = new ArrayList<>();
         final List<String> internalInput = new ArrayList<>();
-        final String inputConversions;
+        final IndentingTextRenderer preCallActions = new IndentingTextRenderer();
 
         ParameterLists(LibraryDescription lib, MethodDescription desc) {
-            boolean isConstructor = desc.getIsConstructor();
-            var conversions = new StringBuilder();
-
             // First parameter: self or cls
             if (desc.getIsStatic()) {
                 externalInput.add(getReceiverName(desc));
@@ -817,7 +780,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     names.add(parameter.getLowerUnderscoreParamName());
                 }
                 externalInput.add(desc.getPropertyName() + ": " + getSetterTypeHint(desc));
-                conversions.append(String.join(", ", names)).append(" = ").append(desc.getPropertyName()).append("\n");
+                preCallActions.addLine(String.join(", ", names) + " = " + desc.getPropertyName());
             } else {
                 // Standard parameters -> one for each
                 for (var parameter : desc.getParameters()) {
@@ -832,7 +795,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             // Conversions and C call
             for (var parameter : desc.getParameters()) {
                 // Convert from input to C type
-                appendInputConversion(lib, parameter, conversions);
+                addInputConversion(lib, parameter, preCallActions);
 
                 // Call the C method
                 if (parameter.getDataType() == DataType.OBJECT_HANDLE) {
@@ -847,17 +810,16 @@ public class PythonBindingsGenerator extends BindingGenerator {
             if (!props.isEmpty()) {
                 externalInput.addAll(getPropertyInputParams(props));
             }
-
-            this.inputConversions = conversions.toString();
         }
 
-        private static void appendInputConversion(LibraryDescription lib, TypeDescription desc, StringBuilder out) {
+        private static void addInputConversion(LibraryDescription lib, TypeDescription desc, IndentingTextRenderer out) {
             String pyType = getCPythonType(desc);
             String name = desc.getLowerUnderscoreParamName();
+            out.set("NAME", name).set("CTYPE", pyType);
 
             var marshaller = getPythonMarshaller(desc);
             if (marshaller.isPresent()) {
-                out.append(marshaller.get().pack(name));
+                out.add(marshaller.get().pack(name));
 
             } else if (desc.getDataType() == DataType.STRUCT) {
                 // The dataclass is the public face, so the mirror gets packed field by field.
@@ -872,47 +834,38 @@ public class PythonBindingsGenerator extends BindingGenerator {
                     String value = name + "." + field.getLowerUnderscoreName();
                     args.add(field.getDataType() == DataType.BOOL ? "int(" + value + ")" : value);
                 }
-                out.append(IndentingTextRenderer.of("""
-                                if not isinstance(%%NAME%%, %%CTYPE%%):
-                                    %%NAME%% = %%CTYPE%%(%%ARGS%%)
-                                """)
-                        .set("NAME", name)
-                        .set("CTYPE", pyType)
-                        .set("ARGS", joiner.join(args))
-                        .render());
+                out.setArgs("ARGS", args).add("""
+                        if not isinstance(%%NAME%%, %%CTYPE%%):
+                            %%NAME%% = %%CTYPE%%(%%ARGS%%)
+                        """);
 
             } else if (desc.getDataType() == DataType.CALLBACK) {
                 // Any callable is accepted, a prebuilt prototype passes straight through. The
                 // wrapper is a local, so it lives exactly as long as the call.
-                out.append(IndentingTextRenderer.of("""
+                out.add("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
                             %%NAME%% = %%CTYPE%%(%%NAME%%)
-                        """).set("NAME", name).set("CTYPE", pyType)
-                        .render());
+                        """);
 
             } else if (pyType.equals("c_char_p")) {
-                out.append(IndentingTextRenderer.of("""
+                out.add("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, c_char_p):
                             %%NAME%% = c_char_p(%%NAME%%.encode('utf-8') if isinstance(%%NAME%%, str) else %%NAME%%)
-                        """).set("NAME", name).render());
+                        """);
 
             } else if (pyType.equals("POINTER(c_char_p)")) {
-                out.append(IndentingTextRenderer.of("""
+                out.add("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(c_char_p)):
                             encoded_list = [s.encode('utf-8') if isinstance(s, str) else s for s in %%NAME%%]
                             %%NAME%% = (c_char_p * len(encoded_list))(*encoded_list)
-                        """).set("NAME", name).render());
+                        """);
 
             } else if (pyType.startsWith("POINTER(c_")) {
                 String baseType = pyType.substring("POINTER(".length(), pyType.length() - 1);
-                out.append(IndentingTextRenderer.of("""
-                                if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(%%BASE%%)):
-                                    %%NAME%% = np.ascontiguousarray(%%NAME%%, dtype=np.%%NUMPY%%).ctypes.data_as(POINTER(%%BASE%%))
-                                """)
-                        .set("NAME", name)
-                        .set("BASE", baseType)
-                        .set("NUMPY", getNumpyType(baseType))
-                        .render());
+                out.set("BASE", baseType).set("NUMPY", getNumpyType(baseType)).add("""
+                        if %%NAME%% is not None and not isinstance(%%NAME%%, POINTER(%%BASE%%)):
+                            %%NAME%% = np.ascontiguousarray(%%NAME%%, dtype=np.%%NUMPY%%).ctypes.data_as(POINTER(%%BASE%%))
+                        """);
             }
         }
 
