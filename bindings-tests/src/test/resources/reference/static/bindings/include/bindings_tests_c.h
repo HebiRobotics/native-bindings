@@ -79,9 +79,9 @@ typedef struct bindings_tests_Circle_* bindings_tests_CirclePtr;
 typedef struct bindings_tests_Square_* bindings_tests_SquarePtr;
 
 typedef enum bindings_tests_CircleColor {
-  bindings_tests_CircleColor_Red = 0,
-  bindings_tests_CircleColor_Green = 1,
-  bindings_tests_CircleColor_Blue = 2
+    bindings_tests_CircleColor_Red = 0,
+    bindings_tests_CircleColor_Green = 1,
+    bindings_tests_CircleColor_Blue = 2
 } bindings_tests_CircleColor;
 #if defined(_MSC_VER) || defined(__cplusplus)
 static_assert(sizeof(bindings_tests_CircleColor) == 4, "error: unexpected size for bindings_tests_CircleColor enum");
@@ -90,9 +90,9 @@ _Static_assert(sizeof(bindings_tests_CircleColor) == 4, "error: unexpected size 
 #endif
 
 typedef enum bindings_tests_Color {
-  bindings_tests_Color_Red = 0,
-  bindings_tests_Color_Green = 1,
-  bindings_tests_Color_Blue = 2
+    bindings_tests_Color_Red = 0,
+    bindings_tests_Color_Green = 1,
+    bindings_tests_Color_Blue = 2
 } bindings_tests_Color;
 #if defined(_MSC_VER) || defined(__cplusplus)
 static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bindings_tests_Color enum");
@@ -101,8 +101,8 @@ _Static_assert(sizeof(bindings_tests_Color) == 4, "error: unexpected size for bi
 #endif
 
 typedef enum bindings_tests_Marker {
-  bindings_tests_Marker_Dot = 0,
-  bindings_tests_Marker_Cross = 1
+    bindings_tests_Marker_Dot = 0,
+    bindings_tests_Marker_Cross = 1
 } bindings_tests_Marker;
 #if defined(_MSC_VER) || defined(__cplusplus)
 static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for bindings_tests_Marker enum");

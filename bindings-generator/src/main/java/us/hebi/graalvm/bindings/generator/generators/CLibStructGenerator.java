@@ -118,12 +118,12 @@ public class CLibStructGenerator extends AbstractGenerator {
      * is what native-image looks up, and they stay in the model's source order, which is the ABI.
      */
     private static String generateProbeHeader(AnnotatedCLibStruct struct, String headerName) {
-        String guard = "BINDINGS_" + headerName.replace('.', '_').toUpperCase();
-
-        var out = new StringBuilder();
-        out.append("#ifndef ").append(guard).append("\n");
-        out.append("#define ").append(guard).append("\n");
-        out.append("""
+        var out = new IndentingTextRenderer()
+                .set("GUARD", "BINDINGS_" + headerName.replace('.', '_').toUpperCase())
+                .set("NAME", struct.getCStructName());
+        out.add("""
+                #ifndef %%GUARD%%
+                #define %%GUARD%%
 
                 /*
                  * Struct definition for the GraalVM @CStruct layout probe. This header is only
@@ -135,16 +135,14 @@ public class CLibStructGenerator extends AbstractGenerator {
                 #include <stddef.h>
                 #include <stdint.h>
 
-                typedef struct {
                 """);
-
+        out.beginControlFlow("typedef struct {");
         for (var field : struct.getFields()) {
-            out.append("    ").append(TypeMap.toStructFieldC(field.getDataType(), field.isConst())).append(" ").append(field.getName()).append(";\n");
+            out.addLine(TypeMap.toStructFieldC(field.getDataType(), field.isConst()) + " " + field.getName() + ";");
         }
-
-        out.append("} ").append(struct.getCStructName()).append(";\n");
-        out.append("\n#endif\n");
-        return out.toString();
+        out.endControlFlow("} %%NAME%%;");
+        out.addLine().addLine("#endif");
+        return out.render();
     }
 
     private static TypeSpec generateDirectives(ClassName directivesClass, String headerName) {
