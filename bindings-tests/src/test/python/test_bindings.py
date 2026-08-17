@@ -533,19 +533,9 @@ class CallbacksTest(unittest.TestCase):
 
         bindings_tests.Callbacks.invoke_times(callback, user_data, 5)
 
-        # Fires synchronously, five times, with indices 0..4, before returning
+        # Fires synchronously, five times, with indices 0..4. The void* is passed through unread.
         self.assertEqual(5, state.count)
         self.assertEqual([0, 1, 2, 3, 4], list(state.indices)[:5])
-
-    def test_invoke_once(self):
-        state = CallbacksTest._State()
-        user_data = ctypes.cast(ctypes.pointer(state), ctypes.c_void_p)
-        callback = self._make_callback()
-
-        bindings_tests.Callbacks.invoke_once(callback, user_data, 7)
-
-        self.assertEqual(1, state.count)
-        self.assertEqual(7, state.indices[0])
 
     def test_null_callback_is_a_noop(self):
         state = CallbacksTest._State()
@@ -553,9 +543,99 @@ class CallbacksTest(unittest.TestCase):
         null_callback = bindings_tests.IndexCallbackFunction()
 
         bindings_tests.Callbacks.invoke_times(null_callback, user_data, 5)
-        bindings_tests.Callbacks.invoke_once(null_callback, user_data, 7)
 
         self.assertEqual(0, state.count)
+
+    def test_plain_function(self):
+        seen = []
+
+        def handler(user_data, index):
+            # Nothing was passed, so nothing arrives
+            self.assertIsNone(user_data)
+            seen.append(index)
+
+        # Any callable works, the wrapper builds the ctypes prototype around it
+        bindings_tests.Callbacks.invoke_times(handler, None, 5)
+
+        self.assertEqual([0, 1, 2, 3, 4], seen)
+
+    def test_double_callback(self):
+        # A binary operator with no context at all, both arguments and the result are plain floats
+        result = bindings_tests.Callbacks.invoke_double_callback(lambda a, b: a + b, 1.5, 2.25)
+
+        self.assertEqual(3.75, result)
+
+    def test_double_span_to_scalar_callback(self):
+        # Spans carry their own length and arrive as ctypes pointers to the mirror struct
+        def sum_spans(a, b):
+            total = 0.0
+            for i in range(a.contents.length):
+                total += a.contents.data[i]
+            for i in range(b.contents.length):
+                total += b.contents.data[i]
+            return total
+
+        result = bindings_tests.Callbacks.invoke_double_span_to_scalar_callback(sum_spans, [1.0, 2.0, 3.0], [4.0, 5.0])
+
+        self.assertEqual(15.0, result)
+
+    def test_callback_with_raw_pointer_arguments(self):
+        # The solver-objective shape. Raw pointers carry no length, so the count is agreed on
+        # out of band.
+        source = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+        target = np.zeros(3, dtype=np.float64)
+
+        def double_all(user_data, values_in, values_out):
+            for i in range(3):
+                values_out[i] = values_in[i] * 2.0
+
+        bindings_tests.Callbacks.transform_once(double_all, None, source, target)
+
+        self.assertEqual([2.0, 4.0, 6.0], list(target))
+
+    def test_invoke_plain_times(self):
+        seen = []
+
+        # No user_data, so the closure is the only channel. Any callable is still accepted.
+        bindings_tests.Callbacks.invoke_plain_times(seen.append, 4)
+
+        self.assertEqual([0, 1, 2, 3], seen)
+
+    def test_invoke_plain_checked(self):
+        seen = []
+
+        bindings_tests.Callbacks.invoke_plain_checked(seen.append, 3)
+        self.assertEqual([3], seen)
+
+        # The callback fires before the validation, so a failing call still records it
+        with self.assertRaises(bindings_tests.Error) as caught:
+            bindings_tests.Callbacks.invoke_plain_checked(seen.append, -1)
+        self.assertIn("must not be negative", str(caught.exception))
+        self.assertEqual("bindings_tests:IllegalArgumentException", caught.exception.id)
+        self.assertEqual([3, -1], seen)
+
+    def test_invoke_plain_on_worker_thread(self):
+        seen = []
+
+        bindings_tests.Callbacks.invoke_plain_on_worker_thread(seen.append, 6)
+
+        self.assertEqual([6], seen)
+
+    def test_notify_plain_once(self):
+        seen = []
+
+        # Nothing crosses the ABI, so the callable takes no arguments either
+        bindings_tests.Callbacks.notify_plain_once(lambda: seen.append(1))
+
+        self.assertEqual([1], seen)
+
+    def test_method_wrapper_is_not_retained(self):
+        # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call
+        for i in range(10):
+            bindings_tests.Callbacks.invoke_times(lambda user_data, index: None, None, i)
+
+        self.assertFalse(hasattr(bindings_tests, "_callback_wrappers"))
+        self.assertFalse(hasattr(bindings_tests, "_wrap_callback"))
 
 
 if __name__ == "__main__":

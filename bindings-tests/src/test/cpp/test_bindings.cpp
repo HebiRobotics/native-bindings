@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bindings_tests.hpp"
@@ -508,6 +509,16 @@ struct CallbackState {
   int indices[kMaxCallbacks];
 };
 
+// The callback's pointers carry no length, so the element count is agreed on out of band.
+const int kTransformCount = 3;
+
+void onTransform(void* userData, const double* input, double* output) {
+  ++static_cast<CallbackState*>(userData)->count;
+  for (int i = 0; i < kTransformCount; ++i) {
+    output[i] = input[i] * 2.0;
+  }
+}
+
 void onIndex(void* userData, int index) {
   CallbackState* state = static_cast<CallbackState*>(userData);
   if (state->count < kMaxCallbacks) {
@@ -516,10 +527,21 @@ void onIndex(void* userData, int index) {
   ++state->count;
 }
 
+// The plain shapes carry no userData, so their state lives at file scope and only a
+// captureless lambda converts to the parameter type
+CallbackState plainState;
+
+void onPlainIndex(int index) {
+  if (plainState.count < kMaxCallbacks) {
+    plainState.indices[plainState.count] = index;
+  }
+  ++plainState.count;
+}
+
 }  // namespace
 
 static void testCallbacks() {
-  // Fires synchronously, five times, with indices 0..4, before returning.
+  // Fires synchronously, five times, with indices 0..4. The void* is passed through unread.
   CallbackState state = {};
   bt::callbacks::invokeTimes(&onIndex, &state, 5);
   CHECK(state.count == 5);
@@ -527,16 +549,73 @@ static void testCallbacks() {
     CHECK(state.indices[i] == i);
   }
 
-  CallbackState once = {};
-  bt::callbacks::invokeOnce(&onIndex, &once, 7);
-  CHECK(once.count == 1);
-  CHECK(once.indices[0] == 7);
-
   // A null function pointer is a no-op.
   CallbackState none = {};
   bt::callbacks::invokeTimes(nullptr, &none, 5);
-  bt::callbacks::invokeOnce(nullptr, &none, 7);
   CHECK(none.count == 0);
+
+  // A binary operator with no context at all, a captureless lambda converts to it.
+  CHECK(bt::callbacks::invokeDoubleCallback([](double a, double b) { return a + b; }, 1.5, 2.25) == 3.75);
+
+  // The method's spans get their vector overload, the callback receives them by pointer
+  const std::vector<double> left = {1.0, 2.0, 3.0};
+  const std::vector<double> right = {4.0, 5.0};
+  CHECK(bt::callbacks::invokeDoubleSpanToScalarCallback(
+            [](const bt::internal::DoubleSpan* a, const bt::internal::DoubleSpan* b) {
+              double total = 0.0;
+              for (size_t i = 0; i < a->length; i++) total += a->data[i];
+              for (size_t i = 0; i < b->length; i++) total += b->data[i];
+              return total;
+            },
+            left, right) == 15.0);
+
+  // Raw pointer arguments, the shape of a solver objective. The const input still gets its
+  // vector overload.
+  CallbackState transformed = {};
+  const double source[kTransformCount] = {1.0, 2.0, 3.0};
+  double target[kTransformCount] = {};
+  bt::callbacks::transformOnce(&onTransform, &transformed, source, target);
+  CHECK(transformed.count == 1);
+  CHECK(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
+
+  const std::vector<double> sourceVector = {4.0, 5.0, 6.0};
+  bt::callbacks::transformOnce(&onTransform, &transformed, sourceVector, target);
+  CHECK(transformed.count == 2);
+  CHECK(target[0] == 8.0 && target[1] == 10.0 && target[2] == 12.0);
+
+  // No context pointer, so a plain function pointer or captureless lambda
+  plainState = CallbackState();
+  bt::callbacks::invokePlainTimes(&onPlainIndex, 4);
+  CHECK(plainState.count == 4);
+  for (int i = 0; i < 4; ++i) {
+    CHECK(plainState.indices[i] == i);
+  }
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainTimes([](int index) { onPlainIndex(index); }, 3);
+  CHECK(plainState.count == 3);
+  CHECK(plainState.indices[2] == 2);
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainChecked(&onPlainIndex, 3);
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == 3);
+
+  // The callback fires before the validation, so a throwing call still records it.
+  plainState = CallbackState();
+  CHECK(throwsWithMessage([] { bt::callbacks::invokePlainChecked(&onPlainIndex, -1); },
+                          "must not be negative"));
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == -1);
+
+  plainState = CallbackState();
+  bt::callbacks::invokePlainOnWorkerThread(&onPlainIndex, 6);
+  CHECK(plainState.count == 1);
+  CHECK(plainState.indices[0] == 6);
+
+  plainState = CallbackState();
+  bt::callbacks::notifyPlainOnce([] { ++plainState.count; });
+  CHECK(plainState.count == 1);
 }
 
 // ---------------------------------------------------------------------------

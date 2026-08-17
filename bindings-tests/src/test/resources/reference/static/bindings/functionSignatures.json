@@ -136,34 +136,74 @@
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.invokeOnce": {
+  "bindings_tests.Callbacks.invokeDoubleCallback": {
     "inputs": [{
         "kind": "required",
         "name": "func",
-        "type": ["any"]
+        "type": ["function_handle"]
       }, {
         "kind": "required",
-        "name": "userData",
-        "type": ["any"]
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "a",
+        "type": ["numeric"]
+      }, {
+        "kind": "required",
+        "name": "b",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokePlainChecked": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
       }, {
         "kind": "required",
         "name": "index",
         "type": ["numeric"]
       }]
   },
-  "bindings_tests.Callbacks.invokeTimes": {
+  "bindings_tests.Callbacks.invokePlainOnWorkerThread": {
     "inputs": [{
         "kind": "required",
         "name": "func",
-        "type": ["any"]
+        "type": ["function_handle"]
       }, {
         "kind": "required",
-        "name": "userData",
-        "type": ["any"]
+        "name": "index",
+        "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.invokePlainTimes": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
       }, {
         "kind": "required",
         "name": "times",
         "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Callbacks.notifyPlainOnce": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
       }]
   },
   "bindings_tests.Circle": {

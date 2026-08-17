@@ -4,5 +4,6 @@
 LIBRARY libmex
 EXPORTS
     mexCallMATLAB_800
+    mexCallMATLABWithTrap_800
     mexErrMsgIdAndTxt_800
     mexErrMsgTxt_800

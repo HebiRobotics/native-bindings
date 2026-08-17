@@ -1,8 +1,10 @@
 #include "mex.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -30,12 +32,16 @@ inline uint32_t hash32_fnv1a(const mxChar* str, size_t len) {
     return hash;
 }
 
+// mxGetScalar is undefined on an empty array and unpredictable on a struct
+// or cell, so only classes it is actually defined for get through.
+inline bool isNumericScalar(const mxArray* arg) {
+    return (mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
+            && !mxIsComplex(arg) && mxGetNumberOfElements(arg) == 1;
+}
+
 template <typename T>
 inline T getScalar(const mxArray* arg, const char* name) {
-    // mxGetScalar is undefined on an empty array and unpredictable on a struct
-    // or cell, so only classes it is actually defined for get through.
-    if (!(mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
-            || mxIsComplex(arg) || mxGetNumberOfElements(arg) != 1) {
+    if (!isNumericScalar(arg)) {
         mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument '%s' must be a numeric scalar.", name);
     }
     return static_cast<T>(mxGetScalar(arg));
@@ -158,6 +164,65 @@ struct MatlabStringArray {
     operator char**() const { return ptrs; }
     operator const char**() const { return (const char**)ptrs; }
     MatlabStringArray(const MatlabStringArray&) = delete;
+};
+
+// Only the thread that loaded the MEX file may enter the Matrix API
+static const std::thread::id matlabThread = std::this_thread::get_id();
+
+// An empty argument passes a null function pointer, like the other language faces
+inline const mxArray* getFunctionHandle(const mxArray* arg, const char* name) {
+    if (mxGetNumberOfElements(arg) == 0) {
+        return nullptr;
+    }
+    if (!mxIsClass(arg, "function_handle")) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument '%s' must be a function handle or empty.", name);
+    }
+    return arg;
+}
+
+// Result of a callback scope, copied out before it closes. MATLAB owns the trapped
+// error until the end of the mexFunction, so it outlives the scope.
+struct CallbackOutcome {
+    mxArray* error; // what a failed invocation trapped
+    int dropped;    // invocations that never reached MATLAB
+};
+
+// Raises a trapped callback error after the library has unwound. 'throw' keeps the
+// original identifier and message (rethrow rejects errors not caught in MATLAB code).
+inline void checkCallbackError(const CallbackOutcome& outcome) {
+    if (outcome.error != nullptr) {
+        mxArray* error = outcome.error;
+        mexCallMATLAB(0, nullptr, 1, &error, "throw");
+    }
+    if (outcome.dropped != 0) {
+        mexErrMsgIdAndTxt("bindings_tests:NotSupported",
+                          "%d callback invocation(s) fired on a thread that cannot reach MATLAB and were skipped.", outcome.dropped);
+    }
+}
+
+// A bad result is trapped like a failing feval and raised after the library returns.
+// Returns nullptr when the result is usable.
+inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
+    if (isNumericScalar(result)) {
+        return nullptr;
+    }
+    mxArray* args[3] = {mxCreateString("bindings_tests:TypeError"),
+                        mxCreateString("Callback '%s' must return a numeric scalar."),
+                        mxCreateString(callback)};
+    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
+    for (mxArray* arg : args) mxDestroyArray(arg);
+    return error;
+}
+
+// One site per callback parameter of every dispatched method. Each site owns the static
+// its scope publishes itself through, so two callbacks of the same type stay apart.
+enum CallbackSite {
+    bindings_tests_Callbacks_invokeDoubleCallback_func,
+    bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback_func,
+    bindings_tests_Callbacks_invokePlainTimes_func,
+    bindings_tests_Callbacks_invokePlainChecked_func,
+    bindings_tests_Callbacks_invokePlainOnWorkerThread_func,
+    bindings_tests_Callbacks_notifyPlainOnce_func,
 };
 
 inline mxArray* createEmpty() {
@@ -284,6 +349,13 @@ inline StatusInfo getStatusInfo(const mxArray* arg) {
     };
 }
 
+typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
+typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const DoubleSpan* a, const DoubleSpan* b);
+typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
+typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
+
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
 // as "either UTF-8 encoding or the local codepage encoding". The UTF-8 default was added in
@@ -395,6 +467,179 @@ inline mxArray* createMexStatusInfo(const StatusInfo& value) {
     mxSetField(result, 0, "enabled", mxCreateLogicalScalar(value.enabled != 0));
     return result;
 }
+
+// Wrapper handle for DoubleCallbackFunc (alive for one call)
+template <CallbackSite Site>
+struct DoubleCallbackFuncScope {
+    static DoubleCallbackFuncScope* current;
+    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+    DoubleCallbackFuncScope* const previous;
+    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+    explicit DoubleCallbackFuncScope(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+    ~DoubleCallbackFuncScope() { current = previous; }
+    DoubleCallbackFuncScope(const DoubleCallbackFuncScope&) = delete;
+
+    bindings_tests_DoubleCallbackFunc function() const { return handle != nullptr ? &invoke : nullptr; }
+
+    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+    static double invoke(double a, double b) {
+        DoubleCallbackFuncScope* scope = current;
+        // An unsupported fire after the scope closed means the library kept the pointer past the call
+        if (scope == nullptr || scope->error != nullptr) {
+            return double{};
+        }
+        if (std::this_thread::get_id() != matlabThread) {
+            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+            return double{};
+        }
+        mxArray* args[3] = {const_cast<mxArray*>(scope->handle), createMexScalar(a), createMexScalar(b)};
+        double value{};
+        mxArray* result = nullptr;
+        mxArray* error = mexCallMATLABWithTrap(1, &result, 3, args, "feval");
+        if (error == nullptr) {
+            error = checkCallbackResult(result, "DoubleCallbackFunc");
+            if (error == nullptr) {
+                value = static_cast<double>(mxGetScalar(result));
+            }
+            mxDestroyArray(result);
+        }
+        scope->error = error;
+        mxDestroyArray(args[1]);
+        mxDestroyArray(args[2]);
+        return value;
+    }
+};
+template <CallbackSite Site>
+DoubleCallbackFuncScope<Site>* DoubleCallbackFuncScope<Site>::current = nullptr;
+
+// Wrapper handle for DoubleSpanToScalarCallbackFunc (alive for one call)
+template <CallbackSite Site>
+struct DoubleSpanToScalarCallbackFuncScope {
+    static DoubleSpanToScalarCallbackFuncScope* current;
+    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+    DoubleSpanToScalarCallbackFuncScope* const previous;
+    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+    explicit DoubleSpanToScalarCallbackFuncScope(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+    ~DoubleSpanToScalarCallbackFuncScope() { current = previous; }
+    DoubleSpanToScalarCallbackFuncScope(const DoubleSpanToScalarCallbackFuncScope&) = delete;
+
+    bindings_tests_DoubleSpanToScalarCallbackFunc function() const { return handle != nullptr ? &invoke : nullptr; }
+
+    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+    static double invoke(const DoubleSpan* a, const DoubleSpan* b) {
+        DoubleSpanToScalarCallbackFuncScope* scope = current;
+        // An unsupported fire after the scope closed means the library kept the pointer past the call
+        if (scope == nullptr || scope->error != nullptr) {
+            return double{};
+        }
+        if (std::this_thread::get_id() != matlabThread) {
+            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+            return double{};
+        }
+        mxArray* args[3] = {const_cast<mxArray*>(scope->handle), createMexDoubleArray(*a), createMexDoubleArray(*b)};
+        double value{};
+        mxArray* result = nullptr;
+        mxArray* error = mexCallMATLABWithTrap(1, &result, 3, args, "feval");
+        if (error == nullptr) {
+            error = checkCallbackResult(result, "DoubleSpanToScalarCallbackFunc");
+            if (error == nullptr) {
+                value = static_cast<double>(mxGetScalar(result));
+            }
+            mxDestroyArray(result);
+        }
+        scope->error = error;
+        mxDestroyArray(args[1]);
+        mxDestroyArray(args[2]);
+        return value;
+    }
+};
+template <CallbackSite Site>
+DoubleSpanToScalarCallbackFuncScope<Site>* DoubleSpanToScalarCallbackFuncScope<Site>::current = nullptr;
+
+// Wrapper handle for PlainIndexCallbackFunction (alive for one call)
+template <CallbackSite Site>
+struct PlainIndexCallbackFunctionScope {
+    static PlainIndexCallbackFunctionScope* current;
+    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+    PlainIndexCallbackFunctionScope* const previous;
+    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+    explicit PlainIndexCallbackFunctionScope(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+    ~PlainIndexCallbackFunctionScope() { current = previous; }
+    PlainIndexCallbackFunctionScope(const PlainIndexCallbackFunctionScope&) = delete;
+
+    bindings_tests_PlainIndexCallbackFunction function() const { return handle != nullptr ? &invoke : nullptr; }
+
+    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+    static void invoke(int index) {
+        PlainIndexCallbackFunctionScope* scope = current;
+        // An unsupported fire after the scope closed means the library kept the pointer past the call
+        if (scope == nullptr || scope->error != nullptr) {
+            return;
+        }
+        if (std::this_thread::get_id() != matlabThread) {
+            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        mxArray* args[2] = {const_cast<mxArray*>(scope->handle), createMexScalar(index)};
+        mxArray* error = mexCallMATLABWithTrap(0, nullptr, 2, args, "feval");
+        scope->error = error;
+        mxDestroyArray(args[1]);
+    }
+};
+template <CallbackSite Site>
+PlainIndexCallbackFunctionScope<Site>* PlainIndexCallbackFunctionScope<Site>::current = nullptr;
+
+// Wrapper handle for PlainNotifyCallbackFunction (alive for one call)
+template <CallbackSite Site>
+struct PlainNotifyCallbackFunctionScope {
+    static PlainNotifyCallbackFunctionScope* current;
+    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+    PlainNotifyCallbackFunctionScope* const previous;
+    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+    explicit PlainNotifyCallbackFunctionScope(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+    ~PlainNotifyCallbackFunctionScope() { current = previous; }
+    PlainNotifyCallbackFunctionScope(const PlainNotifyCallbackFunctionScope&) = delete;
+
+    bindings_tests_PlainNotifyCallbackFunction function() const { return handle != nullptr ? &invoke : nullptr; }
+
+    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+    static void invoke() {
+        PlainNotifyCallbackFunctionScope* scope = current;
+        // An unsupported fire after the scope closed means the library kept the pointer past the call
+        if (scope == nullptr || scope->error != nullptr) {
+            return;
+        }
+        if (std::this_thread::get_id() != matlabThread) {
+            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        mxArray* args[1] = {const_cast<mxArray*>(scope->handle)};
+        mxArray* error = mexCallMATLABWithTrap(0, nullptr, 1, args, "feval");
+        scope->error = error;
+    }
+};
+template <CallbackSite Site>
+PlainNotifyCallbackFunctionScope<Site>* PlainNotifyCallbackFunctionScope<Site>::current = nullptr;
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {
@@ -821,22 +1066,97 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         }
 
         // Callbacks
-        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeTimes") */ 3311763887: {
-            static auto bindings_tests_Callbacks_invokeTimes = libLoader.getFunc<void(*)(void*, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");
-            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeTimes");
-            void* func = getPtr<void*>(prhs[1]);
-            void* userData = getPtr<void*>(prhs[2]);
-            size_t times = getScalar<size_t>(prhs[3], "times");
-            bindings_tests_Callbacks_invokeTimes(func, userData, times);
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeDoubleCallback") */ 3965007693: {
+            static auto bindings_tests_Callbacks_invokeDoubleCallback = libLoader.getFunc<double(*)(bindings_tests_DoubleCallbackFunc, double, double)>("bindings_tests_Callbacks_invokeDoubleCallback");
+            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeDoubleCallback");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            double a = getScalar<double>(prhs[2], "a");
+            double b = getScalar<double>(prhs[3], "b");
+            double _value;
+            CallbackOutcome funcOutcome;
+            {
+                DoubleCallbackFuncScope<bindings_tests_Callbacks_invokeDoubleCallback_func> func(funcHandle);
+                _value = bindings_tests_Callbacks_invokeDoubleCallback(func.function(), a, b);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
             break;
         }
-        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeOnce") */ 3234909522: {
-            static auto bindings_tests_Callbacks_invokeOnce = libLoader.getFunc<void(*)(void*, void*, int)>("bindings_tests_Callbacks_invokeOnce");
-            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeOnce");
-            void* func = getPtr<void*>(prhs[1]);
-            void* userData = getPtr<void*>(prhs[2]);
-            int index = getScalar<int>(prhs[3], "index");
-            bindings_tests_Callbacks_invokeOnce(func, userData, index);
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback") */ 728431532: {
+            static auto bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback = libLoader.getFunc<double(*)(bindings_tests_DoubleSpanToScalarCallbackFunc, DoubleSpan, DoubleSpan)>("bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback");
+            checkArgCount(nrhs, 3, "bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            MatlabArray<double, mxDOUBLE_CLASS> a_arr(prhs[2]);
+            DoubleSpan a = {a_arr.ptr, mxGetNumberOfElements(prhs[2])};
+            MatlabArray<double, mxDOUBLE_CLASS> b_arr(prhs[3]);
+            DoubleSpan b = {b_arr.ptr, mxGetNumberOfElements(prhs[3])};
+            double _value;
+            CallbackOutcome funcOutcome;
+            {
+                DoubleSpanToScalarCallbackFuncScope<bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback_func> func(funcHandle);
+                _value = bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func.function(), a, b);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokePlainTimes") */ 1177968689: {
+            static auto bindings_tests_Callbacks_invokePlainTimes = libLoader.getFunc<void(*)(bindings_tests_PlainIndexCallbackFunction, size_t)>("bindings_tests_Callbacks_invokePlainTimes");
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokePlainTimes");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            size_t times = getScalar<size_t>(prhs[2], "times");
+            CallbackOutcome funcOutcome;
+            {
+                PlainIndexCallbackFunctionScope<bindings_tests_Callbacks_invokePlainTimes_func> func(funcHandle);
+                bindings_tests_Callbacks_invokePlainTimes(func.function(), times);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokePlainChecked") */ 1568763650: {
+            static auto bindings_tests_Callbacks_invokePlainChecked = libLoader.getFunc<void(*)(ErrorInfo*, bindings_tests_PlainIndexCallbackFunction, int)>("bindings_tests_Callbacks_invokePlainChecked");
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokePlainChecked");
+            ErrorInfo _error = {};
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            int index = getScalar<int>(prhs[2], "index");
+            CallbackOutcome funcOutcome;
+            {
+                PlainIndexCallbackFunctionScope<bindings_tests_Callbacks_invokePlainChecked_func> func(funcHandle);
+                bindings_tests_Callbacks_invokePlainChecked(&_error, func.function(), index);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            checkError(_error);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokePlainOnWorkerThread") */ 3138948006: {
+            static auto bindings_tests_Callbacks_invokePlainOnWorkerThread = libLoader.getFunc<void(*)(bindings_tests_PlainIndexCallbackFunction, int)>("bindings_tests_Callbacks_invokePlainOnWorkerThread");
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokePlainOnWorkerThread");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            int index = getScalar<int>(prhs[2], "index");
+            CallbackOutcome funcOutcome;
+            {
+                PlainIndexCallbackFunctionScope<bindings_tests_Callbacks_invokePlainOnWorkerThread_func> func(funcHandle);
+                bindings_tests_Callbacks_invokePlainOnWorkerThread(func.function(), index);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_notifyPlainOnce") */ 203427955: {
+            static auto bindings_tests_Callbacks_notifyPlainOnce = libLoader.getFunc<void(*)(bindings_tests_PlainNotifyCallbackFunction)>("bindings_tests_Callbacks_notifyPlainOnce");
+            checkArgCount(nrhs, 1, "bindings_tests_Callbacks_notifyPlainOnce");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            CallbackOutcome funcOutcome;
+            {
+                PlainNotifyCallbackFunctionScope<bindings_tests_Callbacks_notifyPlainOnce_func> func(funcHandle);
+                bindings_tests_Callbacks_notifyPlainOnce(func.function());
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
             break;
         }
 

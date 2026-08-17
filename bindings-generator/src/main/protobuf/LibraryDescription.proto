@@ -20,8 +20,8 @@ message LibraryDescription {
 
   repeated ClassDescription classes = 10;
   repeated EnumDescription enums = 11;
-  repeated TypeDef typedefs = 15;
   repeated StructDescription structs = 16;
+  repeated CallbackDescription callbacks = 17;
 
   optional bool enable_graphics = 14 [default = false];
 
@@ -40,11 +40,14 @@ message EnumValueDescription {
   optional int32 c_value = 4; // mapped integer value
 }
 
-message TypeDef {
-  optional string name = 1;
-  optional string c_definition = 2;
-  optional string cpp_definition = 3;
-  optional string python_definition = 4;
+// A function pointer that crosses the public C ABI. Derived from the single
+// @InvokeCFunctionPointer method of a CFunctionPointer interface, so every language
+// face declares the same typedef.
+message CallbackDescription {
+  optional string name = 1; // typedef name, the interface's simple name
+  optional string c_prefix = 2; // namespaced prefix to guarantee uniqueness
+  optional TypeDescription return_type = 3;
+  repeated TypeDescription parameters = 4;
 }
 
 // A user-defined struct that crosses the public C ABI by value. The field order is
@@ -93,12 +96,10 @@ enum DataType {
   FLOAT64_POINTER = 18;       // GraalVM CDoublePointer -> double*
 
   // Meta / High-Level Types
-  TYPEDEF = 40;               // C type alias (e.g. 'my_type_t')
   ENUM = 41;                  // GraalVM @CEnum -> C int (signed 4-byte)
   OBJECT_HANDLE = 42;         // Opaque handle to an Isolate-managed object (void*)
-  reserved 43;                // was VOID_WITH_ERROR_CODE, replaced by the error out-struct
   STRUCT = 44;                // user-defined struct, passed and returned by value in the public C ABI
-  reserved 50;                // was FLOAT64_SPAN, replaced by STRUCT with the span marshaller
+  CALLBACK = 45;              // function pointer described by a CallbackDescription of the same name
 
 }
 

@@ -51,7 +51,7 @@ public final class TypeMap {
     public static String toExternalC(TypeDescription type, boolean ptrSuffix) {
         return switch (type.getDataType()) {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
-            case TYPEDEF, ENUM -> type.getCPrefix() + type.getTypeName();
+            case ENUM, CALLBACK -> type.getCPrefix() + type.getTypeName();
             case STRUCT -> toStructCName(type.getCPrefix(), type.getTypeName());
             default -> toExternalC(type.getDataType());
         };
@@ -186,8 +186,9 @@ public final class TypeMap {
             case OBJECT_HANDLE -> "void*";    // technically void*
 
             // Structs only cross the public ABI by value. The internal entry point sees
-            // them as struct pointers, so they never have an internal name.
-            case STRUCT, TYPEDEF, UNSPECIFIED ->
+            // them as struct pointers, so they never have an internal name. Callbacks are
+            // always named by their typedef.
+            case STRUCT, CALLBACK, UNSPECIFIED ->
                     throw new IllegalArgumentException("Can't determine C type for: " + type);
         };
     }
@@ -220,7 +221,7 @@ public final class TypeMap {
             case FLOAT64_POINTER -> "POINTER(c_double)";
 
             // Meta / Custom
-            case TYPEDEF -> "c_void_p";         // Treat aliases as opaque
+            case CALLBACK -> type.getTypeName(); // the CFUNCTYPE prototype declared next to the typedefs
             case ENUM -> "c_int32";             // @CEnum maps to int
             case OBJECT_HANDLE -> "c_void_p";   // Opaque handles
 
@@ -244,7 +245,7 @@ public final class TypeMap {
                     .flatMap(StructMarshaller::python)
                     .map(StructMarshaller.PyStructMarshaller::typeHint)
                     .orElseGet(desc::getTypeName);
-            case OBJECT_HANDLE, TYPEDEF, ENUM -> desc.getTypeName();
+            case OBJECT_HANDLE, ENUM, CALLBACK -> desc.getTypeName();
             case VOID -> "None";
             case BOOL -> "bool";
 

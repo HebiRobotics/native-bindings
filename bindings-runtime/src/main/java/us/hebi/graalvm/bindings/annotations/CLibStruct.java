@@ -38,6 +38,6 @@ public @interface CLibStruct {
     /**
      * @return prefix for non-namespaced C names
      */
-    String prefix() default "";
+    String cPrefix() default "";
 
 }

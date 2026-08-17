@@ -47,7 +47,6 @@ class Naming;
 class Shape;
 class Circle;
 class Square;
-using IndexCallbackFunction = void (*)(void* userData, int index);
 
 namespace internal {
 using CounterPtr = struct Counter_*;
@@ -77,6 +76,13 @@ struct ErrorInfo {
   int32_t code;
 };
 }
+
+using DoubleCallbackFunc = double (*)(double a, double b);
+using DoubleSpanToScalarCallbackFunc = double (*)(const internal::DoubleSpan* a, const internal::DoubleSpan* b);
+using IndexCallbackFunction = void (*)(void* userData, int index);
+using PlainIndexCallbackFunction = void (*)(int index);
+using PlainNotifyCallbackFunction = void (*)();
+using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 class Exception : public std::runtime_error {
 public:
@@ -381,6 +387,9 @@ std::vector<double> getSequence(size_t count) noexcept;
  * @brief Synchronous callbacks into caller-provided function pointers.
  */
 namespace callbacks {
+double invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept;
+double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept;
 
 /**
  * @details 
@@ -395,13 +404,61 @@ namespace callbacks {
 void invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept;
 
 /**
- * @brief Invokes the callback once with the given index. Returns after it completes.
+ * @details 
+ * Invokes the callback once with the two buffers and returns after it completes.
+ * Both buffers stay owned by the caller, and how many elements they hold is
+ * between the caller and the callback, since a raw pointer carries no length.
+ * The input is not verified! A null function pointer leaves output untouched.
  *
  * @param func 
  * @param userData 
+ * @param input 
+ * @param output 
+ */
+void transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept;
+void transformOnce(TransformCallbackFunction func, void* userData, const std::vector<double>& input, double* output) noexcept;
+
+/**
+ * @details 
+ * Invokes the callback exactly 'times' times with indices 0 to times-1, then
+ * returns. A null function pointer is ignored, and a non-positive count does
+ * nothing.
+ *
+ * @param func 
+ * @param times 
+ */
+void invokePlainTimes(PlainIndexCallbackFunction func, size_t times) noexcept;
+
+/**
+ * @details 
+ * Invokes the callback once with the given index, then throws if the index is
+ * negative. The invocation happens before the validation on purpose, so that a
+ * caller can observe both failures in one call.
+ *
+ * @param func 
+ * @param index 
+ * @throw index is negative
+ */
+void invokePlainChecked(PlainIndexCallbackFunction func, int index);
+
+/**
+ * @details 
+ * Invokes the callback once with the given index on a worker thread, and joins that
+ * thread before returning. The invocation therefore completes within the call but not
+ * on the calling thread, which is the shape a solver has when it fans an objective
+ * out to workers. The callback must be thread safe.
+ *
+ * @param func 
  * @param index 
  */
-void invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept;
+void invokePlainOnWorkerThread(PlainIndexCallbackFunction func, int index) noexcept;
+
+/**
+ * @brief Invokes the callback once. Returns after it completes.
+ *
+ * @param func 
+ */
+void notifyPlainOnce(PlainNotifyCallbackFunction func) noexcept;
 } // namespace callbacks
 
 
@@ -851,8 +908,14 @@ extern "C" {
   int bindings_tests_Arrays_sumUint8(uint8_t*, size_t);
   internal::ByteSpan bindings_tests_Arrays_addOffsetUint8(internal::ByteSpan, char);
   internal::DoubleSpan bindings_tests_Arrays_getSequence(size_t);
+  double bindings_tests_Callbacks_invokeDoubleCallback(DoubleCallbackFunc, double, double);
+  double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc, internal::DoubleSpan, internal::DoubleSpan);
   void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction, void*, size_t);
-  void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction, void*, int);
+  void bindings_tests_Callbacks_transformOnce(TransformCallbackFunction, void*, const double*, double*);
+  void bindings_tests_Callbacks_invokePlainTimes(PlainIndexCallbackFunction, size_t);
+  void bindings_tests_Callbacks_invokePlainChecked(internal::ErrorInfo*, PlainIndexCallbackFunction, int);
+  void bindings_tests_Callbacks_invokePlainOnWorkerThread(PlainIndexCallbackFunction, int);
+  void bindings_tests_Callbacks_notifyPlainOnce(PlainNotifyCallbackFunction);
   void bindings_tests_Errors_requireNonNegative(internal::ErrorInfo*, int);
   int bindings_tests_Errors_divideInt32(internal::ErrorInfo*, int, int);
   double bindings_tests_Errors_failingFloat64(internal::ErrorInfo*, int);
@@ -1164,11 +1227,37 @@ inline std::vector<double> arrays::getSequence(size_t count) noexcept {
 }
 
 // Callbacks
+inline double callbacks::invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept {
+  return bindings_tests_Callbacks_invokeDoubleCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept {
+  return bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b);
+}
+inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept {
+  return invokeDoubleSpanToScalarCallback(func, {a.data(), a.size()}, {b.data(), b.size()});
+}
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   bindings_tests_Callbacks_invokeTimes(func, userData, times);
 }
-inline void callbacks::invokeOnce(IndexCallbackFunction func, void* userData, int index) noexcept {
-  bindings_tests_Callbacks_invokeOnce(func, userData, index);
+inline void callbacks::transformOnce(TransformCallbackFunction func, void* userData, const double* input, double* output) noexcept {
+  bindings_tests_Callbacks_transformOnce(func, userData, input, output);
+}
+inline void callbacks::transformOnce(TransformCallbackFunction func, void* userData, const std::vector<double>& input, double* output) noexcept {
+  transformOnce(func, userData, input.data(), output);
+}
+inline void callbacks::invokePlainTimes(PlainIndexCallbackFunction func, size_t times) noexcept {
+  bindings_tests_Callbacks_invokePlainTimes(func, times);
+}
+inline void callbacks::invokePlainChecked(PlainIndexCallbackFunction func, int index) {
+  internal::ErrorInfo error_ = {};
+  bindings_tests_Callbacks_invokePlainChecked(&error_, func, index);
+  checkError(error_);
+}
+inline void callbacks::invokePlainOnWorkerThread(PlainIndexCallbackFunction func, int index) noexcept {
+  bindings_tests_Callbacks_invokePlainOnWorkerThread(func, index);
+}
+inline void callbacks::notifyPlainOnce(PlainNotifyCallbackFunction func) noexcept {
+  bindings_tests_Callbacks_notifyPlainOnce(func);
 }
 
 // Errors

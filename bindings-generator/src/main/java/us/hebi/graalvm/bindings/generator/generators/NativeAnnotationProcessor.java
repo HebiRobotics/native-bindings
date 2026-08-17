@@ -5,8 +5,11 @@ import com.google.auto.service.AutoService;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
+import us.hebi.graalvm.bindings.annotations.CLibCallback;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibCallback;
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
+import us.hebi.graalvm.bindings.generator.annotations.AnnotationUtil;
 import us.hebi.graalvm.bindings.generator.annotations.EnvProcessor;
 import us.hebi.graalvm.bindings.generator.bindings.CBindingsGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.CppBindingsGenerator;
@@ -68,26 +71,58 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         // Runs once per processor instance, i.e. once per compilation, so a shared JVM
         // (IDE daemon, compile-testing) never sees a previous run's marshallers
         StructMarshallers.clearRegistrations();
+        checkLibraryCPrefix();
         return List.of(new Step() {
             @Override
             public Set<String> annotations() {
-                return ImmutableSet.of(CLibClass.class.getCanonicalName());
+                return ImmutableSet.of(CLibClass.class.getCanonicalName(), CLibCallback.class.getCanonicalName());
             }
 
             @Override
             public Set<? extends Element> process(ImmutableSetMultimap<String, Element> elementsByAnnotation) {
+                for (Element element : elementsByAnnotation.get(CLibCallback.class.getCanonicalName())) {
+                    reportErrors(() -> checkIsCallbackType(element));
+                }
                 for (Element element : elementsByAnnotation.get(CLibClass.class.getCanonicalName())) {
-                    try {
-                        processElement(castToTypeElement(element), processingEnv);
-                    } catch (Throwable t) {
-                        StringWriter sw = new StringWriter();
-                        t.printStackTrace(new PrintWriter(sw));
-                        processingEnv.getMessager().printMessage(ERROR, sw.toString());
-                    }
+                    reportErrors(() -> processElement(castToTypeElement(element), processingEnv));
                 }
                 return Collections.emptySet();
             }
         });
+    }
+
+    /**
+     * The library prefix leads every non-namespaced C name, and it defaults to the namespace
+     * with the dots replaced. There is no annotated element to point at, so this is reported
+     * the way a missing option is.
+     */
+    private void checkLibraryCPrefix() {
+        String cPrefix = new EnvProcessor.GeneratorOptions(processingEnv).getCPrefix();
+        if (!AnnotationUtil.isCIdentifier(cPrefix)) {
+            processingEnv.getMessager().printMessage(ERROR, String.format(
+                    "-A%s: '%s' is not a valid C identifier",
+                    EnvProcessor.OPTION_C_PREFIX, cPrefix));
+        }
+    }
+
+    private void reportErrors(Runnable task) {
+        try {
+            task.run();
+        } catch (Throwable t) {
+            StringWriter sw = new StringWriter();
+            t.printStackTrace(new PrintWriter(sw));
+            processingEnv.getMessager().printMessage(ERROR, sw.toString());
+        }
+    }
+
+    /**
+     * The annotation only adds metadata to a callback that discovery finds on its own, so anywhere
+     * else it would silently do nothing
+     */
+    private static void checkIsCallbackType(Element element) {
+        if (!(element instanceof TypeElement type) || !AnnotatedCLibCallback.isCallbackType(type)) {
+            throw new ProcessingException(element, "@CLibCallback requires an interface extending CFunctionPointer: %s", element);
+        }
     }
 
     private static TypeElement castToTypeElement(Element element) {
@@ -169,7 +204,9 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
      * an unstable sort in the descriptor. Unlike the generated Java names, these are the
      * author's own and no mangling can keep them apart, so the only fix is to reject them.
      * Without this check the first symptom is a swallowed FilerException from
-     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file".
+     * {@link AbstractGenerator}, reported as a bare "Attempt to recreate a file". Names taken
+     * by a different kind are rejected in {@code LibraryDescriptionGenerator}, which is where
+     * all four kinds are known.
      */
     private void checkNamesAreUnique(AnnotatedCLibClass apiClass) {
         checkNameIsUnique(classNames, "@CLibClass", apiClass.getName(), apiClass.getElement());

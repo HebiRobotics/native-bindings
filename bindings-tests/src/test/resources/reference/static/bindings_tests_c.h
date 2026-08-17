@@ -22,8 +22,6 @@
 extern "C" {
 #endif
 
-typedef void (*IndexCallbackFunction)(void* userData, int index);
-
 // Error information for every method that can throw. A non-zero code
 // means the call failed and the return value can be ignored. Contents
 // are library owned and only valid until the next call on this thread.
@@ -82,6 +80,13 @@ typedef struct {
     int32_t state;
     int32_t enabled;
 } bindings_tests_StatusInfo;
+
+typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
+typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const bindings_tests_DoubleSpan* a, const bindings_tests_DoubleSpan* b);
+typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
+typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
+typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
 typedef struct custom_prefix_Naming_* custom_prefix_NamingPtr;
@@ -176,8 +181,14 @@ DLL_PUBLIC bindings_tests_ByteSpan bindings_tests_Arrays_addOffsetUint8(bindings
 DLL_PUBLIC bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 
 // ==== Callbacks ====
-DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(IndexCallbackFunction func, void* userData, size_t times);
-DLL_PUBLIC void bindings_tests_Callbacks_invokeOnce(IndexCallbackFunction func, void* userData, int index);
+DLL_PUBLIC double bindings_tests_Callbacks_invokeDoubleCallback(bindings_tests_DoubleCallbackFunc func, double a, double b);
+DLL_PUBLIC double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(bindings_tests_DoubleSpanToScalarCallbackFunc func, bindings_tests_DoubleSpan a, bindings_tests_DoubleSpan b);
+DLL_PUBLIC void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times);
+DLL_PUBLIC void bindings_tests_Callbacks_transformOnce(bindings_tests_TransformCallbackFunction func, void* userData, const double* input, double* output);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainTimes(bindings_tests_PlainIndexCallbackFunction func, size_t times);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainChecked(bindings_tests_ErrorInfo* _error, bindings_tests_PlainIndexCallbackFunction func, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_invokePlainOnWorkerThread(bindings_tests_PlainIndexCallbackFunction func, int index);
+DLL_PUBLIC void bindings_tests_Callbacks_notifyPlainOnce(bindings_tests_PlainNotifyCallbackFunction func);
 
 // ==== Errors ====
 DLL_PUBLIC void bindings_tests_Errors_requireNonNegative(bindings_tests_ErrorInfo* _error, int value);

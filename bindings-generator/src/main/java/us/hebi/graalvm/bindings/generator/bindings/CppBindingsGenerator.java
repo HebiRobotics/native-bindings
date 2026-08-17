@@ -202,10 +202,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             String cppClassName = apiClass.getType().getTypeName();
             out.write(String.format("class %s;\n", cppClassName));
         }
-        for (var typedef : lib.getTypedefs()) {
-            out.write(typedef.getCppDefinition());
-            out.write("\n");
-        }
 
         // Forward declare opaque pointers in an internal namespace
         out.write("\nnamespace %s {\n".formatted(INTERNAL_POINTER_NAMESPACE));
@@ -231,6 +227,15 @@ public class CppBindingsGenerator extends BindingGenerator {
         // Error struct
         out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
         out.write("}\n\n");
+
+        // Emitted after the internal namespace to allow callbacks with structs
+        if (lib.getCallbacks().length() > 0) {
+            for (var callback : lib.getCallbacks()) {
+                out.write(getCppCallbackAlias(callback));
+                out.write("\n");
+            }
+            out.write("\n");
+        }
     }
 
     private void writeClassWrapper(ClassScope scope, Writer out, Writer impl, boolean useDynamicLookup) throws IOException {
@@ -736,9 +741,22 @@ public class CppBindingsGenerator extends BindingGenerator {
         return StructMarshallers.resolve(type).flatMap(StructMarshaller::cpp);
     }
 
+    /**
+     * The C header's function pointer as an alias. Parameter names are kept for readability.
+     */
+    private static String getCppCallbackAlias(CallbackDescription callback) {
+        var parameters = new StringJoiner(", ");
+        for (var parameter : callback.getParameters()) {
+            parameters.add(CBindingsGenerator.getCallbackParameterType(parameter, CppBindingsGenerator::getCType)
+                    + " " + parameter.getParamName());
+        }
+        return String.format("using %s = %s (*)(%s);",
+                callback.getName(), getCType(callback.getReturnType()), parameters);
+    }
+
     private static String getCType(TypeDescription type) {
         var string = switch (type.getDataType()) {
-            case TYPEDEF, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
+            case CALLBACK, OBJECT_HANDLE, ENUM, STRUCT -> getCppType(type, true);
             default -> TypeMap.toExternalC(type.getDataType());
         };
         return type.getIsConst() ? "const " + string : string;
@@ -749,7 +767,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             case OBJECT_HANDLE -> internalPtr
                     ? INTERNAL_POINTER_NAMESPACE + "::" + type.getTypeName() + C_PTR_SUFFIX
                     : type.getTypeName();
-            case ENUM, TYPEDEF -> type.getTypeName();
+            case ENUM, CALLBACK -> type.getTypeName();
             // A marshalled struct only exists as the internal layout mirror
             case STRUCT -> StructMarshallers.resolve(type).flatMap(StructMarshaller::cpp).isPresent()
                     ? INTERNAL_POINTER_NAMESPACE + "::" + getInternalStructName(type.getTypeName())

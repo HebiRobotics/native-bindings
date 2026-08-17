@@ -2,7 +2,6 @@ package us.hebi.graalvm.bindings.generator.generators;
 
 import com.google.common.base.CaseFormat;
 import org.graalvm.nativeimage.c.CContext;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.generator.annotations.*;
 import us.hebi.graalvm.bindings.generator.bindings.BindingGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
@@ -10,6 +9,8 @@ import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
 import us.hebi.graalvm.bindings.model.*;
 import us.hebi.quickbuf.JsonSink;
 
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,6 +35,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
     @Override
     protected void process(AnnotatedCLibClass apiClass) {
+        registerName("class", apiClass.getName(), apiClass.getElement());
+
         var classDesc = description.getMutableClasses().next()
                 .setCDestructorName(apiClass.getDestructorCEntryName())
                 .setInstantiable(apiClass.enableInstancing())
@@ -89,6 +92,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                 if (parameter.isIsolateOrThread()) continue;
 
                 collectStructView(parameter);
+                collectCallback(parameter);
 
                 // The out parameter is already recorded as the return type
                 if (parameter.isOutParameter()) continue;
@@ -103,19 +107,12 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         }
 
         for (AnnotatedCLibEnum nestedEnum : apiClass.getNestedEnums()) {
+            registerName("enum", nestedEnum.getName(), nestedEnum.getElement());
             description.addEnums(nestedEnum.toDescription());
         }
 
         for (AnnotatedCLibStruct nestedStruct : apiClass.getNestedStructs()) {
             registerStruct(nestedStruct);
-        }
-
-        for (CLibTypeDef typeDef : apiClass.getTypeDefs()) {
-            description.getMutableTypedefs().next()
-                    .setName(typeDef.name())
-                    .setCDefinition(typeDef.cDefinition())
-                    .setCppDefinition(typeDef.cppDefinition())
-                    .setPythonDefinition(typeDef.pythonDefinition());
         }
 
     }
@@ -135,6 +132,49 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     /**
+     * Discovery by use, like {@link #collectStructView(AnnotatedClibType)}
+     */
+    private void collectCallback(AnnotatedClibType type) {
+        if (type.getDataType() != DataType.CALLBACK) {
+            return;
+        }
+        var element = type.getTypeElement();
+        usedCallbacks.computeIfAbsent(element.getQualifiedName().toString(),
+                name -> new AnnotatedCLibCallback(element, getEnv()));
+    }
+
+    /**
+     * Two interfaces of the same simple name would emit the same typedef twice, so the collision
+     * is reported here rather than by the C compiler
+     */
+    private void registerUsedCallbacks() {
+        for (var callback : usedCallbacks.values()) {
+            registerName("callback", callback.getName(), callback.getElement());
+            description.addCallbacks(callback.toDescription());
+        }
+    }
+
+    /**
+     * The four kinds a library declares share one namespace, so the same name may only be taken
+     * once. The comparison is on the plain name rather than on the C name: the Python module and
+     * the MATLAB package are one flat namespace per library, so two kinds with the same plain
+     * name overwrite each other there even when their C prefixes keep them apart in the header.
+     * Two declarations of the same kind are rejected earlier, with their own message.
+     */
+    private void registerName(String kind, String name, TypeElement element) {
+        var qualifiedName = element.getQualifiedName().toString();
+        var previous = declaredNames.putIfAbsent(name, new DeclaredName(kind, qualifiedName));
+        if (previous != null) {
+            error(element, "%s name '%s' collides with %s %s: %s",
+                    capitalized(kind), name, previous.kind(), name, qualifiedName);
+        }
+    }
+
+    private static String capitalized(String kind) {
+        return Character.toUpperCase(kind.charAt(0)) + kind.substring(1);
+    }
+
+    /**
      * The C header declares every struct the descriptor lists, so a view reaches it here or
      * not at all. A view used by two classes arrives twice and is registered once.
      */
@@ -142,9 +182,10 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         var declaredBy = struct.getElement().getQualifiedName().toString();
         var previous = structNames.putIfAbsent(struct.getName(), declaredBy);
         if (previous == null) {
+            registerName("struct", struct.getName(), struct.getElement());
             description.addStructs(struct.toDescription());
         } else if (!previous.equals(declaredBy)) {
-            error(struct, "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
+            error(struct.getElement(), "Duplicate @CLibStruct value '%s', already declared by %s", struct.getName(), previous);
         }
     }
 
@@ -157,7 +198,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         for (var struct : usedStructViews.values()) {
             // Presence is the whole check, the Class value is never read
             if (!structGenerator.isSourceDeclared(struct) && struct.getElement().getAnnotation(CContext.class) == null) {
-                error(struct, "A precompiled @CLibStruct view must ship its own directives and name them in @CContext: %s",
+                error(struct.getElement(), "A precompiled @CLibStruct view must ship its own directives and name them in @CContext: %s",
                         struct.getElement().getQualifiedName());
                 continue;
             }
@@ -169,8 +210,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
      * postRound does not catch, so a thrown error would escape the processor and bury the
      * message in a javac stack trace.
      */
-    private void error(AnnotatedCLibStruct struct, String message, Object... args) {
-        getMessager().printMessage(ERROR, String.format(message, args), struct.getElement());
+    private void error(Element element, String message, Object... args) {
+        getMessager().printMessage(ERROR, String.format(message, args), element);
         errorReported = true;
     }
 
@@ -201,11 +242,13 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         description.setCPrefix(options.getCPrefix());
 
         registerUsedStructViews();
+        registerUsedCallbacks();
 
         // Sort classes by name so the output-diffs are predictable
         ProtoSortUtil.sortClassDescriptions(description.getClasses());
         ProtoSortUtil.sortInPlace(description.getEnums(), Comparator.comparing(EnumDescription::getName));
         ProtoSortUtil.sortInPlace(description.getStructs(), Comparator.comparing(StructDescription::getName));
+        ProtoSortUtil.sortInPlace(description.getCallbacks(), Comparator.comparing(CallbackDescription::getName));
 
         // Fill in children information
         List<TypeDescription> children = new ArrayList<>();
@@ -231,12 +274,17 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
         return description;
     }
 
+    private record DeclaredName(String kind, String qualifiedName) {
+    }
+
     final LibraryDescription description = LibraryDescription.newInstance();
 
     private final CLibStructGenerator structGenerator;
 
     private final Map<String, AnnotatedCLibStruct> usedStructViews = new LinkedHashMap<>();
+    private final Map<String, AnnotatedCLibCallback> usedCallbacks = new LinkedHashMap<>();
     private final Map<String, String> structNames = new HashMap<>();
+    private final Map<String, DeclaredName> declaredNames = new HashMap<>();
     private boolean errorReported = false;
 
 }

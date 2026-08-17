@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import os
 import platform
-from typing import Sequence, Tuple, Any
+from typing import Sequence, Tuple, Any, Callable
 
 # Load the shared library relative to this file
 def load_library():
@@ -209,7 +209,12 @@ class struct_Structs_(Structure):
     pass
 StructsPtr = POINTER(struct_Structs_)
 
+DoubleCallbackFunc = CFUNCTYPE(c_double, c_double, c_double)
+DoubleSpanToScalarCallbackFunc = CFUNCTYPE(c_double, POINTER(_DoubleSpan), POINTER(_DoubleSpan))
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
+PlainIndexCallbackFunction = CFUNCTYPE(None, c_int)
+PlainNotifyCallbackFunction = CFUNCTYPE(None)
+TransformCallbackFunction = CFUNCTYPE(None, c_void_p, POINTER(c_double), POINTER(c_double))
 
 # ==== Counter ====
 libbindings_tests.bindings_tests_Counter_create.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -306,10 +311,22 @@ libbindings_tests.bindings_tests_Arrays_getSequence.argtypes = [c_size_t]
 libbindings_tests.bindings_tests_Arrays_getSequence.restype = _DoubleSpan
 
 # ==== Callbacks ====
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.argtypes = [DoubleCallbackFunc, c_double, c_double]
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.restype = c_double
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.argtypes = [DoubleSpanToScalarCallbackFunc, _DoubleSpan, _DoubleSpan]
+libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.restype = c_double
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
-libbindings_tests.bindings_tests_Callbacks_invokeOnce.argtypes = [IndexCallbackFunction, c_void_p, c_int]
-libbindings_tests.bindings_tests_Callbacks_invokeOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_transformOnce.argtypes = [TransformCallbackFunction, c_void_p, POINTER(c_double), POINTER(c_double)]
+libbindings_tests.bindings_tests_Callbacks_transformOnce.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainTimes.argtypes = [PlainIndexCallbackFunction, c_size_t]
+libbindings_tests.bindings_tests_Callbacks_invokePlainTimes.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainChecked.argtypes = [POINTER(_ErrorInfo), PlainIndexCallbackFunction, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokePlainChecked.restype = None
+libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread.argtypes = [PlainIndexCallbackFunction, c_int]
+libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread.restype = None
+libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce.argtypes = [PlainNotifyCallbackFunction]
+libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce.restype = None
 
 # ==== Errors ====
 libbindings_tests.bindings_tests_Errors_requireNonNegative.argtypes = [POINTER(_ErrorInfo), c_int]
@@ -900,28 +917,128 @@ class Callbacks:
         raise TypeError('Class is not instantiable')
 
     @classmethod
-    def invoke_times(cls, func: IndexCallbackFunction, user_data: Any | bytes | None, times: int) -> None:
+    def invoke_double_callback(cls, func: Callable[[float, float], float], a: float, b: float) -> float:
+        if func is not None and not isinstance(func, DoubleCallbackFunc):
+            func = DoubleCallbackFunc(func)
+        return libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback(func, a, b)
+
+    @classmethod
+    def invoke_double_span_to_scalar_callback(cls, func: Callable[[Any, Any], float], a: Sequence[float], b: Sequence[float]) -> float:
+        np = _require_numpy()
+        if func is not None and not isinstance(func, DoubleSpanToScalarCallbackFunc):
+            func = DoubleSpanToScalarCallbackFunc(func)
+        if a is None:
+            a = _DoubleSpan(None, 0)
+        elif not isinstance(a, _DoubleSpan):
+            a_arr = np.ascontiguousarray(a, dtype=np.float64)
+            a = _DoubleSpan(a_arr.ctypes.data_as(POINTER(c_double)), len(a_arr))
+        if b is None:
+            b = _DoubleSpan(None, 0)
+        elif not isinstance(b, _DoubleSpan):
+            b_arr = np.ascontiguousarray(b, dtype=np.float64)
+            b = _DoubleSpan(b_arr.ctypes.data_as(POINTER(c_double)), len(b_arr))
+        return libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b)
+
+    @classmethod
+    def invoke_times(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:
         """Invokes the callback exactly 'times' times with indices 0 to times-1, then
         returns. A null function pointer is ignored, and a non-positive count does
         nothing.
 
         Args:
-            func:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                IndexCallbackFunction per call. Build the prototype once for a hot loop.
             user_data:
             times:
         """
+        if func is not None and not isinstance(func, IndexCallbackFunction):
+            func = IndexCallbackFunction(func)
         libbindings_tests.bindings_tests_Callbacks_invokeTimes(func, user_data, times)
 
     @classmethod
-    def invoke_once(cls, func: IndexCallbackFunction, user_data: Any | bytes | None, index: int) -> None:
-        """Invokes the callback once with the given index. Returns after it completes.
+    def transform_once(cls, func: Callable[[Any, Sequence[float], Sequence[float]], None], user_data: Any | bytes | None, input: Sequence[float], output: Sequence[float]) -> None:
+        """Invokes the callback once with the two buffers and returns after it completes.
+        Both buffers stay owned by the caller, and how many elements they hold is
+        between the caller and the callback, since a raw pointer carries no length.
+        The input is not verified! A null function pointer leaves output untouched.
 
         Args:
-            func:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                TransformCallbackFunction per call. Build the prototype once for a hot loop.
             user_data:
+            input:
+            output:
+        """
+        np = _require_numpy()
+        if func is not None and not isinstance(func, TransformCallbackFunction):
+            func = TransformCallbackFunction(func)
+        if input is not None and not isinstance(input, POINTER(c_double)):
+            input = np.ascontiguousarray(input, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        if output is not None and not isinstance(output, POINTER(c_double)):
+            output = np.ascontiguousarray(output, dtype=np.float64).ctypes.data_as(POINTER(c_double))
+        libbindings_tests.bindings_tests_Callbacks_transformOnce(func, user_data, input, output)
+
+    @classmethod
+    def invoke_plain_times(cls, func: Callable[[int], None], times: int) -> None:
+        """Invokes the callback exactly 'times' times with indices 0 to times-1, then
+        returns. A null function pointer is ignored, and a non-positive count does
+        nothing.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
+            times:
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_invokePlainTimes(func, times)
+
+    @classmethod
+    def invoke_plain_checked(cls, func: Callable[[int], None], index: int) -> None:
+        """Invokes the callback once with the given index, then throws if the index is
+        negative. The invocation happens before the validation on purpose, so that a
+        caller can observe both failures in one call.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
+            index:
+
+        Raises:
+            Exception: index is negative
+        """
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        error_ = _ErrorInfo()
+        _checked(error_, libbindings_tests.bindings_tests_Callbacks_invokePlainChecked(byref(error_), func, index))
+
+    @classmethod
+    def invoke_plain_on_worker_thread(cls, func: Callable[[int], None], index: int) -> None:
+        """Invokes the callback once with the given index on a worker thread, and joins that
+        thread before returning. The invocation therefore completes within the call but not
+        on the calling thread, which is the shape a solver has when it fans an objective
+        out to workers. The callback must be thread safe.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainIndexCallbackFunction per call. Build the prototype once for a hot loop.
             index:
         """
-        libbindings_tests.bindings_tests_Callbacks_invokeOnce(func, user_data, index)
+        if func is not None and not isinstance(func, PlainIndexCallbackFunction):
+            func = PlainIndexCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_invokePlainOnWorkerThread(func, index)
+
+    @classmethod
+    def notify_plain_once(cls, func: Callable[[], None]) -> None:
+        """Invokes the callback once. Returns after it completes.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                PlainNotifyCallbackFunction per call. Build the prototype once for a hot loop.
+        """
+        if func is not None and not isinstance(func, PlainNotifyCallbackFunction):
+            func = PlainNotifyCallbackFunction(func)
+        libbindings_tests.bindings_tests_Callbacks_notifyPlainOnce(func)
 
 
 class Errors:

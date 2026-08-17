@@ -62,7 +62,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         from enum import IntEnum
                         import os
                         import platform
-                        from typing import Sequence, Tuple, Any
+                        from typing import Sequence, Tuple, Any, Callable
 
                         # Load the shared library relative to this file
                         def load_library():
@@ -240,9 +240,22 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     private void appendTypedefs(StringBuilder content) {
-        for (var type : lib.getTypedefs()) {
-            content.append(type.getPythonDefinition()).append("\n");
+        for (var callback : lib.getCallbacks()) {
+            content.append(getPythonCallbackType(callback)).append("\n");
         }
+    }
+
+    /**
+     * The ctypes prototype a callable gets wrapped in. Struct views arrive by pointer.
+     */
+    private static String getPythonCallbackType(CallbackDescription callback) {
+        var types = new StringJoiner(", ");
+        types.add(TypeMap.toCPython(callback.getReturnType()));
+        for (var parameter : callback.getParameters()) {
+            types.add(parameter.getDataType() == DataType.STRUCT
+                    ? "POINTER(" + TypeMap.toCPython(parameter) + ")" : TypeMap.toCPython(parameter));
+        }
+        return String.format("%s = CFUNCTYPE(%s)", callback.getName(), types);
     }
 
     private void appendCFunctionSignatures(StringBuilder content, List<ClassDescription> apiClasses) {
@@ -666,10 +679,31 @@ public class PythonBindingsGenerator extends BindingGenerator {
         throw new IllegalArgumentException("No struct found for type " + type.getTypeName());
     }
 
+    /**
+     * A callback parameter is hinted as the Callable the wrapper accepts. ctypes hands a void*
+     * to it as an address or None and a struct view as a pointer, so both show up as Any.
+     */
+    private static String getPythonTypeHint(LibraryDescription lib, TypeDescription type) {
+        if (type.getDataType() != DataType.CALLBACK) {
+            return TypeMap.toPythonTypeHint(type);
+        }
+        for (var callback : lib.getCallbacks()) {
+            if (!callback.getName().equals(type.getTypeName())) continue;
+            var args = new StringJoiner(", ", "[", "]");
+            for (var parameter : callback.getParameters()) {
+                args.add(switch (parameter.getDataType()) {
+                    case VOID_POINTER, STRUCT -> "Any";
+                    default -> TypeMap.toPythonTypeHint(parameter);
+                });
+            }
+            return "Callable[%s, %s]".formatted(args, TypeMap.toPythonTypeHint(callback.getReturnType()));
+        }
+        return TypeMap.toPythonTypeHint(type);
+    }
+
     private static String getCPythonType(TypeDescription typeDescription) {
         return switch (typeDescription.getDataType()) {
             case OBJECT_HANDLE -> typeDescription.getTypeName() + "Ptr";
-            case TYPEDEF -> typeDescription.getTypeName();
             default -> TypeMap.toCPython(typeDescription);
         };
     }
@@ -787,7 +821,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             } else {
                 // Standard parameters -> one for each
                 for (var parameter : desc.getParameters()) {
-                    String input = parameter.getLowerUnderscoreParamName() + ": " + TypeMap.toPythonTypeHint(parameter);
+                    String input = parameter.getLowerUnderscoreParamName() + ": " + getPythonTypeHint(lib, parameter);
                     if (parameter.hasDefaultValue()) {
                         input += " = " + convertCDefaultParamString(parameter);
                     }
@@ -845,6 +879,15 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .set("NAME", name)
                         .set("CTYPE", pyType)
                         .set("ARGS", joiner.join(args))
+                        .render());
+
+            } else if (desc.getDataType() == DataType.CALLBACK) {
+                // Any callable is accepted, a prebuilt prototype passes straight through. The
+                // wrapper is a local, so it lives exactly as long as the call.
+                out.append(IndentingTextRenderer.of("""
+                        if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
+                            %%NAME%% = %%CTYPE%%(%%NAME%%)
+                        """).set("NAME", name).set("CTYPE", pyType)
                         .render());
 
             } else if (pyType.equals("c_char_p")) {

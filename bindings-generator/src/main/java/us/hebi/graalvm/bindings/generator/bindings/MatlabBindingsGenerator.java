@@ -26,6 +26,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     public MatlabBindingsGenerator(LibraryDescription lib) {
         super(lib);
+        this.callbacks = new MatlabCallbackGenerator(lib, this::getCToMex);
     }
 
     @Override
@@ -145,8 +146,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     private String getMexCType(TypeDescription param) {
-        if (param.getDataType() == DataType.TYPEDEF) {
-            return "void*"; // callbacks are not supported at this time
+        if (param.getDataType() == DataType.CALLBACK) {
+            return TypeMap.toExternalC(param, false); // the gateway declares the callback typedefs itself
         }
         if (param.getDataType() == DataType.STRUCT) {
             return param.getTypeName(); // layout-compatible local struct generated into the MEX gateway
@@ -156,7 +157,10 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private String getMexToC(TypeDescription param, int index) {
         return switch (param.getDataType()) {
-            case OBJECT_HANDLE, VOID_POINTER, TYPEDEF ->
+            case CALLBACK -> "const mxArray* %1$sHandle = getFunctionHandle(prhs[%2$d], \"%1$s\")".formatted(
+                    param.getParamName(), index);
+
+            case OBJECT_HANDLE, VOID_POINTER ->
                     (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
                     "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
 
@@ -194,7 +198,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         };
     }
 
-    private String getCToMex(TypeDescription type) {
+    String getCToMex(TypeDescription type) {
         return switch (type.getDataType()) {
             // Numbers and Booleans
             case ENUM, BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, CHAR16 ->
@@ -251,19 +255,21 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         final StringBuilder post = new StringBuilder();
         final List<String> types = new ArrayList<>();
         final List<String> args = new ArrayList<>();
+        final List<CallbackArg> callbackArgs = new ArrayList<>();
         final int FIRST_INDEX = 1; // first real argument after function name
         for (ClassDescription clazz : lib.getClasses()) {
             cases.addLine("\n// " + getMatlabClassName(clazz));
             for (MethodDescription method : clazz.getMethods()) {
+                if (callbacks.getMatlabExclusionReason(method).isPresent()) continue;
                 int index = FIRST_INDEX;
                 pre.setLength(0);
                 post.setLength(0);
                 types.clear();
                 args.clear();
+                callbackArgs.clear();
                 // The error struct is filled by the call and raises before any output is built
                 if (isThrowing(method)) {
                     pre.append("ErrorInfo _error = {};\n");
-                    post.append("\ncheckError(_error);");
                     types.add("ErrorInfo*");
                     args.add("&_error");
                 }
@@ -274,13 +280,51 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 for (var param : method.getParameters()) {
                     types.add(getMexCType(param));
                     pre.append(getMexToC(param, index++)).append(";\n");
-                    args.add(param.getParamName());
+                    if (param.getDataType() == DataType.CALLBACK) {
+                        callbackArgs.add(new CallbackArg(param.getParamName(),
+                                MatlabCallbackGenerator.getCallbackScopeName(param.getTypeName())
+                                + "<" + MatlabCallbackGenerator.getCallbackSite(method, param) + ">"));
+                        args.add(param.getParamName() + ".function()");
+                    } else {
+                        args.add(param.getParamName());
+                    }
+                }
+                for (var callback : callbackArgs) {
+                    post.append("\ncheckCallbackError(").append(callback.name()).append("Outcome);");
+                }
+                // Checked after the callback error, which is the more likely root cause
+                if (isThrowing(method)) {
+                    post.append("\ncheckError(_error);");
                 }
                 var vars = cases.snapshot();
                 vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
-                if (method.getReturnType().getDataType() != DataType.VOID) {
-                    pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
+                boolean returnsValue = method.getReturnType().getDataType() != DataType.VOID;
+                if (returnsValue) {
                     post.append("\nif (nlhs > 0) plhs[0] = ").append(getCToMex(method.getReturnType())).append(";");
+                }
+                if (callbackArgs.isEmpty()) {
+                    if (returnsValue) {
+                        pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
+                    }
+                } else {
+                    if (returnsValue) {
+                        pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%%;\n");
+                    }
+                    for (var callback : callbackArgs) {
+                        pre.append("CallbackOutcome ").append(callback.name()).append("Outcome;\n");
+                    }
+
+                    // mexErrMsgIdAndTxt longjmps past destructors, so nothing in the block may raise
+                    var scope = new IndentingTextRenderer().addLine("{").indent();
+                    for (var callback : callbackArgs) {
+                        scope.addLine(callback.scopeType() + " " + callback.name() + "(" + callback.name() + "Handle);");
+                    }
+                    scope.addLine((returnsValue ? "%%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
+                    for (var callback : callbackArgs) {
+                        scope.addLine(callback.name() + "Outcome = " + callback.name() + ".outcome();");
+                    }
+                    scope.unindent().add("}");
+                    vars.set("CALL", scope.render());
                 }
                 addCase.accept(vars.set("CNAME", method.getCName())
                         .set("HASH", computeHash.apply(method.getCName()))
@@ -298,8 +342,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
                             .set("CNAME", clazz.getCDestructorName())
                             .set("HASH", computeHash.apply(clazz.getCDestructorName()))
-                            .set("ARG_COUNT", "1")
-                    );
+                            .set("ARG_COUNT", "1"));
                 }
                 if (clazz.hasToParentCastMethod()) {
                     addCase.accept(cases.snapshot()
@@ -318,11 +361,20 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return withLibVars()
                 .set("HASH_SEED", String.format("0x%08X", seed))
                 .set("HASH_PRIME", String.format("0x%08X", prime))
+                .set("CALLBACK_TYPEDEFS", callbacks.createCallbackTypedefs())
+                .set("CALLBACK_SUPPORT", callbacks.createCallbackSupport())
+                .set("CALLBACK_SCOPES", callbacks.createCallbackScopes())
                 .set("STRUCT_HELPERS", createStructHelpers())
                 .set("STRUCT_RETURN_HELPERS", createStructReturnHelpers())
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
                 .render();
+    }
+
+    /**
+     * A callback parameter of a dispatched call and the scope type of its site
+     */
+    private record CallbackArg(String name, String scopeType) {
     }
 
     /**
@@ -742,6 +794,12 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     private void addWrapperMethod(ClassDescription apiClass, MethodDescription method, IndentingTextRenderer
             content) {
+        var exclusionReason = callbacks.getMatlabExclusionReason(method);
+        if (exclusionReason.isPresent()) {
+            addUnsupportedStub(apiClass, method, exclusionReason.get(), content);
+            return;
+        }
+
         var params = new ParameterLists(lib, method);
 
         // Property accessor naming
@@ -786,6 +844,29 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         content.endControlFlow("end\n");
 
+    }
+
+    /**
+     * The m-file stub for a method that {@link MatlabCallbackGenerator#getMatlabExclusionReason}
+     * rejected. It takes varargin so that any call reaches the error rather than a count mismatch.
+     */
+    private void addUnsupportedStub(ClassDescription apiClass, MethodDescription method, String reason,
+                                    IndentingTextRenderer content) {
+        boolean isConstructor = GeneratorUtil.isConstructor(method);
+        content.set("FUNC_NAME", isConstructor ? getMatlabClassName(apiClass) : method.getName());
+        content.set("OUTPUT", isConstructor ? "this" : "varargout");
+        content.set("REASON", reason);
+
+        var help = new StringBuilder();
+        if (method.hasDocumentation()) {
+            help.append(method.getDocumentation().trim()).append("\n\n");
+        }
+        help.append("Not supported from MATLAB: %%REASON%%.");
+
+        content.beginControlFlow("function %%OUTPUT%% = %%FUNC_NAME%%(varargin)");
+        content.addLine(DocumentationUtil.wrapInMatlabDoc("", help.toString()));
+        content.addLine("error('%%LIB_NAME%%:NotSupported', \"'%%FUNC_NAME%%' is not supported from MATLAB: %%REASON%%.\");");
+        content.endControlFlow("end\n");
     }
 
     /**
@@ -1106,6 +1187,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             String classPrefix = getFullyQualifiedType(lib, apiClass.getType());
             for (var method : apiClass.getMethods()) {
                 if (GeneratorUtil.isAccessor(method)) continue;
+                if (callbacks.getMatlabExclusionReason(method).isPresent()) continue;
 
                 Map<String, Object> methodData = new LinkedHashMap<>();
                 List<Map<String, Object>> inputs = new ArrayList<>();
@@ -1179,6 +1261,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                  FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
             case CHAR_POINTER -> List.of("char");
             case CHAR_POINTER_POINTER -> List.of("cell");
+            case CALLBACK -> List.of("function_handle");
             case STRUCT -> List.of(getMexMarshaller(type)
                     .map(StructMarshaller.MexStructMarshaller::typeHint)
                     .orElse("struct"));
@@ -1223,5 +1306,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
         return String.valueOf(obj);
     }
+
+    private final MatlabCallbackGenerator callbacks;
 
 }

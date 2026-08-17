@@ -669,6 +669,58 @@
     "instantiable": false,
     "cDestructorName": "bindings_tests_Callbacks_release",
     "methods": [{
+      "name": "invokeDoubleCallback",
+      "lowerUnderscoreName": "invoke_double_callback",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeDoubleCallback",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleCallbackFunc",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "dataType": "FLOAT64"
+      }, {
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "dataType": "FLOAT64"
+      }],
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokeDoubleSpanToScalarCallback",
+      "lowerUnderscoreName": "invoke_double_span_to_scalar_callback",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpanToScalarCallbackFunc",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "a",
+        "lowerUnderscoreParamName": "a",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
+      }, {
+        "paramName": "b",
+        "lowerUnderscoreParamName": "b",
+        "cPrefix": "bindings_tests_",
+        "typeName": "DoubleSpan",
+        "dataType": "STRUCT"
+      }],
+      "flags": ["Noexcept"]
+    }, {
       "name": "invokeTimes",
       "lowerUnderscoreName": "invoke_times",
       "isStatic": true,
@@ -679,8 +731,9 @@
       "parameters": [{
         "paramName": "func",
         "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
         "typeName": "IndexCallbackFunction",
-        "dataType": "TYPEDEF"
+        "dataType": "CALLBACK"
       }, {
         "paramName": "userData",
         "lowerUnderscoreParamName": "user_data",
@@ -693,28 +746,114 @@
       "documentation": "Invokes the callback exactly 'times' times with indices 0 to times-1, then\nreturns. A null function pointer is ignored, and a non-positive count does\nnothing.\n",
       "flags": ["Noexcept"]
     }, {
-      "name": "invokeOnce",
-      "lowerUnderscoreName": "invoke_once",
+      "name": "transformOnce",
+      "lowerUnderscoreName": "transform_once",
       "isStatic": true,
-      "cName": "bindings_tests_Callbacks_invokeOnce",
+      "cName": "bindings_tests_Callbacks_transformOnce",
       "returnType": {
         "dataType": "VOID"
       },
       "parameters": [{
         "paramName": "func",
         "lowerUnderscoreParamName": "func",
-        "typeName": "IndexCallbackFunction",
-        "dataType": "TYPEDEF"
+        "cPrefix": "bindings_tests_",
+        "typeName": "TransformCallbackFunction",
+        "dataType": "CALLBACK"
       }, {
         "paramName": "userData",
         "lowerUnderscoreParamName": "user_data",
         "dataType": "VOID_POINTER"
       }, {
+        "isConst": true,
+        "paramName": "input",
+        "lowerUnderscoreParamName": "input",
+        "dataType": "FLOAT64_POINTER"
+      }, {
+        "paramName": "output",
+        "lowerUnderscoreParamName": "output",
+        "dataType": "FLOAT64_POINTER"
+      }],
+      "documentation": "Invokes the callback once with the two buffers and returns after it completes.\nBoth buffers stay owned by the caller, and how many elements they hold is\nbetween the caller and the callback, since a raw pointer carries no length.\nThe input is not verified! A null function pointer leaves output untouched.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokePlainTimes",
+      "lowerUnderscoreName": "invoke_plain_times",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainTimes",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "times",
+        "lowerUnderscoreParamName": "times",
+        "dataType": "SIZE_T"
+      }],
+      "documentation": "Invokes the callback exactly 'times' times with indices 0 to times-1, then\nreturns. A null function pointer is ignored, and a non-positive count does\nnothing.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "invokePlainChecked",
+      "lowerUnderscoreName": "invoke_plain_checked",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainChecked",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
         "paramName": "index",
         "lowerUnderscoreParamName": "index",
         "dataType": "INT32"
       }],
-      "documentation": "Invokes the callback once with the given index. Returns after it completes.",
+      "documentation": "Invokes the callback once with the given index, then throws if the index is\nnegative. The invocation happens before the validation on purpose, so that a\ncaller can observe both failures in one call.\n",
+      "throwsOn": "index is negative"
+    }, {
+      "name": "invokePlainOnWorkerThread",
+      "lowerUnderscoreName": "invoke_plain_on_worker_thread",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokePlainOnWorkerThread",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainIndexCallbackFunction",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "index",
+        "lowerUnderscoreParamName": "index",
+        "dataType": "INT32"
+      }],
+      "documentation": "Invokes the callback once with the given index on a worker thread, and joins that\nthread before returning. The invocation therefore completes within the call but not\non the calling thread, which is the shape a solver has when it fans an objective\nout to workers. The callback must be thread safe.\n",
+      "flags": ["Noexcept"]
+    }, {
+      "name": "notifyPlainOnce",
+      "lowerUnderscoreName": "notify_plain_once",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_notifyPlainOnce",
+      "returnType": {
+        "dataType": "VOID"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "PlainNotifyCallbackFunction",
+        "dataType": "CALLBACK"
+      }],
+      "documentation": "Invokes the callback once. Returns after it completes.",
       "flags": ["Noexcept"]
     }]
   }, {
@@ -1766,12 +1905,6 @@
       "cValue": 1
     }]
   }],
-  "typedefs": [{
-    "name": "IndexCallbackFunction",
-    "cDefinition": "typedef void (*IndexCallbackFunction)(void* userData, int index);",
-    "cppDefinition": "using IndexCallbackFunction = void (*)(void* userData, int index);",
-    "pythonDefinition": "IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)"
-  }],
   "structs": [{
     "name": "ByteSpan",
     "cPrefix": "bindings_tests_",
@@ -1870,6 +2003,83 @@
       "name": "enabled",
       "lowerUnderscoreName": "enabled",
       "dataType": "BOOL"
+    }]
+  }],
+  "callbacks": [{
+    "name": "DoubleCallbackFunc",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "FLOAT64"
+    },
+    "parameters": [{
+      "paramName": "a",
+      "dataType": "FLOAT64"
+    }, {
+      "paramName": "b",
+      "dataType": "FLOAT64"
+    }]
+  }, {
+    "name": "DoubleSpanToScalarCallbackFunc",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "FLOAT64"
+    },
+    "parameters": [{
+      "paramName": "a",
+      "cPrefix": "bindings_tests_",
+      "typeName": "DoubleSpan",
+      "dataType": "STRUCT"
+    }, {
+      "paramName": "b",
+      "cPrefix": "bindings_tests_",
+      "typeName": "DoubleSpan",
+      "dataType": "STRUCT"
+    }]
+  }, {
+    "name": "IndexCallbackFunction",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
+    }, {
+      "paramName": "index",
+      "dataType": "INT32"
+    }]
+  }, {
+    "name": "PlainIndexCallbackFunction",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "index",
+      "dataType": "INT32"
+    }]
+  }, {
+    "name": "PlainNotifyCallbackFunction",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "VOID"
+    }
+  }, {
+    "name": "TransformCallbackFunction",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "VOID"
+    },
+    "parameters": [{
+      "paramName": "userData",
+      "dataType": "VOID_POINTER"
+    }, {
+      "isConst": true,
+      "paramName": "input",
+      "dataType": "FLOAT64_POINTER"
+    }, {
+      "paramName": "output",
+      "dataType": "FLOAT64_POINTER"
     }]
   }]
 }

@@ -666,11 +666,60 @@ static void on_index(void* userData, int index) {
     state->count++;
 }
 
+/* The callback's pointers carry no length, so the element count is agreed on out of band. */
+#define TRANSFORM_COUNT 3
+
+static void on_transform(void* userData, const double* input, double* output) {
+    int i;
+    ((CallbackState*) userData)->count++;
+    for (i = 0; i < TRANSFORM_COUNT; i++) {
+        output[i] = input[i] * 2.0;
+    }
+}
+
+/* The plain shapes carry no userData, so their state lives at file scope */
+static CallbackState plain_state;
+
+static void on_plain_index(int index) {
+    if (plain_state.count < MAX_CALLBACKS) {
+        plain_state.indices[plain_state.count] = index;
+    }
+    plain_state.count++;
+}
+
+static void on_plain_notify(void) {
+    plain_state.count++;
+}
+
+static double sum(double a, double b) {
+    return a + b;
+}
+
+/* Spans carry their own length and arrive by pointer */
+static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests_DoubleSpan* b) {
+    double total = 0.0;
+    size_t i;
+    for (i = 0; i < a->length; i++) {
+        total += a->data[i];
+    }
+    for (i = 0; i < b->length; i++) {
+        total += b->data[i];
+    }
+    return total;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
+    bindings_tests_ErrorInfo error;
+    double source[TRANSFORM_COUNT];
+    double target[TRANSFORM_COUNT];
+    double left[3];
+    double right[2];
+    bindings_tests_DoubleSpan a;
+    bindings_tests_DoubleSpan b;
     int i;
 
-    /* Fires synchronously, five times, with indices 0..4, before returning. */
+    /* Fires synchronously, five times, with indices 0..4. The void* is passed through unread. */
     memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_invokeTimes(&on_index, &state, (size_t) 5);
     assert(state.count == 5);
@@ -678,16 +727,71 @@ static void test_callbacks(void) {
         assert(state.indices[i] == i);
     }
 
-    memset(&state, 0, sizeof(state));
-    bindings_tests_Callbacks_invokeOnce(&on_index, &state, 7);
-    assert(state.count == 1);
-    assert(state.indices[0] == 7);
-
     /* A null function pointer is a no-op. */
     memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_invokeTimes(NULL, &state, (size_t) 5);
-    bindings_tests_Callbacks_invokeOnce(NULL, &state, 7);
     assert(state.count == 0);
+
+    /* A binary operator with no context at all: both arguments and the result cross as plain doubles. */
+    assert(bindings_tests_Callbacks_invokeDoubleCallback(&sum, 1.5, 2.25) == 3.75);
+
+    /* Spans cross by value into the method and by pointer into the callback. */
+    left[0] = 1.0;
+    left[1] = 2.0;
+    left[2] = 3.0;
+    right[0] = 4.0;
+    right[1] = 5.0;
+    a.data = left;
+    a.length = 3;
+    b.data = right;
+    b.length = 2;
+    assert(bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(&sum_spans, a, b) == 15.0);
+
+    /* A callback whose own arguments are raw pointers, the shape a solver objective has.
+       Only the MATLAB face cannot express it, C hands the pointers straight through. */
+    memset(&state, 0, sizeof(state));
+    source[0] = 1.0;
+    source[1] = 2.0;
+    source[2] = 3.0;
+    memset(target, 0, sizeof(target));
+    bindings_tests_Callbacks_transformOnce(&on_transform, &state, source, target);
+    assert(state.count == 1);
+    assert(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
+
+    /* The same shapes without a context pointer */
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainTimes(&on_plain_index, (size_t) 4);
+    assert(plain_state.count == 4);
+    for (i = 0; i < 4; i++) {
+        assert(plain_state.indices[i] == i);
+    }
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainTimes(NULL, (size_t) 4);
+    bindings_tests_Callbacks_notifyPlainOnce(NULL);
+    assert(plain_state.count == 0);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainChecked(&error, &on_plain_index, 3);
+    assert(error.code == 0);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == 3);
+
+    /* The callback fires before the validation, so a failing call still records it. */
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainChecked(&error, &on_plain_index, -1);
+    assert(error.code != 0);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == -1);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_invokePlainOnWorkerThread(&on_plain_index, 6);
+    assert(plain_state.count == 1);
+    assert(plain_state.indices[0] == 6);
+
+    memset(&plain_state, 0, sizeof(plain_state));
+    bindings_tests_Callbacks_notifyPlainOnce(&on_plain_notify);
+    assert(plain_state.count == 1);
 
     printf("callbacks ok\n");
 }

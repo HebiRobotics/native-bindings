@@ -28,6 +28,7 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
     public AnnotatedCLibEnum(Element element, ProcessingEnvironment processingEnvironment, AnnotatedCLibClass parent) {
         super(AnnotationUtil.castToEnumElement(element), processingEnvironment);
         annotation = checkNotNull(element.getAnnotation(CLibEnum.class), "Enum must contain a @CGeneratedEnum annotation");
+        AnnotationUtil.checkIsCIdentifier(element, annotation.value(), annotation.cPrefix());
     }
 
     public EnumDescription toDescription() {
@@ -47,15 +48,15 @@ public class AnnotatedCLibEnum extends AnnotatedCLibElement<TypeElement> {
     }
 
     public static String getCName(EnvProcessor.GeneratorOptions options, CLibEnum annotation) {
-        return AnnotationUtil.getCPrefix(options, annotation.prefix()) + "_" + annotation.value();
+        return AnnotationUtil.getCPrefix(options, annotation.cPrefix()) + "_" + annotation.value();
     }
 
     public static String getCPrefix(EnvProcessor.GeneratorOptions options, CLibEnum annotation) {
-        return AnnotationUtil.getCPrefix(options, annotation.prefix()) + "_";
+        return AnnotationUtil.getCPrefix(options, annotation.cPrefix()) + "_";
     }
 
     public String getCPrefix() {
-        return AnnotationUtil.getCPrefix(getOptions(), annotation.prefix());
+        return AnnotationUtil.getCPrefix(getOptions(), annotation.cPrefix());
     }
 
     public String getName() {

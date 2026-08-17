@@ -1,5 +1,6 @@
 package us.hebi.graalvm.bindings.generator.generators;
 
+import us.hebi.graalvm.bindings.model.DataType;
 import us.hebi.graalvm.bindings.model.MethodDescription;
 import us.hebi.graalvm.bindings.model.TypeDescription;
 
@@ -41,7 +42,7 @@ public class DocumentationUtil {
         return wrapInMatlabDoc(indent, out.toString());
     }
 
-    private static String wrapInMatlabDoc(String indent, String comment) {
+    public static String wrapInMatlabDoc(String indent, String comment) {
         // First line uses 1 space, next lines use 3 spaces
         return indent + "% " + comment.trim().replaceAll("\n", indent + "\n%   ");
     }
@@ -60,6 +61,12 @@ public class DocumentationUtil {
             for (TypeDescription param : methodDesc.getParameters()) {
                 String name = param.getLowerUnderscoreParamName();
                 out.append("\n").append(INDENT).append(name).append(": ").append(param.getComment());
+                if (param.getDataType() == DataType.CALLBACK) {
+                    if (param.hasComment()) out.append(" ");
+                    out.append("Any callable is accepted, and a plain one is wrapped into a fresh");
+                    out.append("\n").append(INDENT).append(INDENT);
+                    out.append(param.getTypeName()).append(" per call. Build the prototype once for a hot loop.");
+                }
             }
         }
 

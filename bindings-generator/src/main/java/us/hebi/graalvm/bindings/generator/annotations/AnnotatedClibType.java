@@ -13,7 +13,6 @@ import us.hebi.graalvm.bindings.annotations.CLibEnum;
 import us.hebi.graalvm.bindings.annotations.CLibIndex;
 import us.hebi.graalvm.bindings.annotations.CLibOut;
 import us.hebi.graalvm.bindings.annotations.CLibStruct;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.annotations.CSizeType;
 import us.hebi.graalvm.bindings.generator.bindings.StructMarshaller;
 import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
@@ -127,7 +126,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
         // Special types we added
         if (getStructElement().isPresent()) return DataType.STRUCT;
         if (isGeneratedCEnumType()) return DataType.ENUM;
-        if (isDefinedType(mirror)) return DataType.TYPEDEF;
+        if (isCallbackType(mirror)) return DataType.CALLBACK;
         if (isNativeApiType()) return DataType.OBJECT_HANDLE;
 
         throw new IllegalArgumentException("Unsupported data type: " + type);
@@ -243,6 +242,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
             case STRUCT -> getStructElement()
                     .map(element -> element.getAnnotation(CLibStruct.class))
                     .map(annotation -> AnnotatedCLibStruct.getCPrefix(getOptions(), annotation));
+            case CALLBACK -> Optional.of(AnnotatedCLibCallback.getCPrefix(getOptions(), toTypeElement(mirror)));
             default -> Optional.empty();
         };
     }
@@ -253,8 +253,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibClass.class, CLibClass::value);
             case ENUM ->
                     AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibEnum.class, CLibEnum::value);
-            case TYPEDEF ->
-                    AnnotationUtil.tryGetAnnotationValue((TypeElement) env.getTypeUtils().asElement(mirror), CLibTypeDef.class, CLibTypeDef::name);
+            case CALLBACK -> Optional.of(AnnotatedCLibCallback.getName((TypeElement) env.getTypeUtils().asElement(mirror)));
             case STRUCT -> getStructElement()
                     .map(AnnotatedCLibStruct::getName)
                     .filter(name -> !name.isEmpty());

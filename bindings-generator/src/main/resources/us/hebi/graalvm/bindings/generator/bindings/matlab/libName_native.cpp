@@ -1,8 +1,10 @@
 #include "mex.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -30,12 +32,16 @@ inline uint32_t hash32_fnv1a(const mxChar* str, size_t len) {
     return hash;
 }
 
+// mxGetScalar is undefined on an empty array and unpredictable on a struct
+// or cell, so only classes it is actually defined for get through.
+inline bool isNumericScalar(const mxArray* arg) {
+    return (mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
+            && !mxIsComplex(arg) && mxGetNumberOfElements(arg) == 1;
+}
+
 template <typename T>
 inline T getScalar(const mxArray* arg, const char* name) {
-    // mxGetScalar is undefined on an empty array and unpredictable on a struct
-    // or cell, so only classes it is actually defined for get through.
-    if (!(mxIsNumeric(arg) || mxIsLogical(arg) || mxIsChar(arg))
-            || mxIsComplex(arg) || mxGetNumberOfElements(arg) != 1) {
+    if (!isNumericScalar(arg)) {
         mexErrMsgIdAndTxt("%%LIB_NAME%%:TypeError", "Argument '%s' must be a numeric scalar.", name);
     }
     return static_cast<T>(mxGetScalar(arg));
@@ -158,12 +164,12 @@ struct MatlabStringArray {
     operator char**() const { return ptrs; }
     operator const char**() const { return (const char**)ptrs; }
     MatlabStringArray(const MatlabStringArray&) = delete;
-};
+};%%CALLBACK_SUPPORT%%
 
 inline mxArray* createEmpty() {
     // Returns a 0x0 double array, which is the standard MATLAB 'null'
     return mxCreateDoubleMatrix(0, 0, mxREAL);
-}%%STRUCT_HELPERS%%
+}%%STRUCT_HELPERS%%%%CALLBACK_TYPEDEFS%%
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
@@ -256,7 +262,7 @@ inline mxArray* createMexSize(size_t value) {
     mxArray* array = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
     ((uint64_t*)mxGetData(array))[0] = (uint64_t) value;
     return array;
-}%%STRUCT_RETURN_HELPERS%%
+}%%STRUCT_RETURN_HELPERS%%%%CALLBACK_SCOPES%%
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {

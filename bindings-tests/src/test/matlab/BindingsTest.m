@@ -12,10 +12,6 @@ classdef BindingsTest < matlab.unittest.TestCase
 %   <bindings>/lib/<platform>/, so the built library has to be copied there
 %   first (see .github/workflows/native.yml).
 %
-%   Callbacks are deliberately not covered: MATLAB cannot pass a C function
-%   pointer, so the typedef degrades to void* and TestCallbacks is not
-%   callable from here. That feature area is covered by C, C++ and Python.
-%
 %   Note on types: the MEX dispatch returns every scalar as a MATLAB double,
 %   including booleans and enums, so the expected values below are plain
 %   numbers rather than logicals or enum instances.
@@ -427,6 +423,164 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindings_tests.Indices.fromRow(6), 5);
 
             testCase.verifyEqual(bindings_tests.Indices.echoSize(4), 4);
+        end
+
+        function testContextCarryingCallbacksAreNotSupported(testCase)
+            % An address is not an mxArray, so a callback with a void* or raw pointer gets a stub
+            noop = @(varargin) [];
+
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(noop, 4), 'bindings_tests:NotSupported');
+            testCase.verifyError(@() bindings_tests.Callbacks.transformOnce(noop), 'bindings_tests:NotSupported');
+        end
+
+        function testValueReturningCallback(testCase)
+            % feval's one output becomes the C return value
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) a + b, 1.5, 2.25), 3.75);
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@max, 1.5, 2.25), 2.25);
+
+            % A result that is not a numeric scalar is trapped and raised after the library returns
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [a b], 1, 2), ...
+                'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [], 1, 2), ...
+                'bindings_tests:TypeError');
+            testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@fail, 1, 2), ...
+                'bindings_tests:CallbackFailed');
+
+            function result = fail(~, ~)
+                result = 0; %#ok<NASGU>
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
+        end
+
+        function testSpanArgumentCallback(testCase)
+            % Spans carry their length, so the handle sees a numeric row vector
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
+                @(a, b) sum(a) + sum(b), [1 2 3], [4 5]), 15);
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
+                @(a, b) numel(a) * 10 + numel(b), [1 2 3], [4 5]), 32);
+        end
+
+        function testPlainCallbacks(testCase)
+            % The supported shape: no void* anywhere
+            collected = [];
+            outer = [];
+            inner = [];
+
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 4);
+            testCase.verifyEqual(collected, [0 1 2 3]);
+
+            % A non-positive count never reaches the callback
+            collected = [];
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 0);
+            testCase.verifyTrue(isempty(collected));
+
+            % An empty argument is a null function pointer, anything else must be a function handle
+            bindings_tests.Callbacks.invokePlainTimes([], 1);
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(42, 1), ...
+                'bindings_tests:TypeError');
+
+            % The callback re-enters the method that took it. Nesting level n collects 0..n-1.
+            bindings_tests.Callbacks.invokePlainTimes(@nest, 3);
+            testCase.verifyEqual(outer, [0 1 2]);
+            testCase.verifyEqual(inner, [0 0 1 0 1 2]);
+
+            % An error inside the callback is trapped and rethrown once the library has returned
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(@fail, 1), ...
+                'bindings_tests:CallbackFailed');
+
+            % The next call still works
+            collected = [];
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function nest(index)
+                outer(end + 1) = index;
+                bindings_tests.Callbacks.invokePlainTimes(@collectInner, index + 1);
+            end
+
+            function collectInner(index)
+                inner(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
+        end
+
+        function testPlainCallbackErrorOrdering(testCase)
+            % The callback fires before the validation, so the index is recorded before the error
+            collected = [];
+            bindings_tests.Callbacks.invokePlainChecked(@collect, 3);
+            testCase.verifyEqual(collected, 3);
+
+            collected = [];
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainChecked(@collect, -1), ...
+                'bindings_tests:IllegalArgumentException');
+            testCase.verifyEqual(collected, -1);
+
+            % Both fail in the same call, and the callback error is raised first as the root cause
+            testCase.verifyError(@() bindings_tests.Callbacks.invokePlainChecked(@fail, -1), ...
+                'bindings_tests:CallbackFailed');
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+
+            function fail(~)
+                error('bindings_tests:CallbackFailed', 'raised from the MATLAB callback');
+            end
+        end
+
+        function testPlainCallbackOnWorkerThread(testCase)
+            % Only the MATLAB thread may enter the Matrix API, other threads skip and get counted
+            collected = [];
+
+            [message, identifier] = testCase.captureError( ...
+                @() bindings_tests.Callbacks.invokePlainOnWorkerThread(@collect, 5));
+            testCase.verifyEqual(identifier, 'bindings_tests:NotSupported');
+            testCase.verifyTrue(contains(message, '1 callback invocation'));
+            testCase.verifyTrue(isempty(collected));
+
+            % The next call still works
+            bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
+            testCase.verifyEqual(collected, [0 1]);
+
+            function collect(index)
+                collected(end + 1) = index;
+            end
+        end
+
+        function testArgumentlessPlainCallback(testCase)
+            % Nothing crosses the ABI at all, so the function handle takes no arguments
+            called = false;
+            bindings_tests.Callbacks.notifyPlainOnce(@() note());
+            testCase.verifyTrue(called);
+
+            function note()
+                called = true;
+            end
+        end
+
+        function testDeeplyNestedCallbacks(testCase)
+            % Re-entering the library chains one scope per level, and each level sees its own
+            % handle again once the nested call has unwound
+            depth = 0;
+            unwound = 0;
+            nest(0);
+            testCase.verifyEqual(depth, 40);
+            testCase.verifyEqual(unwound, 40);
+
+            function nest(~)
+                depth = depth + 1;
+                if depth < 40
+                    bindings_tests.Callbacks.invokePlainTimes(@nest, 1);
+                end
+                unwound = unwound + 1;
+            end
         end
 
         function testIsolated(testCase)

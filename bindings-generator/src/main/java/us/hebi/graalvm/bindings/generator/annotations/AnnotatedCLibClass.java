@@ -6,12 +6,13 @@ import com.google.common.base.Strings;
 import com.squareup.javapoet.ClassName;
 import us.hebi.graalvm.bindings.annotations.CLibClass;
 import us.hebi.graalvm.bindings.annotations.CLibMethod;
-import us.hebi.graalvm.bindings.annotations.CLibTypeDef;
 import us.hebi.graalvm.bindings.model.MethodDescription;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
 import static java.util.function.Predicate.*;
@@ -27,6 +28,8 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
     public AnnotatedCLibClass(TypeElement typeElement, ProcessingEnvironment processingEnvironment) {
         super(typeElement, processingEnvironment);
         annotation = checkNotNull(typeElement.getAnnotation(CLibClass.class), "Class %s is not annotated with @CApiClass");
+        AnnotationUtil.checkIsCIdentifier(typeElement, annotation.cPrefix(), annotation.value());
+
         publicApiMethods = getPublicMethodsUpToAnnotatedParent(typeElement);
 
         nestedEnums = typeElement.getEnclosedElements().stream()
@@ -37,11 +40,6 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         nestedStructs = typeElement.getEnclosedElements().stream()
                 .filter(AnnotatedCLibStruct::isNativeStruct)
                 .map(element -> new AnnotatedCLibStruct(element, processingEnvironment))
-                .toList();
-
-        typeDefs = typeElement.getEnclosedElements().stream()
-                .map(element -> element.getAnnotation(CLibTypeDef.class))
-                .filter(Objects::nonNull)
                 .toList();
 
     }
@@ -226,17 +224,11 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         return nestedStructs;
     }
 
-    public List<CLibTypeDef> getTypeDefs() {
-        return typeDefs;
-    }
-
     final List<AnnotatedCLibMethod> publicApiMethods;
 
     final List<AnnotatedCLibEnum> nestedEnums;
 
     final List<AnnotatedCLibStruct> nestedStructs;
-
-    final List<CLibTypeDef> typeDefs;
 
     final CLibClass annotation;
 

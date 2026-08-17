@@ -202,6 +202,95 @@ public class ProcessorValidationTest {
     }
 
     @Test
+    public void rejectsClassNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadClass", """
+                @CLibClass("Bad Name")
+                public class BadClass {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'Bad Name' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsClassPrefixThatIsNotACIdentifier() {
+        assertThat(compile(source("BadPrefix", """
+                @CLibClass(value = "BadPrefix", cPrefix = "bad prefix")
+                public class BadPrefix {
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'bad prefix' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsMethodNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadMethod", """
+                @CLibClass("BadMethod")
+                public class BadMethod {
+                    @CLibMethod(flags = Noexcept, name = "2ndValue")
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'2ndValue' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsStructNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadStruct", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("BadStruct")
+                public class BadStruct {
+                    @CLibStruct("Bad Point")
+                    @CStruct("Point")
+                    public interface Point extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("'Bad Point' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsStructNameThatCollidesWithAClass() {
+        assertThat(compile(source("ClassStructCollision", """
+                import org.graalvm.nativeimage.c.struct.CField;
+                import org.graalvm.nativeimage.c.struct.CStruct;
+                import org.graalvm.word.PointerBase;
+                @CLibClass("Point")
+                public class ClassStructCollision {
+                    @CLibStruct("Point")
+                    @CStruct("Coord")
+                    public interface Coord extends PointerBase {
+                        @CField("x") double x();
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining(
+                "Struct name 'Point' collides with class Point: validation.ClassStructCollision.Coord");
+    }
+
+    @Test
+    public void rejectsEnumNameThatCollidesWithAClass() {
+        assertThat(compile(source("EnumClassCollision", """
+                @CLibClass("Shade")
+                public class EnumClassCollision {
+                    @CLibEnum("Shade")
+                    public enum Tone { Dark }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Tone first() { return Tone.Dark; }
+                }
+                """))).hadErrorContaining(
+                "Enum name 'Shade' collides with class Shade: validation.EnumClassCollision.Tone");
+    }
+
+    @Test
     public void acceptsAStructView() {
         assertThat(compile(source("Points", """
                 import org.graalvm.nativeimage.c.struct.CField;
@@ -741,6 +830,227 @@ public class ProcessorValidationTest {
                     public static double x(FirstView first, SecondView second) { return 0; }
                 }
                 """))).succeeded();
+    }
+
+    @Test
+    public void rejectsCallbackWithoutInvokeMethod() {
+        assertThat(compile(source("NoInvoke", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                @CLibClass("NoInvoke")
+                public class NoInvoke {
+                    public interface Callback extends CFunctionPointer {
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found none");
+    }
+
+    @Test
+    public void rejectsCallbackWithTwoInvokeMethods() {
+        assertThat(compile(source("TwoInvokes", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("TwoInvokes")
+                public class TwoInvokes {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void first(int index);
+                        @InvokeCFunctionPointer void second(int index);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found [first, second]");
+    }
+
+    @Test
+    public void rejectsCallbackWithUnmappableParameter() {
+        assertThat(compile(source("HandleCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("HandleCallback")
+                public class HandleCallback {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(HandleCallback handle);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("is not supported in a callback signature: Callback.invoke");
+    }
+
+    /**
+     * A struct view crosses a function pointer as a pointer, and the callee has no memory to
+     * point a returned one at, so only the parameter direction is admitted.
+     */
+    @Test
+    public void rejectsCallbackReturningAStructView() {
+        assertThat(compile(source("SpanCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
+                @CLibClass("SpanCallback")
+                public class SpanCallback {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer DoubleSpan invoke(DoubleSpan span);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("@InvokeCFunctionPointer return type"
+                                          + " 'us.hebi.graalvm.bindings.runtime.structs.DoubleSpan'"
+                                          + " is not supported in a callback signature: Callback.invoke");
+    }
+
+    /**
+     * The annotated API declares plain Java enums, and native-image rejects those in an
+     * {@code @InvokeCFunctionPointer} signature ("parameter types are restricted to primitive
+     * types, word types and enumerations (@CEnum)"). Only stage 1 sees that, so the processor
+     * has to say it first. See plans item 1 for what admitting them would take.
+     */
+    @Test
+    public void rejectsCallbackWithJavaEnumParameter() {
+        assertThat(compile(source("EnumCallback", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("EnumCallback")
+                public class EnumCallback {
+                    @CLibEnum("Color")
+                    public enum Color { Red, Green }
+
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(Color value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining("@InvokeCFunctionPointer parameter type 'validation.EnumCallback.Color'"
+                                          + " is a Java enum, which a callback signature cannot use because GraalVM"
+                                          + " only accepts @CEnum types there: Callback.invoke");
+    }
+
+    @Test
+    public void rejectsCallbackAnnotationOnNonFunctionPointer() {
+        assertThat(compile(source("NotAPointer", """
+                @CLibClass("NotAPointer")
+                public class NotAPointer {
+                    @CLibCallback
+                    public interface Callback {
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static int value() { return 1; }
+                }
+                """))).hadErrorContaining("@CLibCallback requires an interface extending CFunctionPointer: validation.NotAPointer.Callback");
+    }
+
+    @Test
+    public void appliesTheCallbackNameOverride() throws IOException {
+        assertThat(compile(source("Renamed", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Renamed")
+                public class Renamed {
+                    @CLibCallback("OnValue")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).succeeded();
+
+        // The override names the typedef everywhere, so the descriptor is what the
+        // language faces then read it from
+        String json = readGeneratedFile("api.json");
+        assertTrue(json.contains("\"name\": \"OnValue\""));
+        assertFalse(json.contains("\"Callback\""));
+    }
+
+    @Test
+    public void appliesTheCallbackPrefixOverride() throws IOException {
+        assertThat(compile(source("Prefixed", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Prefixed")
+                public class Prefixed {
+                    @CLibCallback(cPrefix = "custom")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).succeeded();
+
+        // Only C needs the prefix to stay unique, the namespaced faces keep the plain name
+        assertTrue(readGeneratedFile("validation_c.h").contains("typedef void (*custom_Callback)(int value);"));
+        assertFalse(readGeneratedFile("validation_c.h").contains("validation_Callback"));
+        assertTrue(readGeneratedFile("validation.hpp").contains("using Callback = void (*)(int value);"));
+        assertTrue(readGeneratedFile("validation.py").contains("Callback = CFUNCTYPE(None, c_int)"));
+    }
+
+    @Test
+    public void rejectsCallbackNameThatIsNotACIdentifier() {
+        assertThat(compile(source("BadName", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("BadName")
+                public class BadName {
+                    @CLibCallback("on value")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining(
+                "'on value' is not a valid C identifier");
+    }
+
+    @Test
+    public void rejectsCallbackNameThatCollidesWithAClass() {
+        assertThat(compile(source("Collision", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("Collision")
+                public class Collision {
+                    @CLibCallback("Collision")
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static void run(Callback callback) { }
+                }
+                """))).hadErrorContaining(
+                "Callback name 'Collision' collides with class Collision: validation.Collision.Callback");
+    }
+
+    @Test
+    public void rejectsCallbackReturn() {
+        assertThat(compile(source("CallbackReturn", """
+                import org.graalvm.nativeimage.c.function.CFunctionPointer;
+                import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+                @CLibClass("CallbackReturn")
+                public class CallbackReturn {
+                    public interface Callback extends CFunctionPointer {
+                        @InvokeCFunctionPointer void invoke(int value);
+                    }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static Callback current() { return null; }
+                }
+                """))).hadErrorContaining(
+                "a CFunctionPointer return is not supported until a use case needs it: current");
     }
 
     private String readGeneratedFile(String fileName) throws IOException {
