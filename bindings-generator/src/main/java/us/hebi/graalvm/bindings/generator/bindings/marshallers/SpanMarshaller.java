@@ -127,31 +127,33 @@ class SpanMarshaller implements StructMarshaller {
         /** The temporary array keeps the buffer alive until the call returns */
         @Override
         public String pack(String paramName) {
-            return IndentingTextRenderer.of("""
+            return new IndentingTextRenderer()
+                    .set("NAME", paramName)
+                    .set("CTYPE", TypeMap.toStructMirrorCPython(structName))
+                    .set("DTYPE", element.numpyDtype())
+                    .set("ELEMENT", element.ctypesType())
+                    .add("""
                             if %%NAME%% is None:
                                 %%NAME%% = %%CTYPE%%(None, 0)
                             elif not isinstance(%%NAME%%, %%CTYPE%%):
                                 %%NAME%%_arr = np.ascontiguousarray(%%NAME%%, dtype=np.%%DTYPE%%)
                                 %%NAME%% = %%CTYPE%%(%%NAME%%_arr.ctypes.data_as(POINTER(%%ELEMENT%%)), len(%%NAME%%_arr))
                             """)
-                    .set("NAME", paramName)
-                    .set("CTYPE", TypeMap.toStructMirrorCPython(structName))
-                    .set("DTYPE", element.numpyDtype())
-                    .set("ELEMENT", element.ctypesType())
                     .render();
         }
 
         /** Copied out immediately because the span is only valid until the next call */
         @Override
         public String unpack(String structVar) {
-            return IndentingTextRenderer.of("""
+            return new IndentingTextRenderer()
+                    .set("VAR", structVar)
+                    .set("DTYPE", element.numpyDtype())
+                    .add("""
                             %%VAR%% = %%CALL%%
                             if %%VAR%%.length == 0 or not %%VAR%%.data:
                                 return np.empty(0, dtype=np.%%DTYPE%%)
                             return np.ctypeslib.as_array(%%VAR%%.data, shape=(%%VAR%%.length,)).copy()
                             """)
-                    .set("VAR", structVar)
-                    .set("DTYPE", element.numpyDtype())
                     .render();
         }
 
@@ -169,9 +171,9 @@ class SpanMarshaller implements StructMarshaller {
         /** MatlabArray handles class conversion, and the element count rides along in the span */
         @Override
         public String read(String prhsExpr, String structVar) {
-            return ("MatlabArray<%4$s, %5$s> %1$s_arr(%2$s);\n" +
-                    "%3$s %1$s = {%1$s_arr.ptr, mxGetNumberOfElements(%2$s)}")
-                    .formatted(structVar, prhsExpr, structName, element.mxType(), element.mxClassId());
+            String array = structVar + "_arr";
+            return "MatlabArray<" + element.mxType() + ", " + element.mxClassId() + "> " + array + "(" + prhsExpr + ");\n"
+                   + structName + " " + structVar + " = {" + array + ".ptr, mxGetNumberOfElements(" + prhsExpr + ")}";
         }
 
         @Override
@@ -181,7 +183,13 @@ class SpanMarshaller implements StructMarshaller {
 
         @Override
         public String helpers() {
-            return IndentingTextRenderer.of("""
+            return new IndentingTextRenderer()
+                    .set("WORD", element.word())
+                    .set("STRUCT_NAME", structName)
+                    .set("CREATE", element.mxCreate())
+                    .set("DATA", element.mxData())
+                    .set("ELEMENT", element.mxType())
+                    .add("""
 
                             // Returned spans are library-owned and only valid until the next call,
                             // so they get copied immediately
@@ -194,11 +202,6 @@ class SpanMarshaller implements StructMarshaller {
                                 return array;
                             }
                             """)
-                    .set("WORD", element.word())
-                    .set("STRUCT_NAME", structName)
-                    .set("CREATE", element.mxCreate())
-                    .set("DATA", element.mxData())
-                    .set("ELEMENT", element.mxType())
                     .render();
         }
 

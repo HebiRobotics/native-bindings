@@ -20,7 +20,7 @@ import static com.google.common.base.Preconditions.*;
 public class IndentingTextRenderer {
 
     /**
-     * Wraps an already indented block for %%KEY%% substitution only.
+     * A renderer holding the text, for setting the tokens afterwards
      */
     public static IndentingTextRenderer of(String content) {
         return new IndentingTextRenderer().add(content);
@@ -94,14 +94,6 @@ public class IndentingTextRenderer {
         return this;
     }
 
-    /**
-     * Removes all variables.
-     */
-    public IndentingTextRenderer clearVariables() {
-        variables.clear();
-        return this;
-    }
-
     // =========================================================================
     // Append
     // =========================================================================
@@ -138,13 +130,6 @@ public class IndentingTextRenderer {
      */
     public IndentingTextRenderer addLineIf(boolean condition, Supplier<String> text) {
         return condition ? addLine(text.get()) : this;
-    }
-
-    /**
-     * Appends the comma separated arguments
-     */
-    public IndentingTextRenderer addArgs(Iterable<String> args) {
-        return add(String.join(", ", args));
     }
 
     public IndentingTextRenderer add(String text) {
@@ -187,7 +172,7 @@ public class IndentingTextRenderer {
         return this;
     }
 
-    public IndentingTextRenderer stripTrailingSpaces() {
+    private IndentingTextRenderer stripTrailingSpaces() {
         while (removeLastCharIf(c -> c == ' ' || c == '\t')) ;
         return this;
     }
