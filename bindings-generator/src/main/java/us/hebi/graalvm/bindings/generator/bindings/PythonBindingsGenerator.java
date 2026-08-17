@@ -246,9 +246,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The ctypes prototype a caller wraps its function around. Parameter names have no place
-     * in a CFUNCTYPE, so only the types survive from the invoke signature. A struct view crosses
-     * a function pointer as a pointer to the caller's struct rather than by value.
+     * The ctypes prototype a callable gets wrapped in. Struct views arrive by pointer.
      */
     private static String getPythonCallbackType(CallbackDescription callback) {
         var types = new StringJoiner(", ");
@@ -682,10 +680,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * A callback parameter is described by the signature the library calls back with rather
-     * than by the CFUNCTYPE name, because the wrapper accepts any callable. ctypes hands a
-     * void* argument to the callable as a plain address or None, and a struct view as a pointer
-     * to the private mirror struct, so both show up as Any.
+     * A callback parameter is hinted as the Callable the wrapper accepts. ctypes hands a void*
+     * to it as an address or None and a struct view as a pointer, so both show up as Any.
      */
     private static String getPythonTypeHint(LibraryDescription lib, TypeDescription type) {
         if (type.getDataType() != DataType.CALLBACK) {
@@ -886,9 +882,8 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         .render());
 
             } else if (desc.getDataType() == DataType.CALLBACK) {
-                // Anything callable is accepted, a prebuilt prototype passes straight through. A
-                // callback parameter is call-scoped, so its trampoline stays a local and a fresh
-                // lambda per call gets collected like any other object.
+                // Any callable is accepted, a prebuilt prototype passes straight through. The
+                // wrapper is a local, so it lives exactly as long as the call.
                 out.append(IndentingTextRenderer.of("""
                         if %%NAME%% is not None and not isinstance(%%NAME%%, %%CTYPE%%):
                             %%NAME%% = %%CTYPE%%(%%NAME%%)

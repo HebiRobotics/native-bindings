@@ -73,15 +73,15 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The function pointer alias a callback crosses the ABI as. The MEX gateway declares its
-     * own copy of this, so it stays a plain string rather than going through the header writer.
+     * The typedef a callback crosses the ABI as. A plain string because the MEX gateway declares
+     * its own copy.
      */
     public static String getCCallbackTypedef(CallbackDescription callback) {
         return getCCallbackTypedef(callback, CBindingsGenerator::getQualifiedCType);
     }
 
     /**
-     * @param types how the calling face spells a type, e.g., the MEX gateway's own struct copies
+     * @param types how the calling face spells a type, e.g. the MEX gateway's own struct copies
      */
     public static String getCCallbackTypedef(CallbackDescription callback, Function<TypeDescription, String> types) {
         var parameters = new StringJoiner(", ");
@@ -93,9 +93,8 @@ public class CBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * A struct view is a word type on the GraalVM side, so a callback receives the address of the
-     * caller's struct rather than the by-value copy the shim hands the entry points. The view is
-     * only read for the duration of the call, which is what makes the const unconditional.
+     * A struct view is a GraalVM word type, so a callback receives it by (const) pointer rather than
+     * by value like the entry points do
      */
     public static String getCallbackParameterType(TypeDescription type, Function<TypeDescription, String> types) {
         return type.getDataType() == DataType.STRUCT ? "const " + types.apply(type) + "*" : types.apply(type);

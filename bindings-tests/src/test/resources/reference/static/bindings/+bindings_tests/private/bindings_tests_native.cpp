@@ -166,8 +166,7 @@ struct MatlabStringArray {
     MatlabStringArray(const MatlabStringArray&) = delete;
 };
 
-// The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
-// may enter the Matrix API. Any other thread has to skip rather than corrupt it.
+// Only the thread that loaded the MEX file may enter the Matrix API
 static const std::thread::id matlabThread = std::this_thread::get_id();
 
 // An empty argument passes a null function pointer, like the other language faces
@@ -181,19 +180,15 @@ inline const mxArray* getFunctionHandle(const mxArray* arg, const char* name) {
     return arg;
 }
 
-// What a callback scope produced, copied out before the scope closes. The trapped
-// error is heap allocated by mexCallMATLABWithTrap and MATLAB owns it until the end of
-// the mexFunction, so it stays valid once the scope is gone.
+// Result of a callback scope, copied out before it closes. MATLAB owns the trapped
+// error until the end of the mexFunction, so it outlives the scope.
 struct CallbackOutcome {
     mxArray* error; // what a failed invocation trapped
     int dropped;    // invocations that never reached MATLAB
 };
 
-// Raises what a callback trapped, once the library has unwound its own frames and the
-// scope has closed. Throwing the MException keeps the original identifier and
-// message, and it longjmps like any other error. rethrow is the wrong verb here, it
-// rejects an exception that was never caught in MATLAB code. A trapped error wins over
-// the skip count, it is the more specific failure.
+// Raises a trapped callback error after the library has unwound. 'throw' keeps the
+// original identifier and message (rethrow rejects errors not caught in MATLAB code).
 inline void checkCallbackError(const CallbackOutcome& outcome) {
     if (outcome.error != nullptr) {
         mxArray* error = outcome.error;
@@ -205,9 +200,8 @@ inline void checkCallbackError(const CallbackOutcome& outcome) {
     }
 }
 
-// A result of the wrong shape cannot be raised from inside the library's frames any more
-// than a failing feval can, so the check produces the same trapped MException by letting
-// MATLAB's own error() format it. Returns nullptr when the result is usable.
+// A bad result is trapped like a failing feval and raised after the library returns.
+// Returns nullptr when the result is usable.
 inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
     if (isNumericScalar(result)) {
         return nullptr;
@@ -220,9 +214,8 @@ inline mxArray* checkCallbackResult(const mxArray* result, const char* callback)
     return error;
 }
 
-// One site per callback parameter of every method the gateway dispatches. A site owns
-// the static its scope publishes itself through, so a method taking two callbacks of
-// the same type needs no lookup key.
+// One site per callback parameter of every dispatched method. Each site owns the static
+// its scope publishes itself through, so two callbacks of the same type stay apart.
 enum CallbackSite {
     bindings_tests_Callbacks_invokeDoubleCallback_func,
     bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback_func,
@@ -492,8 +485,8 @@ struct DoubleCallbackFuncScope {
 
     CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
 
-    // An error is trapped rather than raised, because a longjmp from here would tear down
-    // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
     static double invoke(double a, double b) {
         DoubleCallbackFuncScope* scope = current;
         // An unsupported fire after the scope closed means the library kept the pointer past the call
@@ -541,8 +534,8 @@ struct DoubleSpanToScalarCallbackFuncScope {
 
     CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
 
-    // An error is trapped rather than raised, because a longjmp from here would tear down
-    // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
     static double invoke(const DoubleSpan* a, const DoubleSpan* b) {
         DoubleSpanToScalarCallbackFuncScope* scope = current;
         // An unsupported fire after the scope closed means the library kept the pointer past the call
@@ -590,8 +583,8 @@ struct PlainIndexCallbackFunctionScope {
 
     CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
 
-    // An error is trapped rather than raised, because a longjmp from here would tear down
-    // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
     static void invoke(int index) {
         PlainIndexCallbackFunctionScope* scope = current;
         // An unsupported fire after the scope closed means the library kept the pointer past the call
@@ -628,8 +621,8 @@ struct PlainNotifyCallbackFunctionScope {
 
     CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
 
-    // An error is trapped rather than raised, because a longjmp from here would tear down
-    // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
     static void invoke() {
         PlainNotifyCallbackFunctionScope* scope = current;
         // An unsupported fire after the scope closed means the library kept the pointer past the call

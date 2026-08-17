@@ -15,10 +15,9 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 /**
  * Covers function pointer parameters.
  * <p>
- * Every callback here completes before the method returns, so the number of invocations
- * is fully determined by the arguments. That keeps the language tests free of sleeps and
- * polling. {@link #invokePlainOnWorkerThread} is the one that does not run on the calling
- * thread, which is what the MATLAB face has to detect.
+ * Every callback here completes before the method returns, so the language tests need no
+ * sleeps or polling. {@link #invokePlainOnWorkerThread} is the one that runs off the calling
+ * thread, which the MATLAB face has to detect.
  *
  * @author Florian Enner
  */
@@ -37,8 +36,7 @@ public class TestCallbacks {
         return func.invoke(a, b);
     }
 
-    // A span argument carries its length, so unlike TransformCallbackFunction the MEX trampoline
-    // can size the mxArray. Every face gets the span by pointer, which is how a struct view crosses.
+    // Spans carry their length, so MATLAB can size the mxArray. Every face receives them by pointer.
     @CLibCallback("DoubleSpanToScalarCallbackFunc")
     public interface DoubleSpanToScalarCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer
@@ -50,38 +48,33 @@ public class TestCallbacks {
         return func.invoke(a, b);
     }
 
-    // The only callback here that still carries a void*. Nothing may read it, so C, C++
-    // and Python pass the address through untouched and MATLAB stubs every method taking one.
+    // The only remaining void* callback. C, C++ and Python pass the address through untouched,
+    // MATLAB stubs the methods taking it.
     public interface IndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, int index);
     }
 
-    // A raw pointer argument has no length travelling with it, so the MEX trampoline cannot
-    // size the mxArray it would have to build. This is the shape that excludes the methods
-    // taking it from the MATLAB face, and it is what a numerical solver's objective looks like.
+    // Raw pointers carry no length, so MATLAB cannot build an mxArray and excludes the method.
+    // This is what a numerical solver's objective looks like.
     public interface TransformCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(VoidPointer userData, @CConst CDoublePointer input, CDoublePointer output);
     }
 
-    // The shape the MATLAB gateway supports, now that nothing may cross the ABI as context.
-    // The registry thunk the library was handed is the channel, so its identity is what
-    // replaces a void* argument.
+    // The shape the MATLAB gateway supports: no context crosses the ABI
     public interface PlainIndexCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke(int index);
     }
 
-    // No arguments at all. Together with a method that takes no void* either, this is the
-    // pair the MATLAB face used to reject outright.
+    // No arguments at all
     public interface PlainNotifyCallbackFunction extends CFunctionPointer {
         @InvokeCFunctionPointer(transition = CFunction.Transition.TO_NATIVE)
         void invoke();
     }
 
-    // The single void* method, pinning both behaviours: C, C++ and Python see the address
-    // arrive unread and unchanged, MATLAB stubs the method with the 'userData' reason.
+    // The single void* method: C, C++ and Python see the address arrive unchanged, MATLAB stubs it
     @CLibMethod(flags = Noexcept)
     @CLibComment("""
             Invokes the callback exactly 'times' times with indices 0 to times-1, then
@@ -97,8 +90,7 @@ public class TestCallbacks {
         }
     }
 
-    // Pins a callback whose own arguments are raw pointers, the shape a solver objective has
-    // when it reads a parameter vector and writes a residual vector.
+    // Raw pointer arguments, the shape of a solver objective reading parameters and writing residuals
     @CLibMethod(flags = Noexcept)
     @CLibComment("""
             Invokes the callback once with the two buffers and returns after it completes.
@@ -172,8 +164,7 @@ public class TestCallbacks {
         }
     }
 
-    // Nothing crosses the ABI here but the function pointer itself, which is the narrowest
-    // callback a library can declare and the one MATLAB needs no conversion at all for.
+    // Nothing crosses the ABI but the function pointer itself
     @CLibMethod(flags = Noexcept)
     @CLibComment("Invokes the callback once. Returns after it completes.")
     public static void notifyPlainOnce(PlainNotifyCallbackFunction func) {

@@ -527,9 +527,8 @@ void onIndex(void* userData, int index) {
   ++state->count;
 }
 
-// The plain shapes carry no userData, so their state has to live at file scope and only a
-// captureless lambda converts to the parameter type. That is the cost of dropping the
-// context, and it is what makes the shape expressible in MATLAB.
+// The plain shapes carry no userData, so their state lives at file scope and only a
+// captureless lambda converts to the parameter type
 CallbackState plainState;
 
 void onPlainIndex(int index) {
@@ -542,9 +541,7 @@ void onPlainIndex(int index) {
 }  // namespace
 
 static void testCallbacks() {
-  // Fires synchronously, five times, with indices 0..4, before returning. The void* is
-  // an ordinary argument the library passes through unread, so the state struct arrives
-  // at the callback exactly as it was handed in.
+  // Fires synchronously, five times, with indices 0..4. The void* is passed through unread.
   CallbackState state = {};
   bt::callbacks::invokeTimes(&onIndex, &state, 5);
   CHECK(state.count == 5);
@@ -560,9 +557,7 @@ static void testCallbacks() {
   // A binary operator with no context at all, a captureless lambda converts to it.
   CHECK(bt::callbacks::invokeDoubleCallback([](double a, double b) { return a + b; }, 1.5, 2.25) == 3.75);
 
-  // The method's spans get their vector overload like any other span parameter. The callback
-  // itself receives both by pointer, because that is how a struct view crosses a function
-  // pointer, and each carries its own length.
+  // The method's spans get their vector overload, the callback receives them by pointer
   const std::vector<double> left = {1.0, 2.0, 3.0};
   const std::vector<double> right = {4.0, 5.0};
   CHECK(bt::callbacks::invokeDoubleSpanToScalarCallback(
@@ -574,9 +569,8 @@ static void testCallbacks() {
             },
             left, right) == 15.0);
 
-  // A callback whose own arguments are raw pointers, the shape a solver objective has.
-  // Only the MATLAB face cannot express it, here the const input still gets its vector
-  // overload.
+  // Raw pointer arguments, the shape of a solver objective. The const input still gets its
+  // vector overload.
   CallbackState transformed = {};
   const double source[kTransformCount] = {1.0, 2.0, 3.0};
   double target[kTransformCount] = {};
@@ -589,8 +583,7 @@ static void testCallbacks() {
   CHECK(transformed.count == 2);
   CHECK(target[0] == 8.0 && target[1] == 10.0 && target[2] == 12.0);
 
-  // A callback that takes no pointer of its own has nothing to carry state through, so
-  // the caller supplies a plain function pointer. A captureless lambda still converts.
+  // No context pointer, so a plain function pointer or captureless lambda
   plainState = CallbackState();
   bt::callbacks::invokePlainTimes(&onPlainIndex, 4);
   CHECK(plainState.count == 4);

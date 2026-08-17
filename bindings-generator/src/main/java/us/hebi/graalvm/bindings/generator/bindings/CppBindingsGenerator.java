@@ -387,27 +387,21 @@ public class CppBindingsGenerator extends BindingGenerator {
                     cppClassName, INTERNAL_POINTER_NAMESPACE, factoryName, joiner.join(params.paramNames)));
         } else {
             impl.write("inline %s::%s(%s) {\n".formatted(cppClassName, cppClassName, joiner.join(cppParams)));
-            writeConstructorBody(scope, method, cParams, impl, useDynamicLookup);
+            if (useDynamicLookup) {
+                impl.write(getDynamicFunctionLookup(apiClass, method));
+            }
+            if (isThrowing(method)) {
+                impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
+            }
+            impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
+            if (isThrowing(method)) {
+                impl.write(getErrorCheck());
+                impl.write("""
+                          checkNotNull(ptr_, "Could not create %s");
+                        """.formatted(getCppClassName(apiClass.getType())));
+            }
+            impl.write("}\n");
         }
-    }
-
-    /** Everything after the signature */
-    private void writeConstructorBody(ClassScope scope, MethodDescription method, List<String> cParams,
-                                      Writer impl, boolean useDynamicLookup) throws IOException {
-        if (useDynamicLookup) {
-            impl.write(getDynamicFunctionLookup(scope.apiClass, method));
-        }
-        if (isThrowing(method)) {
-            impl.write("  %s %s = {};\n".formatted(getErrorType(), ERROR_LOCAL_NAME));
-        }
-        impl.write("  ptr_ = %s(%s);\n".formatted(method.getCName(), joiner.join(cParams)));
-        if (isThrowing(method)) {
-            impl.write(getErrorCheck());
-            impl.write("""
-                      checkNotNull(ptr_, "Could not create %s");
-                    """.formatted(getCppClassName(scope.apiClass.getType())));
-        }
-        impl.write("}\n");
     }
 
     private void writeFunction(ClassScope scope, MethodDescription method, MethodParams params,
@@ -748,8 +742,7 @@ public class CppBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The same function pointer the C header declares, spelled as an alias. Parameter names are
-     * kept because the wrapper header is what a user reads to learn the callback's contract.
+     * The C header's function pointer as an alias. Parameter names are kept for readability.
      */
     private static String getCppCallbackAlias(CallbackDescription callback) {
         var parameters = new StringJoiner(", ");

@@ -10,10 +10,8 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Emits the callback mechanism of the MEX gateway: one scope class per callback typedef, whose
- * static {@code invoke} the library is handed, and one static per call site through which that
- * function finds the handle. A callback is live for exactly the call that passed it. The
- * dispatch itself stays in {@link MatlabBindingsGenerator} and asks this class for the names.
+ * Emits the callback support of the MEX gateway: one RAII scope class per callback typedef whose
+ * static invoke() the library is handed. The dispatch itself stays in {@link MatlabBindingsGenerator}.
  * <p>
  * TODO:
  *  callbacks in MATLAB are a huge mess. We don't have much of a use case for them yet, so
@@ -26,8 +24,7 @@ import java.util.function.Function;
 class MatlabCallbackGenerator {
 
     /**
-     * @param cToMex the gateway's C to mxArray conversion, which serves every data type and
-     *               therefore stays with the generator
+     * @param cToMex the gateway's C to mxArray conversion, shared with the rest of the gateway
      */
     MatlabCallbackGenerator(LibraryDescription lib, Function<TypeDescription, String> cToMex) {
         this.lib = lib;
@@ -35,10 +32,8 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The gateway does not include the public C header, so it repeats the callback typedefs the
-     * same way it repeats the error struct, spelled against its own struct copies. The token they
-     * fill sits at the end of the struct helpers, which is where those copies are declared, so a
-     * library without callbacks renders the template unchanged.
+     * The gateway does not include the public C header, so it repeats the callback typedefs against
+     * its own struct copies. The token sits at the end of the struct helpers.
      */
     String createCallbackTypedefs() {
         if (lib.getCallbacks().length() == 0) {
@@ -52,8 +47,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The gateway declares layout-compatible copies of the user structs under the bare type name,
-     * so a signature naming one may not use the prefixed name of the public C header.
+     * The gateway declares its struct copies under the bare name rather than the prefixed C name
      */
     private static String getMexCallbackType(TypeDescription type) {
         return type.getDataType() == DataType.STRUCT
@@ -61,8 +55,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * What every callback scope shares, plus the enumeration of call sites. The token it fills
-     * sits at the end of an existing line.
+     * The shared callback support plus the call site enum. The token sits at the end of a line.
      */
     String createCallbackSupport() {
         var sites = getCallbackSites();
@@ -72,8 +65,7 @@ class MatlabCallbackGenerator {
         var out = new IndentingTextRenderer().add("""
 
 
-                // The MEX file is loaded by MATLAB, so static initialization runs on the one thread that
-                // may enter the Matrix API. Any other thread has to skip rather than corrupt it.
+                // Only the thread that loaded the MEX file may enter the Matrix API
                 static const std::thread::id matlabThread = std::this_thread::get_id();
 
                 // An empty argument passes a null function pointer, like the other language faces
@@ -87,19 +79,15 @@ class MatlabCallbackGenerator {
                     return arg;
                 }
 
-                // What a callback scope produced, copied out before the scope closes. The trapped
-                // error is heap allocated by mexCallMATLABWithTrap and MATLAB owns it until the end of
-                // the mexFunction, so it stays valid once the scope is gone.
+                // Result of a callback scope, copied out before it closes. MATLAB owns the trapped
+                // error until the end of the mexFunction, so it outlives the scope.
                 struct CallbackOutcome {
                     mxArray* error; // what a failed invocation trapped
                     int dropped;    // invocations that never reached MATLAB
                 };
 
-                // Raises what a callback trapped, once the library has unwound its own frames and the
-                // scope has closed. Throwing the MException keeps the original identifier and
-                // message, and it longjmps like any other error. rethrow is the wrong verb here, it
-                // rejects an exception that was never caught in MATLAB code. A trapped error wins over
-                // the skip count, it is the more specific failure.
+                // Raises a trapped callback error after the library has unwound. 'throw' keeps the
+                // original identifier and message (rethrow rejects errors not caught in MATLAB code).
                 inline void checkCallbackError(const CallbackOutcome& outcome) {
                     if (outcome.error != nullptr) {
                         mxArray* error = outcome.error;
@@ -111,9 +99,8 @@ class MatlabCallbackGenerator {
                     }
                 }
 
-                // A result of the wrong shape cannot be raised from inside the library's frames any more
-                // than a failing feval can, so the check produces the same trapped MException by letting
-                // MATLAB's own error() format it. Returns nullptr when the result is usable.
+                // A bad result is trapped like a failing feval and raised after the library returns.
+                // Returns nullptr when the result is usable.
                 inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
                     if (isNumericScalar(result)) {
                         return nullptr;
@@ -126,9 +113,8 @@ class MatlabCallbackGenerator {
                     return error;
                 }
 
-                // One site per callback parameter of every method the gateway dispatches. A site owns
-                // the static its scope publishes itself through, so a method taking two callbacks of
-                // the same type needs no lookup key.
+                // One site per callback parameter of every dispatched method. Each site owns the static
+                // its scope publishes itself through, so two callbacks of the same type stay apart.
                 enum CallbackSite {
                 """).indent();
         for (var site : sites) {
@@ -139,8 +125,8 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * One scope class per callback typedef that a MATLAB-visible method takes. The token they fill
-     * sits at the end of an existing line, and they come after the createMex helpers they call.
+     * One scope class per callback typedef a MATLAB-visible method takes. The token sits at the end
+     * of a line, after the createMex helpers they call.
      */
     String createCallbackScopes() {
         var visible = getVisibleCallbacks();
@@ -163,10 +149,8 @@ class MatlabCallbackGenerator {
                         isStruct ? "*" + parameter.getParamName() : parameter.getParamName()));
             }
 
-            // feval takes the handle as its first argument. A void callback asks for no output, so
-            // the trapped error is the only thing that comes back, and a skipped invocation has
-            // nothing to return. A value callback asks for one, and hands back a value-initialized
-            // result wherever the handle was not reached, its error is raised after the call anyway.
+            // A void callback asks feval for no output, a value callback for one. A skipped invocation
+            // returns a value-initialized result, its error is raised after the call anyway.
             var content = out.snapshot()
                     .set("CALLBACK", callback.getName())
                     .set("SCOPE", getCallbackScopeName(callback.getName()))
@@ -196,8 +180,8 @@ class MatlabCallbackGenerator {
 
                         CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
 
-                        // An error is trapped rather than raised, because a longjmp from here would tear down
-                        // the library's own frames. One mxArray copy per argument per call is inherent to MATLAB.
+                        // Errors are trapped rather than raised, a longjmp from here would tear down the
+                        // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
                         static %%RETURN_TYPE%% invoke(%%PARAMS%%) {
                             %%SCOPE%%* scope = current;
                             // An unsupported fire after the scope closed means the library kept the pointer past the call
@@ -278,8 +262,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The enumerator naming one callback parameter of one method, which is what selects the
-     * static its scope publishes itself through
+     * The enumerator naming one callback parameter of one method, which selects the scope's static
      */
     static String getCallbackSite(MethodDescription method, TypeDescription param) {
         return method.getCName() + "_" + param.getParamName();
@@ -290,24 +273,20 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The single decision point for shapes the MATLAB face cannot express. An excluded method
-     * still appears in the m-file, as a stub that raises the returned reason, but it reaches
-     * neither the gateway nor the auto-complete signatures.
+     * The single decision point for shapes the MATLAB face cannot express. Excluded methods get an
+     * m-file stub that raises the reason and no dispatch case.
      *
      * @return why the method cannot be called from MATLAB, or empty if it can
      */
     Optional<String> getMatlabExclusionReason(MethodDescription method) {
         for (var param : method.getParameters()) {
             if (param.getDataType() != DataType.CALLBACK) continue;
-            // The scope asks feval for one output and reads it as a scalar, so anything
-            // that is not one has no route back into the library.
+            // feval is asked for one scalar output, anything else has no route back into the library
             var returnType = getCallback(param).getReturnType().getDataType();
             if (!TypeMap.isVoid(returnType) && !isScalar(returnType)) {
                 return Optional.of("its callback returns a value that the gateway cannot hand back");
             }
-            // A raw pointer argument carries no length, so the scope has nothing to size
-            // the mxArray it would have to build. A span parameter would. A void* is rejected
-            // here like any other pointer, since MATLAB cannot do anything with an address.
+            // A raw pointer carries no length to size an mxArray with, and MATLAB cannot use an address
             for (var argument : getCallback(param).getParameters()) {
                 if (!isConvertibleToMex(argument.getDataType())) {
                     return Optional.of("its callback takes an argument ('" + argument.getParamName()
@@ -319,8 +298,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * Whether a callback argument can reach feval as an mxArray, which is the subset of
-     * {@link MatlabBindingsGenerator#getCToMex} that a scope actually converts.
+     * The subset of {@link MatlabBindingsGenerator#getCToMex} that a scope actually converts
      */
     private static boolean isConvertibleToMex(DataType type) {
         return switch (type) {
@@ -331,8 +309,7 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * Whether a callback result can come back through mxGetScalar, the one read the
-     * scope does on the feval output.
+     * Whether a callback result can come back through mxGetScalar
      */
     private static boolean isScalar(DataType type) {
         return switch (type) {

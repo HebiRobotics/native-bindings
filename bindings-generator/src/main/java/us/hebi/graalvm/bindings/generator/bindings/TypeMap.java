@@ -51,10 +51,7 @@ public final class TypeMap {
     public static String toExternalC(TypeDescription type, boolean ptrSuffix) {
         return switch (type.getDataType()) {
             case OBJECT_HANDLE -> type.getCPrefix() + type.getTypeName() + (ptrSuffix ? C_PTR_SUFFIX : "");
-            case ENUM -> type.getCPrefix() + type.getTypeName();
-            // the typedef the header declares. The C++ alias and the Python prototype keep the
-            // plain name the descriptor carries, each inside its own namespace.
-            case CALLBACK -> type.getCPrefix() + type.getTypeName();
+            case ENUM, CALLBACK -> type.getCPrefix() + type.getTypeName();
             case STRUCT -> toStructCName(type.getCPrefix(), type.getTypeName());
             default -> toExternalC(type.getDataType());
         };
@@ -189,8 +186,8 @@ public final class TypeMap {
             case OBJECT_HANDLE -> "void*";    // technically void*
 
             // Structs only cross the public ABI by value. The internal entry point sees
-            // them as struct pointers, so they never have an internal name. A callback is
-            // named by its typedef in both faces, so callers route it through toExternalC.
+            // them as struct pointers, so they never have an internal name. Callbacks are
+            // always named by their typedef.
             case STRUCT, CALLBACK, UNSPECIFIED ->
                     throw new IllegalArgumentException("Can't determine C type for: " + type);
         };

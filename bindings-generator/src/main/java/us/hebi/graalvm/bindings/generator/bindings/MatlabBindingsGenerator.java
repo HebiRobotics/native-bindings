@@ -9,13 +9,13 @@ import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
-import java.lang.annotation.Inherited;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static java.util.function.Predicate.*;
 import static us.hebi.quickbuf.ProtoUtil.*;
 
 /**
@@ -281,8 +281,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     types.add(getMexCType(param));
                     pre.append(getMexToC(param, index++)).append(";\n");
                     if (param.getDataType() == DataType.CALLBACK) {
-                        // A callback lives for exactly this call, so its scope and the library call
-                        // share a block that nothing inside may raise out of
                         callbackArgs.add(new CallbackArg(param.getParamName(),
                                 MatlabCallbackGenerator.getCallbackScopeName(param.getTypeName())
                                 + "<" + MatlabCallbackGenerator.getCallbackSite(method, param) + ">"));
@@ -294,8 +292,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 for (var callback : callbackArgs) {
                     post.append("\ncheckCallbackError(").append(callback.name()).append("Outcome);");
                 }
-                // A library error raised because the callback failed would otherwise mask
-                // the root cause, so the callback error is checked first
+                // Checked after the callback error, which is the more likely root cause
                 if (isThrowing(method)) {
                     post.append("\ncheckError(_error);");
                 }
@@ -310,7 +307,6 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
                     }
                 } else {
-                    // The return value is declared outside so that the checks below can still see it
                     if (returnsValue) {
                         pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%%;\n");
                     }
@@ -318,8 +314,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         pre.append("CallbackOutcome ").append(callback.name()).append("Outcome;\n");
                     }
 
-                    // mexErrMsgIdAndTxt longjmps without running destructors, so nothing inside
-                    // the block may raise. The outcome is checked once the scope has closed.
+                    // mexErrMsgIdAndTxt longjmps past destructors, so nothing in the block may raise
                     var scope = new IndentingTextRenderer().addLine("{").indent();
                     for (var callback : callbackArgs) {
                         scope.addLine(callback.scopeType() + " " + callback.name() + "(" + callback.name() + "Handle);");
@@ -377,8 +372,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * A callback parameter of a dispatched call. The scope type carries the parameter's site, and
-     * the name is what the outcome is copied out under once the scope has closed.
+     * A callback parameter of a dispatched call and the scope type of its site
      */
     private record CallbackArg(String name, String scopeType) {
     }
@@ -657,7 +651,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
 
         // Instance methods
-        var instanceMethods = getMethods(apiClass, m -> !m.getIsStatic());
+        var instanceMethods = getMethods(apiClass, not(MethodDescription::getIsStatic));
         if (!instanceMethods.isEmpty()) {
             content.beginControlFlow("\nmethods\n");
             instanceMethods.forEach(m -> addWrapperMethod(apiClass, m, content.snapshot()));
@@ -853,9 +847,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * The m-file entry for a method that {@link MatlabCallbackGenerator#getMatlabExclusionReason}
-     * rejected. It takes varargin so that every call reaches the error rather than an argument
-     * count mismatch, and it is the one wrapper shape with no dispatch case behind it.
+     * The m-file stub for a method that {@link MatlabCallbackGenerator#getMatlabExclusionReason}
+     * rejected. It takes varargin so that any call reaches the error rather than a count mismatch.
      */
     private void addUnsupportedStub(ClassDescription apiClass, MethodDescription method, String reason,
                                     IndentingTextRenderer content) {

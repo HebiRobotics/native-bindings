@@ -116,8 +116,8 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
     }
 
     /**
-     * The annotation only carries metadata for a callback that discovery finds on its own,
-     * so putting it anywhere else silently does nothing.
+     * The annotation only adds metadata to a callback that discovery finds on its own, so anywhere
+     * else it would silently do nothing
      */
     private static void checkIsCallbackType(Element element) {
         if (!(element instanceof TypeElement type) || !AnnotatedCLibCallback.isCallbackType(type)) {

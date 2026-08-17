@@ -533,9 +533,7 @@ class CallbacksTest(unittest.TestCase):
 
         bindings_tests.Callbacks.invoke_times(callback, user_data, 5)
 
-        # Fires synchronously, five times, with indices 0..4, before returning. The void*
-        # is an ordinary argument the library passes through unread, so the address the
-        # callback casts back is the one that went in.
+        # Fires synchronously, five times, with indices 0..4. The void* is passed through unread.
         self.assertEqual(5, state.count)
         self.assertEqual([0, 1, 2, 3, 4], list(state.indices)[:5])
 
@@ -552,8 +550,7 @@ class CallbacksTest(unittest.TestCase):
         seen = []
 
         def handler(user_data, index):
-            # Nothing was passed, so nothing arrives: the wrapper neither fills the
-            # argument in nor reads it
+            # Nothing was passed, so nothing arrives
             self.assertIsNone(user_data)
             seen.append(index)
 
@@ -569,8 +566,7 @@ class CallbacksTest(unittest.TestCase):
         self.assertEqual(3.75, result)
 
     def test_double_span_to_scalar_callback(self):
-        # Each span carries its own length, and ctypes hands the callable a pointer to the
-        # private mirror struct because that is how a struct view crosses a function pointer
+        # Spans carry their own length and arrive as ctypes pointers to the mirror struct
         def sum_spans(a, b):
             total = 0.0
             for i in range(a.contents.length):
@@ -584,8 +580,8 @@ class CallbacksTest(unittest.TestCase):
         self.assertEqual(15.0, result)
 
     def test_callback_with_raw_pointer_arguments(self):
-        # The solver-objective shape. The callback's pointers carry no length, which is
-        # why MATLAB excludes the method, so the count is agreed on out of band.
+        # The solver-objective shape. Raw pointers carry no length, so the count is agreed on
+        # out of band.
         source = np.array([1.0, 2.0, 3.0], dtype=np.float64)
         target = np.zeros(3, dtype=np.float64)
 
@@ -600,8 +596,7 @@ class CallbacksTest(unittest.TestCase):
     def test_invoke_plain_times(self):
         seen = []
 
-        # No user_data at all, so the closure is the only channel left. Any callable is
-        # still accepted, the wrapper builds the CFUNCTYPE prototype around it.
+        # No user_data, so the closure is the only channel. Any callable is still accepted.
         bindings_tests.Callbacks.invoke_plain_times(seen.append, 4)
 
         self.assertEqual([0, 1, 2, 3], seen)
@@ -636,7 +631,6 @@ class CallbacksTest(unittest.TestCase):
 
     def test_method_wrapper_is_not_retained(self):
         # A fresh lambda per call is the IK-loop shape, and nothing may outlive the call
-        # that passed it. The module therefore has no process-lifetime cache at all.
         for i in range(10):
             bindings_tests.Callbacks.invoke_times(lambda user_data, index: None, None, i)
 

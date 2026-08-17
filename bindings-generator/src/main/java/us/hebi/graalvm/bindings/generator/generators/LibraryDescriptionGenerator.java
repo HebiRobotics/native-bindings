@@ -58,7 +58,6 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
                     .setReturnType(method.getReturnTypeDescription());
 
             collectStructView(method.getReturnType());
-            collectCallback(method.getReturnType());
 
             // Only set to non-standard values
             if (method.isStatic()) methodDesc.setIsStatic(true);
@@ -133,8 +132,7 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     /**
-     * Discovery by use, like {@link #collectStructView(AnnotatedClibType)}: a signature naming a
-     * {@code CFunctionPointer} interface is what puts its typedef into every language face.
+     * Discovery by use, like {@link #collectStructView(AnnotatedClibType)}
      */
     private void collectCallback(AnnotatedClibType type) {
         if (type.getDataType() != DataType.CALLBACK) {
@@ -146,9 +144,8 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
     }
 
     /**
-     * Two interfaces of the same simple name would emit the same typedef twice, and the second
-     * definition is what the C compiler reports rather than the collision. Runs after
-     * {@link #registerUsedStructViews()}, which is what makes the struct side complete.
+     * Two interfaces of the same simple name would emit the same typedef twice, so the collision
+     * is reported here rather than by the C compiler
      */
     private void registerUsedCallbacks() {
         for (var callback : usedCallbacks.values()) {

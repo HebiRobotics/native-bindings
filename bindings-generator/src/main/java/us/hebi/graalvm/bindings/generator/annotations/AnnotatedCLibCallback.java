@@ -15,9 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@code CFunctionPointer} interface used as a parameter type. The typedef every language
- * face declares is derived from the interface's single {@code @InvokeCFunctionPointer}
- * method, so the signature is stated once in the annotated API.
+ * A {@code CFunctionPointer} interface used as a parameter type. Every language face derives
+ * its typedef from the single {@code @InvokeCFunctionPointer} method.
  *
  * @author Florian Enner
  * @since 07 Aug 2026
@@ -67,12 +66,9 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * The allow-list is GraalVM's, not ours. {@code @InvokeCFunctionPointer} accepts only
-     * primitive types, word types and {@code @CEnum} types, so a handle or a plain Java enum
-     * fails the image build rather than this processor. Rejecting them here turns a stage 1
-     * failure into a diagnostic on the offending declaration. A struct view is a word type, so
-     * it crosses as a pointer to the caller's struct and is fine as a parameter. Only the
-     * return stays out, because the callee has no memory to point it at.
+     * Mirrors GraalVM's allow-list (primitives, word types, {@code @CEnum}) so that a bad type is
+     * a diagnostic here rather than a stage 1 image build error. A struct view is a word type that
+     * crosses as a pointer, fine as a parameter but not as a return.
      */
     private TypeDescription toCallbackType(AnnotatedClibType type, boolean isReturn) {
         DataType dataType;
@@ -108,9 +104,8 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * The annotated API declares plain Java enums and the {@code @CEnum} mirror is generated
-     * from them, so the mirror is not what the interface names. Admitting the plain enum here
-     * only moves the failure to the image build.
+     * The annotated API declares plain Java enums, and only the generated {@code @CEnum} mirror
+     * would be legal here
      */
     private ProcessingException javaEnum(AnnotatedClibType type, boolean isReturn) {
         return new ProcessingException(invokeMethod,
@@ -137,8 +132,7 @@ public class AnnotatedCLibCallback extends AnnotatedCLibElement<TypeElement> {
     }
 
     /**
-     * An unannotated interface is a valid callback, so the annotation is optional here the
-     * way it is in {@link #getName(TypeElement)}.
+     * The annotation is optional, like in {@link #getName(TypeElement)}
      */
     public static String getCPrefix(EnvProcessor.GeneratorOptions options, TypeElement element) {
         var annotation = element.getAnnotation(CLibCallback.class);

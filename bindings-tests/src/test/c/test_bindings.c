@@ -677,8 +677,7 @@ static void on_transform(void* userData, const double* input, double* output) {
     }
 }
 
-/* The plain shapes carry no userData, so their state has to live at file scope. That is
-   the constraint the MATLAB face imposes, written out in C. */
+/* The plain shapes carry no userData, so their state lives at file scope */
 static CallbackState plain_state;
 
 static void on_plain_index(int index) {
@@ -696,8 +695,7 @@ static double sum(double a, double b) {
     return a + b;
 }
 
-/* Each span carries its own length, so no count is agreed on out of band. Both arrive as
-   pointers to the caller's structs, which is how a struct view crosses a function pointer. */
+/* Spans carry their own length and arrive by pointer */
 static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests_DoubleSpan* b) {
     double total = 0.0;
     size_t i;
@@ -721,9 +719,7 @@ static void test_callbacks(void) {
     bindings_tests_DoubleSpan b;
     int i;
 
-    /* Fires synchronously, five times, with indices 0..4, before returning. The void*
-       is an ordinary argument the library passes through unread, so the state struct
-       arrives at the callback exactly as it was handed in. */
+    /* Fires synchronously, five times, with indices 0..4. The void* is passed through unread. */
     memset(&state, 0, sizeof(state));
     bindings_tests_Callbacks_invokeTimes(&on_index, &state, (size_t) 5);
     assert(state.count == 5);
@@ -762,8 +758,7 @@ static void test_callbacks(void) {
     assert(state.count == 1);
     assert(target[0] == 2.0 && target[1] == 4.0 && target[2] == 6.0);
 
-    /* The same shapes without a context pointer. C loses nothing but the argument, which
-       is what makes them expressible in MATLAB. */
+    /* The same shapes without a context pointer */
     memset(&plain_state, 0, sizeof(plain_state));
     bindings_tests_Callbacks_invokePlainTimes(&on_plain_index, (size_t) 4);
     assert(plain_state.count == 4);

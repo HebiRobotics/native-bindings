@@ -19,7 +19,7 @@ public class DocumentationUtil {
     public static String generateMatlabdoc(String indent, MethodDescription methodDesc) {
         StringBuilder out = new StringBuilder(methodDesc.getDocumentation().trim());
 
-        if (methodDesc.getParameters().length() != 0) {
+        if (methodDesc.getParameters().length() > 0) {
             out.append("\n\nInputs:");
             for (TypeDescription parameter : methodDesc.getParameters()) {
                 out.append("\n").append(INDENT).append(parameter.getParamName());
@@ -61,14 +61,7 @@ public class DocumentationUtil {
             for (TypeDescription param : methodDesc.getParameters()) {
                 String name = param.getLowerUnderscoreParamName();
                 out.append("\n").append(INDENT).append(name).append(": ").append(param.getComment());
-                if (param.getDataType() == DataType.CALLBACK && methodDesc.getIsConstructor()) {
-                    // The instance owns the trampoline, so nothing about it is per call
-                    if (param.hasComment()) out.append(" ");
-                    out.append("Any callable is accepted. The object owns the resulting");
-                    out.append("\n").append(INDENT).append(INDENT);
-                    out.append(param.getTypeName()).append(" and keeps it alive for as long as it exists.");
-                } else if (param.getDataType() == DataType.CALLBACK) {
-                    // A raw parameter is call-scoped, so its trampoline is built per call
+                if (param.getDataType() == DataType.CALLBACK) {
                     if (param.hasComment()) out.append(" ");
                     out.append("Any callable is accepted, and a plain one is wrapped into a fresh");
                     out.append("\n").append(INDENT).append(INDENT);

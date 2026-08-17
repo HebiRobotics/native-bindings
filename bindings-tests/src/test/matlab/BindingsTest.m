@@ -426,10 +426,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testContextCarryingCallbacksAreNotSupported(testCase)
-            % Nothing may cross the ABI as context, because the gateway would have to hand
-            % the void* to the function handle as an mxArray and an address is not one. A
-            % method whose callback carries one therefore gets a stub, and the raw pointer
-            % shape below is rejected for its own reason on top of that.
+            % An address is not an mxArray, so a callback with a void* or raw pointer gets a stub
             noop = @(varargin) [];
 
             testCase.verifyError(@() bindings_tests.Callbacks.invokeTimes(noop, 4), 'bindings_tests:NotSupported');
@@ -437,13 +434,11 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testValueReturningCallback(testCase)
-            % The trampoline asks feval for one output and hands it back as the C return
-            % value, so a binary operator round-trips through the library.
+            % feval's one output becomes the C return value
             testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) a + b, 1.5, 2.25), 3.75);
             testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleCallback(@max, 1.5, 2.25), 2.25);
 
-            % A result that is not a numeric scalar is trapped like a failing feval and
-            % raised once the library has returned, rather than from inside its frames.
+            % A result that is not a numeric scalar is trapped and raised after the library returns
             testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [a b], 1, 2), ...
                 'bindings_tests:TypeError');
             testCase.verifyError(@() bindings_tests.Callbacks.invokeDoubleCallback(@(a, b) [], 1, 2), ...
@@ -458,8 +453,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testSpanArgumentCallback(testCase)
-            % A span argument carries its length, so the trampoline can size the mxArray and
-            % the handle sees a numeric row vector rather than an address.
+            % Spans carry their length, so the handle sees a numeric row vector
             testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
                 @(a, b) sum(a) + sum(b), [1 2 3], [4 5]), 15);
             testCase.verifyEqual(bindings_tests.Callbacks.invokeDoubleSpanToScalarCallback( ...
@@ -467,8 +461,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testPlainCallbacks(testCase)
-            % The supported shape: no void* anywhere, so the function the library was handed
-            % is the whole channel and the static of its call site is what finds the handle.
+            % The supported shape: no void* anywhere
             collected = [];
             outer = [];
             inner = [];
@@ -481,25 +474,21 @@ classdef BindingsTest < matlab.unittest.TestCase
             bindings_tests.Callbacks.invokePlainTimes(@collect, 0);
             testCase.verifyTrue(isempty(collected));
 
-            % An empty argument is the null function pointer the other suites pass, and the
-            % library ignores it. Anything else that is not a function handle is rejected.
+            % An empty argument is a null function pointer, anything else must be a function handle
             bindings_tests.Callbacks.invokePlainTimes([], 1);
             testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(42, 1), ...
                 'bindings_tests:TypeError');
 
-            % The callback calls back into the method that took it, so the nested call pushes
-            % its own handle over the site's static and restores it on the way out. Nesting
-            % level n collects 0..n-1.
+            % The callback re-enters the method that took it. Nesting level n collects 0..n-1.
             bindings_tests.Callbacks.invokePlainTimes(@nest, 3);
             testCase.verifyEqual(outer, [0 1 2]);
             testCase.verifyEqual(inner, [0 0 1 0 1 2]);
 
-            % An error raised inside the callback is trapped by the thunk and rethrown at the
-            % call site once the library call has returned.
+            % An error inside the callback is trapped and rethrown once the library has returned
             testCase.verifyError(@() bindings_tests.Callbacks.invokePlainTimes(@fail, 1), ...
                 'bindings_tests:CallbackFailed');
 
-            % The registry recovers from that error, so the next call still works
+            % The next call still works
             collected = [];
             bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
             testCase.verifyEqual(collected, [0 1]);
@@ -523,8 +512,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testPlainCallbackErrorOrdering(testCase)
-            % A throwing method invokes the callback before it validates, so the call below
-            % records the index and then raises the library error.
+            % The callback fires before the validation, so the index is recorded before the error
             collected = [];
             bindings_tests.Callbacks.invokePlainChecked(@collect, 3);
             testCase.verifyEqual(collected, 3);
@@ -534,8 +522,7 @@ classdef BindingsTest < matlab.unittest.TestCase
                 'bindings_tests:IllegalArgumentException');
             testCase.verifyEqual(collected, -1);
 
-            % Both fail in the same call. The callback error is the root cause of the library
-            % one, so the gateway has to raise it first.
+            % Both fail in the same call, and the callback error is raised first as the root cause
             testCase.verifyError(@() bindings_tests.Callbacks.invokePlainChecked(@fail, -1), ...
                 'bindings_tests:CallbackFailed');
 
@@ -549,8 +536,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testPlainCallbackOnWorkerThread(testCase)
-            % Only the MATLAB thread may enter the Matrix API, so a thunk that finds itself
-            % anywhere else skips the invocation and the call reports the count.
+            % Only the MATLAB thread may enter the Matrix API, other threads skip and get counted
             collected = [];
 
             [message, identifier] = testCase.captureError( ...
@@ -559,7 +545,7 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyTrue(contains(message, '1 callback invocation'));
             testCase.verifyTrue(isempty(collected));
 
-            % The registry recovers from that raise, so the next call still works
+            % The next call still works
             bindings_tests.Callbacks.invokePlainTimes(@collect, 2);
             testCase.verifyEqual(collected, [0 1]);
 
@@ -569,8 +555,7 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testArgumentlessPlainCallback(testCase)
-            % Nothing crosses the ABI at all, so the function handle takes no arguments and
-            % feval gets the handle alone. This is the pair the old rule rejected outright.
+            % Nothing crosses the ABI at all, so the function handle takes no arguments
             called = false;
             bindings_tests.Callbacks.notifyPlainOnce(@() note());
             testCase.verifyTrue(called);
@@ -581,9 +566,8 @@ classdef BindingsTest < matlab.unittest.TestCase
         end
 
         function testDeeplyNestedCallbacks(testCase)
-            % A callback re-entering the library chains one scope per level, so there is no
-            % table to exhaust. Each level fires the next once and sees its own handle again
-            % once the nested call has unwound.
+            % Re-entering the library chains one scope per level, and each level sees its own
+            % handle again once the nested call has unwound
             depth = 0;
             unwound = 0;
             nest(0);
