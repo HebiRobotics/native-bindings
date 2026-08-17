@@ -228,9 +228,7 @@ public class CppBindingsGenerator extends BindingGenerator {
         out.write("struct %s {\n  const char* message;\n  const char* id;\n  int32_t code;\n};\n".formatted(ERROR_STRUCT_NAME));
         out.write("}\n\n");
 
-        // The aliases come after the internal namespace because a callback signature may name a
-        // struct layout, and a struct can never name a callback, function pointer fields being
-        // unsupported.
+        // Emitted after the internal namespace to allow callbacks with structs
         if (lib.getCallbacks().length() > 0) {
             for (var callback : lib.getCallbacks()) {
                 out.write(getCppCallbackAlias(callback));

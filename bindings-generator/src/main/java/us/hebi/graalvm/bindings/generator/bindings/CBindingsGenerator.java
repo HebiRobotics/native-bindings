@@ -223,8 +223,7 @@ public class CBindingsGenerator extends BindingGenerator {
             writer.write(getCStructDefinition(struct));
         }
 
-        // Typedefs. They come after the structs because a callback signature may name one, and a
-        // struct can never name a callback, function pointer fields being unsupported.
+        // Callbacks come after structs as they may have struct inputs
         if (lib.getCallbacks().length() > 0) {
             writer.write("\n");
             for (var callback : lib.getCallbacks()) {
