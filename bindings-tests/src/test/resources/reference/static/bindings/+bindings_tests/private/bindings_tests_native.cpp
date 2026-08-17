@@ -200,20 +200,6 @@ inline void checkCallbackError(const CallbackOutcome& outcome) {
     }
 }
 
-// A bad result is trapped like a failing feval and raised after the library returns.
-// Returns nullptr when the result is usable.
-inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
-    if (isNumericScalar(result)) {
-        return nullptr;
-    }
-    mxArray* args[3] = {mxCreateString("bindings_tests:TypeError"),
-                        mxCreateString("Callback '%s' must return a numeric scalar."),
-                        mxCreateString(callback)};
-    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
-    for (mxArray* arg : args) mxDestroyArray(arg);
-    return error;
-}
-
 // One site per callback parameter of every dispatched method. Each site owns the static
 // its scope publishes itself through, so two callbacks of the same type stay apart.
 enum CallbackSite {
@@ -351,10 +337,8 @@ inline StatusInfo getStatusInfo(const mxArray* arg) {
 
 typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
 typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const DoubleSpan* a, const DoubleSpan* b);
-typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
 typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
-typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
@@ -466,6 +450,20 @@ inline mxArray* createMexStatusInfo(const StatusInfo& value) {
     mxSetField(result, 0, "state", createMexScalar(value.state));
     mxSetField(result, 0, "enabled", mxCreateLogicalScalar(value.enabled != 0));
     return result;
+}
+
+// A bad result is trapped like a failing feval and raised after the library returns.
+// Returns nullptr when the result is usable.
+inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
+    if (isNumericScalar(result)) {
+        return nullptr;
+    }
+    mxArray* args[3] = {createMexString("bindings_tests:TypeError"),
+                        createMexString("Callback '%s' must return a numeric scalar."),
+                        createMexString(callback)};
+    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
+    for (mxArray* arg : args) mxDestroyArray(arg);
+    return error;
 }
 
 // Wrapper handle for DoubleCallbackFunc (alive for one call)

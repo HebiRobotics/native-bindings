@@ -32,15 +32,17 @@ class MatlabCallbackGenerator {
     }
 
     /**
-     * The gateway does not include the public C header, so it repeats the callback typedefs against
-     * its own struct copies. The token sits at the end of the struct helpers.
+     * The gateway does not include the public C header, so it repeats the typedefs of the callbacks
+     * it can dispatch against its own struct copies. The token sits at the end of the struct helpers.
      */
     String createCallbackTypedefs() {
-        if (lib.getCallbacks().length() == 0) {
+        var visible = getVisibleCallbacks();
+        if (visible.isEmpty()) {
             return "";
         }
         var out = new IndentingTextRenderer().add("\n");
         for (var callback : lib.getCallbacks()) {
+            if (!visible.contains(callback.getName())) continue;
             out.add("\n").add(CBindingsGenerator.getCCallbackTypedef(callback, MatlabCallbackGenerator::getMexCallbackType));
         }
         return out.render();
@@ -99,20 +101,6 @@ class MatlabCallbackGenerator {
                     }
                 }
 
-                // A bad result is trapped like a failing feval and raised after the library returns.
-                // Returns nullptr when the result is usable.
-                inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
-                    if (isNumericScalar(result)) {
-                        return nullptr;
-                    }
-                    mxArray* args[3] = {mxCreateString("%%LIB_NAME%%:TypeError"),
-                                        mxCreateString("Callback '%s' must return a numeric scalar."),
-                                        mxCreateString(callback)};
-                    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
-                    for (mxArray* arg : args) mxDestroyArray(arg);
-                    return error;
-                }
-
                 // One site per callback parameter of every dispatched method. Each site owns the static
                 // its scope publishes itself through, so two callbacks of the same type stay apart.
                 enum CallbackSite {
@@ -130,7 +118,27 @@ class MatlabCallbackGenerator {
      */
     String createCallbackScopes() {
         var visible = getVisibleCallbacks();
-        var out = new IndentingTextRenderer();
+        if (visible.isEmpty()) {
+            return "";
+        }
+        // The clean-room mex-sdk has no mxCreateString, so this goes through the gateway's own
+        // createMexString, which is why it sits here rather than with the other callback support
+        var out = new IndentingTextRenderer().add("""
+
+
+                // A bad result is trapped like a failing feval and raised after the library returns.
+                // Returns nullptr when the result is usable.
+                inline mxArray* checkCallbackResult(const mxArray* result, const char* callback) {
+                    if (isNumericScalar(result)) {
+                        return nullptr;
+                    }
+                    mxArray* args[3] = {createMexString("%%LIB_NAME%%:TypeError"),
+                                        createMexString("Callback '%s' must return a numeric scalar."),
+                                        createMexString(callback)};
+                    mxArray* error = mexCallMATLABWithTrap(0, nullptr, 3, args, "error");
+                    for (mxArray* arg : args) mxDestroyArray(arg);
+                    return error;
+                }""");
         for (var callback : lib.getCallbacks()) {
             if (!visible.contains(callback.getName())) continue;
             var returnType = callback.getReturnType();
