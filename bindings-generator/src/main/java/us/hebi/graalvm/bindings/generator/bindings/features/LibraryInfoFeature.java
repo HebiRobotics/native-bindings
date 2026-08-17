@@ -2,6 +2,7 @@ package us.hebi.graalvm.bindings.generator.bindings.features;
 
 import us.hebi.graalvm.bindings.generator.annotations.AnnotatedCLibClass;
 import us.hebi.graalvm.bindings.generator.annotations.EnvProcessor;
+import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.LibraryDescription;
 
 /**
@@ -13,21 +14,21 @@ public class LibraryInfoFeature implements FeatureGenerator {
     @Override
     public String getCHeader(boolean isCpp) {
         if (isCpp) {
-            return getReplacedText("""
-                    void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
+            return render("""
+                    void %%GET_LIBRARY_VERSION%%(int* major, int* minor, int* patch, int* build);
                     """);
         } else {
             // The header answers its own version, so this needs internal linkage: the shim
             // carries a copy of the same function, and a consumer linking the static archive
             // would otherwise collide with it. __inline covers MSVC's legacy C mode, which
             // does not know the C99 keyword.
-            return getReplacedText("""
-                    %%DLL_PUBLIC%%void getLibraryVersionC(int* major, int* minor, int* patch, int* build);
-                    static __inline void getHeaderVersionC(int* major, int* minor, int* patch, int* build) {
-                        *major = VERSION_MAJOR;
-                        *minor = VERSION_MINOR;
-                        *patch = VERSION_PATCH;
-                        *build = BUILD_NUMBER;
+            return render("""
+                    %%DLL_PUBLIC%%void %%GET_LIBRARY_VERSION%%(int* major, int* minor, int* patch, int* build);
+                    static __inline void %%GET_HEADER_VERSION%%(int* major, int* minor, int* patch, int* build) {
+                        *major = %%VERSION_MAJOR%%;
+                        *minor = %%VERSION_MINOR%%;
+                        *patch = %%VERSION_PATCH%%;
+                        *build = %%BUILD_NUMBER%%;
                     }
                     """);
         }
@@ -36,12 +37,12 @@ public class LibraryInfoFeature implements FeatureGenerator {
 
     @Override
     public String getCSource() {
-        return getReplacedText("""
-                void getLibraryVersionC(int* major, int* minor, int* patch, int* build) {
-                    *major = VERSION_MAJOR;
-                    *minor = VERSION_MINOR;
-                    *patch = VERSION_PATCH;
-                    *build = BUILD_NUMBER;
+        return render("""
+                void %%GET_LIBRARY_VERSION%%(int* major, int* minor, int* patch, int* build) {
+                    *major = %%VERSION_MAJOR%%;
+                    *minor = %%VERSION_MINOR%%;
+                    *patch = %%VERSION_PATCH%%;
+                    *build = %%BUILD_NUMBER%%;
                 }
                 """);
     }
@@ -53,7 +54,10 @@ public class LibraryInfoFeature implements FeatureGenerator {
 
     @Override
     public String getCppWrapper(boolean useDynamicLookup) {
-        return getReplacedText("""
+        return renderer()
+                .setIf("METHOD_LOOKUP", useDynamicLookup, "\n  static auto %%GET_LIBRARY_VERSION%% = DynamicLookup::instance().getFunc<void(*)(int*, int*, int*, int*)>(\"%%GET_LIBRARY_VERSION%%\");")
+                .set("IS_AVAILABLE", useDynamicLookup ? "DynamicLookup::instance().isLoaded()" : "true")
+                .add("""
 
                 // Library Information
                 namespace lib {
@@ -66,13 +70,13 @@ public class LibraryInfoFeature implements FeatureGenerator {
                   int build_{};
                 };
 
-                inline Version getHeaderVersionCpp() {
-                  return {VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, BUILD_NUMBER};
+                inline Version getHeaderVersion() {
+                  return {%%VERSION_MAJOR%%, %%VERSION_MINOR%%, %%VERSION_PATCH%%, %%BUILD_NUMBER%%};
                 }
 
-                inline Version getLibraryVersionCpp() {
+                inline Version getLibraryVersion() {
                   Version v(0,0,0,0);%%METHOD_LOOKUP%%
-                  getLibraryVersionC(&v.major_, &v.minor_, &v.patch_, &v.build_);
+                  %%GET_LIBRARY_VERSION%%(&v.major_, &v.minor_, &v.patch_, &v.build_);
                   return v;
                 }
 
@@ -80,20 +84,18 @@ public class LibraryInfoFeature implements FeatureGenerator {
 
                 } // namespace lib
 
-                """
-                .replaceAll("%%METHOD_LOOKUP%%", !useDynamicLookup ? "" : "\n  static auto getLibraryVersionC = DynamicLookup::instance().getFunc<void(*)(int*, int*, int*, int*)>(\"getLibraryVersionC\");")
-                .replaceAll("%%IS_AVAILABLE%%", !useDynamicLookup ? "true" : "DynamicLookup::instance().isLoaded()")
-        );
+                """)
+                .render();
     }
 
     public String getVersionCompatibilityCheckCpp() {
-        return getReplacedText("""
+        return render("""
                   // Check version compatibility. Note that we haven't finished the constructor, so we can't
                   // just use the API method as it would cause a recursive call stack.
-                  lib::Version header_version = lib::getHeaderVersionCpp();
+                  lib::Version header_version = lib::getHeaderVersion();
                   lib::Version lib_version(-1,0,0,0);
-                  auto getLibraryVersionC = getFunc<void(*)(int*, int*, int*, int*)>("getLibraryVersionC");
-                  getLibraryVersionC(&lib_version.major_, &lib_version.minor_, &lib_version.patch_, &lib_version.build_);
+                  auto %%GET_LIBRARY_VERSION%% = getFunc<void(*)(int*, int*, int*, int*)>("%%GET_LIBRARY_VERSION%%");
+                  %%GET_LIBRARY_VERSION%%(&lib_version.major_, &lib_version.minor_, &lib_version.patch_, &lib_version.build_);
 
                   bool is_compatible = (lib_version.major_ == header_version.major_ &&
                                         lib_version.minor_ >= header_version.minor_ &&
@@ -117,19 +119,22 @@ public class LibraryInfoFeature implements FeatureGenerator {
         return "";
     }
 
-    private String getReplacedText(String input) {
-        String noClass = "";
-        return input
-                .replaceAll("VERSION_MAJOR", String.valueOf(version.getMajor()))
-                .replaceAll("VERSION_MINOR", String.valueOf(version.getMinor()))
-                .replaceAll("VERSION_PATCH", String.valueOf(version.getPatch()))
-                .replaceAll("BUILD_NUMBER", buildNumber)
-                .replaceAll("getLibraryVersionCpp", "getLibraryVersion")
-                .replaceAll("getHeaderVersionCpp", "getHeaderVersion")
-                .replaceAll("getLibraryVersionC", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "getLibraryVersion"))
-                .replaceAll("getHeaderVersionC", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "getHeaderVersion"))
-                ;
+    private String render(String template) {
+        return renderer().add(template).render();
+    }
 
+    /**
+     * The version and the two C symbols. Tokens of the surrounding file pass through.
+     */
+    private IndentingTextRenderer renderer() {
+        String noClass = "";
+        return new IndentingTextRenderer()
+                .set("VERSION_MAJOR", version.getMajor())
+                .set("VERSION_MINOR", version.getMinor())
+                .set("VERSION_PATCH", version.getPatch())
+                .set("BUILD_NUMBER", buildNumber)
+                .set("GET_LIBRARY_VERSION", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "getLibraryVersion"))
+                .set("GET_HEADER_VERSION", AnnotatedCLibClass.getCEntryName(true, prefix, noClass, "getHeaderVersion"));
     }
 
     public LibraryInfoFeature(LibraryDescription desc) {
