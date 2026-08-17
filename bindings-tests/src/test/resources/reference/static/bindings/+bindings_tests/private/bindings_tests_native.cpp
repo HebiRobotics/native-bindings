@@ -904,7 +904,8 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         case /* hash32_fnv1a("bindings_tests_Circle_to_Shape") */ 615662008: {
             static auto bindings_tests_Circle_to_Shape = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Circle_to_Shape");
             checkArgCount(nrhs, 1, "bindings_tests_Circle_to_Shape");
-            if (nlhs > 0) plhs[0] = createMexPointer(bindings_tests_Circle_to_Shape(getPtr<void*>(prhs[1])));
+            void* _value = bindings_tests_Circle_to_Shape(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
 
@@ -943,7 +944,8 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         case /* hash32_fnv1a("bindings_tests_Square_to_Shape") */ 2776091829: {
             static auto bindings_tests_Square_to_Shape = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Square_to_Shape");
             checkArgCount(nrhs, 1, "bindings_tests_Square_to_Shape");
-            if (nlhs > 0) plhs[0] = createMexPointer(bindings_tests_Square_to_Shape(getPtr<void*>(prhs[1])));
+            void* _value = bindings_tests_Square_to_Shape(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
 

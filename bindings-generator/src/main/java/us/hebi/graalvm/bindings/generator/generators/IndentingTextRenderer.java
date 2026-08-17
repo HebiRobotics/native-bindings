@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.*;
 
@@ -130,6 +131,13 @@ public class IndentingTextRenderer {
 
     public IndentingTextRenderer addLineIf(boolean condition, String text) {
         return condition ? addLine(text) : this;
+    }
+
+    /**
+     * For text that is only valid to build when the condition holds
+     */
+    public IndentingTextRenderer addLineIf(boolean condition, Supplier<String> text) {
+        return condition ? addLine(text.get()) : this;
     }
 
     /**

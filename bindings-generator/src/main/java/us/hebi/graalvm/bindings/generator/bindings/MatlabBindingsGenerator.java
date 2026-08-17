@@ -10,7 +10,6 @@ import us.hebi.graalvm.bindings.model.*;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -155,44 +154,36 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return (param.getIsConst() ? "const " : "") + TypeMap.toExternalC(param.getDataType());
     }
 
+    /**
+     * The statement (without semicolon) that turns argument prhs[index] into a C value named
+     * after the parameter. A receiver has no name and converts to an inline expression.
+     */
     private String getMexToC(TypeDescription param, int index) {
+        String name = param.getParamName();
+        String type = getMexCType(param);
+        String arg = "prhs[" + index + "]";
         return switch (param.getDataType()) {
-            case CALLBACK -> "const mxArray* %1$sHandle = getFunctionHandle(prhs[%2$d], \"%1$s\")".formatted(
-                    param.getParamName(), index);
+            case CALLBACK -> "const mxArray* " + name + "Handle = getFunctionHandle(" + arg + ", \"" + name + "\")";
 
             case OBJECT_HANDLE, VOID_POINTER ->
-                    (param.hasParamName() ? "%s %s = ".formatted(getMexCType(param), param.getParamName()) : "") +
-                    "getPtr<%s>(prhs[%d])".formatted(getMexCType(param), index);
+                    (param.hasParamName() ? type + " " + name + " = " : "") + "getPtr<" + type + ">(" + arg + ")";
 
             case ENUM, BOOL, INT8, INT16, INT32, INT64,
-                 FLOAT32, FLOAT64, SIZE_T, CHAR16 -> "%s %s = getScalar<%s>(prhs[%d], \"%s\")".formatted(
-                    getMexCType(param),
-                    param.getParamName(),
-                    getMexCType(param), index,
-                    param.getParamName()
-            );
+                 FLOAT32, FLOAT64, SIZE_T, CHAR16 -> type + " " + name + " = getScalar<" + type + ">(" + arg + ", \"" + name + "\")";
 
-            case FLOAT64_POINTER ->
-                    "MatlabArray<double, mxDOUBLE_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
-            case FLOAT32_POINTER ->
-                    "MatlabArray<float, mxSINGLE_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
-            case INT64_POINTER ->
-                    "MatlabArray<int64_t, mxINT64_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
-            case INT32_POINTER ->
-                    "MatlabArray<int32_t, mxINT32_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
-            case INT16_POINTER ->
-                    "MatlabArray<int16_t, mxINT16_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
-            case UINT8_POINTER ->
-                    "MatlabArray<uint8_t, mxUINT8_CLASS> %s(prhs[%d])".formatted(param.getParamName(), index);
+            // RAII views over the MATLAB array, valid for the duration of the call
+            case FLOAT64_POINTER -> "MatlabArray<double, mxDOUBLE_CLASS> " + name + "(" + arg + ")";
+            case FLOAT32_POINTER -> "MatlabArray<float, mxSINGLE_CLASS> " + name + "(" + arg + ")";
+            case INT64_POINTER -> "MatlabArray<int64_t, mxINT64_CLASS> " + name + "(" + arg + ")";
+            case INT32_POINTER -> "MatlabArray<int32_t, mxINT32_CLASS> " + name + "(" + arg + ")";
+            case INT16_POINTER -> "MatlabArray<int16_t, mxINT16_CLASS> " + name + "(" + arg + ")";
+            case UINT8_POINTER -> "MatlabArray<uint8_t, mxUINT8_CLASS> " + name + "(" + arg + ")";
+            case CHAR_POINTER -> "MatlabString " + name + "(" + arg + ")";
+            case CHAR_POINTER_POINTER -> "MatlabStringArray " + name + "(" + arg + ")";
 
             case STRUCT -> getMexMarshaller(param)
-                    .map(marshaller -> marshaller.read("prhs[%d]".formatted(index), param.getParamName()))
-                    .orElseGet(() -> "%1$s %2$s = get%1$s(prhs[%3$d])".formatted(
-                            getMexCType(param), param.getParamName(), index));
-
-            case CHAR_POINTER -> "MatlabString %s(prhs[%d])".formatted(param.getParamName(), index);
-
-            case CHAR_POINTER_POINTER -> "MatlabStringArray %s(prhs[%d])".formatted(param.getParamName(), index);
+                    .map(marshaller -> marshaller.read(arg, name))
+                    .orElseGet(() -> type + " " + name + " = get" + type + "(" + arg + ")");
 
             default -> throw new IllegalStateException("Unsupported input type: " + param.getDataType());
         };
@@ -214,8 +205,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             // Strings (C-String to MATLAB String)
             case CHAR_POINTER -> "createMexString(%%RETURN_VALUE%%)";
 
-            // User structs (copied into a 1x1 MATLAB struct). Concatenated rather than
-            // formatted, because String::formatted would eat the %% around the token.
+            // User structs (copied into a 1x1 MATLAB struct)
             case STRUCT -> getMexMarshaller(type)
                     .map(marshaller -> marshaller.write("%%RETURN_VALUE%%"))
                     .orElseGet(() -> "createMex" + type.getTypeName() + "(%%RETURN_VALUE%%)");
@@ -230,129 +220,40 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     private String createMexDispatchSource() {
-        var cases = withLibVars().indent(2)
-                .set("PRE", "")
-                .set("POST", "")
-                .set("CALL", "%%CNAME%%(%%ARGS%%);")
-                .set("RETURN_VALUE", "_value")
-                .set("ARG_COUNT", "0");
-
         // Find a collision-free hash seed
         List<String> symbols = GeneratorUtil.getAllCMethodSymbols(lib);
         long prime = 0x01000193L;
         long seed = findCollisionFreeSeed(symbols, 0x811c9dc5L, prime);
-        Function<String, String> computeHash = cname -> String.valueOf(fnv1a_32_ascii(cname, seed, prime));
+        Function<String, String> hash = cname -> String.valueOf(fnv1a_32_ascii(cname, seed, prime));
 
-        Consumer<IndentingTextRenderer> addCase = (template) -> {
-            template.beginControlFlow("case /* hash32_fnv1a(\"%%CNAME%%\") */ %%HASH%%: {");
-            template.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");");
-            template.addLine("checkArgCount(nrhs, %%ARG_COUNT%%, \"%%CNAME%%\");");
-            template.addLine("%%PRE%%%%CALL%%%%POST%%");
-            template.addLine("break;").unindent().addLine("}");
-        };
-
-        final StringBuilder pre = new StringBuilder();
-        final StringBuilder post = new StringBuilder();
-        final List<String> types = new ArrayList<>();
-        final List<String> args = new ArrayList<>();
-        final List<CallbackArg> callbackArgs = new ArrayList<>();
-        final int FIRST_INDEX = 1; // first real argument after function name
+        var cases = withLibVars().indent(2);
         for (ClassDescription clazz : lib.getClasses()) {
-            cases.addLine("\n// " + getMatlabClassName(clazz));
+            cases.addLine().addLine("// " + getMatlabClassName(clazz));
             for (MethodDescription method : clazz.getMethods()) {
                 if (callbacks.getMatlabExclusionReason(method).isPresent()) continue;
-                int index = FIRST_INDEX;
-                pre.setLength(0);
-                post.setLength(0);
-                types.clear();
-                args.clear();
-                callbackArgs.clear();
-                // The error struct is filled by the call and raises before any output is built
-                if (isThrowing(method)) {
-                    pre.append("ErrorInfo _error = {};\n");
-                    types.add("ErrorInfo*");
-                    args.add("&_error");
-                }
+                var dispatch = new DispatchCase(method.getCName(), method.getReturnType(), isThrowing(method));
                 if (!method.getIsStatic()) {
-                    types.add(getMexCType(clazz.getType()));
-                    args.add(getMexToC(clazz.getType(), index++));
+                    dispatch.addInstance(clazz.getType());
                 }
                 for (var param : method.getParameters()) {
-                    types.add(getMexCType(param));
-                    pre.append(getMexToC(param, index++)).append(";\n");
-                    if (param.getDataType() == DataType.CALLBACK) {
-                        callbackArgs.add(new CallbackArg(param.getParamName(),
-                                MatlabCallbackGenerator.getCallbackScopeName(param.getTypeName())
-                                + "<" + MatlabCallbackGenerator.getCallbackSite(method, param) + ">"));
-                        args.add(param.getParamName() + ".function()");
-                    } else {
-                        args.add(param.getParamName());
-                    }
+                    dispatch.addParameter(method, param);
                 }
-                for (var callback : callbackArgs) {
-                    post.append("\ncheckCallbackError(").append(callback.name()).append("Outcome);");
-                }
-                // Checked after the callback error, which is the more likely root cause
-                if (isThrowing(method)) {
-                    post.append("\ncheckError(_error);");
-                }
-                var vars = cases.snapshot();
-                vars.set("RETURN_TYPE", getMexCType(method.getReturnType()));
-                boolean returnsValue = method.getReturnType().getDataType() != DataType.VOID;
-                if (returnsValue) {
-                    post.append("\nif (nlhs > 0) plhs[0] = ").append(getCToMex(method.getReturnType())).append(";");
-                }
-                if (callbackArgs.isEmpty()) {
-                    if (returnsValue) {
-                        pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%% = ");
-                    }
-                } else {
-                    if (returnsValue) {
-                        pre.append("%%RETURN_TYPE%% %%RETURN_VALUE%%;\n");
-                    }
-                    for (var callback : callbackArgs) {
-                        pre.append("CallbackOutcome ").append(callback.name()).append("Outcome;\n");
-                    }
-
-                    // mexErrMsgIdAndTxt longjmps past destructors, so nothing in the block may raise
-                    var scope = new IndentingTextRenderer().addLine("{").indent();
-                    for (var callback : callbackArgs) {
-                        scope.addLine(callback.scopeType() + " " + callback.name() + "(" + callback.name() + "Handle);");
-                    }
-                    scope.addLine((returnsValue ? "%%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
-                    for (var callback : callbackArgs) {
-                        scope.addLine(callback.name() + "Outcome = " + callback.name() + ".outcome();");
-                    }
-                    scope.unindent().add("}");
-                    vars.set("CALL", scope.render());
-                }
-                addCase.accept(vars.set("CNAME", method.getCName())
-                        .set("HASH", computeHash.apply(method.getCName()))
-                        .set("ARG_COUNT", String.valueOf(index - FIRST_INDEX))
-                        .set("PRE", pre.toString())
-                        .set("POST", post.toString())
-                        .set("TYPES", joiner.join(types))
-                        .set("ARGS", joiner.join(args)));
+                dispatch.write(cases, hash);
             }
+
+            // Generated plumbing that the m-files call
             if (clazz.getInstantiable()) {
                 if (clazz.hasCDestructorName()) {
-                    addCase.accept(cases.snapshot()
-                            .set("RETURN_TYPE", "void")
-                            .set("TYPES", getMexCType(clazz.getType()))
-                            .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
-                            .set("CNAME", clazz.getCDestructorName())
-                            .set("HASH", computeHash.apply(clazz.getCDestructorName()))
-                            .set("ARG_COUNT", "1"));
+                    var voidType = TypeDescription.newInstance().setDataType(DataType.VOID);
+                    new DispatchCase(clazz.getCDestructorName(), voidType, false)
+                            .addInstance(clazz.getType())
+                            .write(cases, hash);
                 }
                 if (clazz.hasToParentCastMethod()) {
-                    addCase.accept(cases.snapshot()
-                            .set("RETURN_TYPE", getMexCType(clazz.getToParentCastMethod().getReturnType()))
-                            .set("TYPES", getMexCType(clazz.getType()))
-                            .set("CNAME", clazz.getToParentCastMethod().getCName())
-                            .set("HASH", computeHash.apply(clazz.getToParentCastMethod().getCName()))
-                            .set("ARGS", getMexToC(clazz.getType(), FIRST_INDEX))
-                            .set("ARG_COUNT", "1")
-                            .set("CALL", "if (nlhs > 0) plhs[0] = createMexPointer(%%CNAME%%(%%ARGS%%));"));
+                    var cast = clazz.getToParentCastMethod();
+                    new DispatchCase(cast.getCName(), cast.getReturnType(), false)
+                            .addInstance(clazz.getType())
+                            .write(cases, hash);
                 }
             }
         }
@@ -369,6 +270,111 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .set("SWITCH_CASES", cases.render())
                 .addResourceContent(getClass(), "matlab/libName_native.cpp")
                 .render();
+    }
+
+    /**
+     * One case of the dispatch switch: the argument conversions, the call, and the result.
+     * Arguments follow the function name, so the first one is prhs[1].
+     */
+    private final class DispatchCase {
+
+        DispatchCase(String cName, TypeDescription returnType, boolean throwing) {
+            this.cName = cName;
+            this.returnType = returnType;
+            this.throwing = throwing;
+            if (throwing) {
+                types.add("ErrorInfo*");
+                args.add("&_error");
+            }
+        }
+
+        /**
+         * The receiver, converted inline
+         */
+        DispatchCase addInstance(TypeDescription type) {
+            types.add(getMexCType(type));
+            args.add(getMexToC(type, nextIndex++));
+            return this;
+        }
+
+        /**
+         * A declared parameter, converted into a local ahead of the call
+         */
+        DispatchCase addParameter(MethodDescription method, TypeDescription param) {
+            types.add(getMexCType(param));
+            conversions.add(getMexToC(param, nextIndex++) + ";");
+            if (param.getDataType() == DataType.CALLBACK) {
+                String scope = MatlabCallbackGenerator.getCallbackScopeName(param.getTypeName())
+                               + "<" + MatlabCallbackGenerator.getCallbackSite(method, param) + ">";
+                callbackArgs.add(new CallbackArg(param.getParamName(), scope));
+                args.add(param.getParamName() + ".function()");
+            } else {
+                args.add(param.getParamName());
+            }
+            return this;
+        }
+
+        void write(IndentingTextRenderer cases, Function<String, String> hash) {
+            boolean returnsValue = returnType.getDataType() != DataType.VOID;
+            var out = cases.snapshot()
+                    .set("CNAME", cName)
+                    .set("HASH", hash.apply(cName))
+                    .set("RETURN_TYPE", getMexCType(returnType))
+                    .set("RETURN_VALUE", "_value")
+                    .set("ARG_COUNT", nextIndex - FIRST_INDEX)
+                    .setArgs("TYPES", types)
+                    .setArgs("ARGS", args);
+
+            out.beginControlFlow("case /* hash32_fnv1a(\"%%CNAME%%\") */ %%HASH%%: {");
+            out.addLine("static auto %%CNAME%% = libLoader.getFunc<%%RETURN_TYPE%%(*)(%%TYPES%%)>(\"%%CNAME%%\");");
+            out.addLine("checkArgCount(nrhs, %%ARG_COUNT%%, \"%%CNAME%%\");");
+
+            // The error struct is filled by the call and raises before any output is built
+            out.addLineIf(throwing, "ErrorInfo _error = {};");
+            for (var conversion : conversions) {
+                out.addLine(conversion);
+            }
+
+            if (callbackArgs.isEmpty()) {
+                out.addLine((returnsValue ? "%%RETURN_TYPE%% %%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
+            } else {
+                // mexErrMsgIdAndTxt longjmps past destructors, so nothing in the block may raise
+                out.addLineIf(returnsValue, "%%RETURN_TYPE%% %%RETURN_VALUE%%;");
+                for (var callback : callbackArgs) {
+                    out.addLine("CallbackOutcome " + callback.name() + "Outcome;");
+                }
+                out.beginControlFlow("{");
+                for (var callback : callbackArgs) {
+                    out.addLine(callback.scopeType() + " " + callback.name() + "(" + callback.name() + "Handle);");
+                }
+                out.addLine((returnsValue ? "%%RETURN_VALUE%% = " : "") + "%%CNAME%%(%%ARGS%%);");
+                for (var callback : callbackArgs) {
+                    out.addLine(callback.name() + "Outcome = " + callback.name() + ".outcome();");
+                }
+                out.endControlFlow("}");
+                for (var callback : callbackArgs) {
+                    out.addLine("checkCallbackError(" + callback.name() + "Outcome);");
+                }
+            }
+
+            // Checked after the callback error, which is the more likely root cause
+            out.addLineIf(throwing, "checkError(_error);");
+            out.addLineIf(returnsValue, () -> "if (nlhs > 0) plhs[0] = " + getCToMex(returnType) + ";");
+            out.addLine("break;");
+            out.endControlFlow("}");
+        }
+
+        private final String cName;
+        private final TypeDescription returnType;
+        private final boolean throwing;
+        private final List<String> types = new ArrayList<>();
+        private final List<String> args = new ArrayList<>();
+        private final List<String> conversions = new ArrayList<>();
+        private final List<CallbackArg> callbackArgs = new ArrayList<>();
+        private int nextIndex = FIRST_INDEX;
+
+        private static final int FIRST_INDEX = 1;
+
     }
 
     /**
@@ -476,7 +482,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     // The 1x1 MATLAB struct a returned %%STRUCT_NAME%% maps to
                     inline mxArray* createMex%%STRUCT_NAME%%(const %%STRUCT_NAME%%& value) {
                     """).indent()
-                    .addLine("const char* fields[] = {" + joiner.join(names) + "};")
+                    .addLine("const char* fields[] = {" + String.join(", ", names) + "};")
                     .addLine("mxArray* result = mxCreateStructMatrix(1, 1, " + names.size() + ", fields);");
             for (var field : fields) {
                 if (TypeMap.isPointerType(field.getDataType())) continue;
@@ -596,7 +602,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         return switch (options.length) {
             case 0 -> "{}";
             case 1 -> options[0];
-            default -> "{" + joiner.join(Arrays.asList(options)) + "}";
+            default -> "{" + String.join(", ", options) + "}";
         };
     }
 
@@ -813,8 +819,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
         content.set("FUNC_NAME", funcName);
         content.set("CFUNC_NAME", method.getCName());
-        content.set("EXTERNAL_ARGS", joiner.join(params.externalInput));
-        content.set("INTERNAL_ARGS", joiner.join(params.internalInput));
+        content.setArgs("EXTERNAL_ARGS", params.externalInput);
+        content.setArgs("INTERNAL_ARGS", params.internalInput);
         content.set("RETURN_TYPE", getFullyQualifiedClassName(method.getReturnType()));
 
         // MATLAB requires an explicit superclass constructor call before 'this' can be assigned
@@ -831,7 +837,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         // Anything that has to happen before the call
         var overload = method.getMatlabOverload();
         overload.tryGetBody().map(String::stripTrailing).ifPresent(content::addLine);
-        if (!params.preCallActions.isEmpty()) content.addLine(params.preCallActions.toString().stripTrailing());
+        content.add(params.preCallActions.render());
         overload.tryGetPostBody().map(String::stripTrailing).ifPresent(content::addLine);
 
         // The actual C call
@@ -839,7 +845,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 .addLine("%%DISPATCH%%(%%INTERNAL_ARGS%%);");
 
         // Anything that has to happen after the call
-        if (!params.postCallActions.isEmpty()) content.addLine(params.postCallActions.toString().stripTrailing());
+        content.add(params.postCallActions.render());
         overload.tryGetPostCall().map(String::stripTrailing).ifPresent(content::addLine);
 
         content.endControlFlow("end\n");
@@ -907,14 +913,15 @@ public class MatlabBindingsGenerator extends BindingGenerator {
      * already put the default into the same space.
      */
     static String getIndexInputConversion(TypeDescription param) {
-        return "%1$s = %1$s - 1;\n".formatted(param.getParamName());
+        String name = param.getParamName();
+        return name + " = " + name + " - 1;\n";
     }
 
     static String wrapOutputAssignment(List<String> list) {
         return switch (list.size()) {
             case 0 -> "";
             case 1 -> "~".equalsIgnoreCase(list.get(0)) ? "" : list.get(0) + " = ";
-            default -> "[" + joiner.join(list) + "] = ";
+            default -> "[" + String.join(", ", list) + "] = ";
         };
     }
 
@@ -932,8 +939,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         final List<String> externalOutput = new ArrayList<>();
         final List<String> internalInput = new ArrayList<>();
         final List<String> internalOutput = new ArrayList<>();
-        final StringBuilder preCallActions = new StringBuilder();
-        final StringBuilder postCallActions = new StringBuilder();
+        final IndentingTextRenderer preCallActions = new IndentingTextRenderer();
+        final IndentingTextRenderer postCallActions = new IndentingTextRenderer();
 
         ParameterLists(LibraryDescription lib, MethodDescription method) {
             final boolean needsSelfRef = !method.getIsStatic() && !method.getIsConstructor();
@@ -949,16 +956,16 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 case OBJECT_HANDLE -> {
                     internalOutput.add("ptr_");
 
-                    postCallActions.append("""
+                    postCallActions.add("""
                             if isempty(ptr_)
                                 error('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%.%%FUNC_NAME%%');
                             end
                             """);
                     if (GeneratorUtil.isConstructor(method)) {
                         externalOutput.add("this");
-                        postCallActions.append("%%SUPER_CTOR%%this.%%REF_FIELD%% = ptr_;\n");
+                        postCallActions.addLine("%%SUPER_CTOR%%this.%%REF_FIELD%% = ptr_;");
                         if (needsVarargin) {
-                            postCallActions.append("""
+                            postCallActions.add("""
                                     if numel(varargin) > 0
                                         this.set(varargin{:});
                                     end
@@ -967,11 +974,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
                     } else {
                         externalOutput.add("obj");
-                        if (needsVarargin) {
-                            postCallActions.append("obj = %%RETURN_TYPE%%(ptr_, varargin{:});\n");
-                        } else {
-                            postCallActions.append("obj = %%RETURN_TYPE%%(ptr_);\n");
-                        }
+                        postCallActions.addLine(needsVarargin
+                                ? "obj = %%RETURN_TYPE%%(ptr_, varargin{:});"
+                                : "obj = %%RETURN_TYPE%%(ptr_);");
                     }
 
                 }
@@ -985,7 +990,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     internalOutput.add(result);
                     externalOutput.add(result);
                     if (method.getReturnType().getIsIndex()) {
-                        postCallActions.append("%1$s = %1$s + 1;\n".formatted(result));
+                        postCallActions.addLine(result + " = " + result + " + 1;");
                     }
                     // TODO: add throwing checks for the other types?
                 }
@@ -1013,26 +1018,27 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 int count = method.getParameters().length();
                 externalInput.add(prop);
 
-                StringBuilder unpack = new StringBuilder();
                 List<String> names = new ArrayList<>();
-                int i = 0;
                 for (var p : method.getParameters()) {
                     names.add(p.getParamName());
-                    unpack.append("    ").append(p.getParamName()).append(" = ")
-                            .append(prop).append("(").append(++i).append(")").append(";\n");
                 }
 
                 // MATLAB doesn't have native tuples, so we need to handle both cells and arrays
-                preCallActions.append("""
-                        if numel(%1$s) ~= %2$d
-                            error('Property "%1$s" requires %2$d elements');
-                        end
-                        if iscell(%1$s)
-                            [%3$s] = %1$s{:};
-                        else
-                        %4$s
-                        end
-                        """.formatted(prop, count, joiner.join(names), unpack.toString().stripTrailing()));
+                preCallActions.set("PROP", prop)
+                        .set("COUNT", count)
+                        .setArgs("NAMES", names)
+                        .add("""
+                                if numel(%%PROP%%) ~= %%COUNT%%
+                                    error('Property "%%PROP%%" requires %%COUNT%% elements');
+                                end
+                                if iscell(%%PROP%%)
+                                    [%%NAMES%%] = %%PROP%%{:};
+                                else
+                                """).indent();
+                for (int i = 0; i < names.size(); i++) {
+                    preCallActions.addLine(names.get(i) + " = %%PROP%%(" + (i + 1) + ");");
+                }
+                preCallActions.unindent().addLine("end");
 
             } else {
 
@@ -1054,11 +1060,14 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                         var param = method.getParameters().get(i);
                         checkArgument(param.hasDefaultValue(), "There can be no required after optional parameters");
                         externalInput.add(param.getParamName());
-                        preCallActions.append("""
-                                if nargin < %d
-                                    %s = %s;
-                                end
-                                """.formatted(argsOffset + i, param.getParamName(), getMatlabDefaultValue(param)));
+                        preCallActions.set("ARG_INDEX", argsOffset + i)
+                                .set("NAME", param.getParamName())
+                                .set("DEFAULT", getMatlabDefaultValue(param))
+                                .add("""
+                                        if nargin < %%ARG_INDEX%%
+                                            %%NAME%% = %%DEFAULT%%;
+                                        end
+                                        """);
                     }
 
                 } else {
@@ -1068,13 +1077,15 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                     for (int i = handledArgsIx; i < method.getParameters().length(); i++) {
                         var param = method.getParameters().get(i);
                         checkArgument(param.hasDefaultValue(), "There can be no required after optional parameters");
-                        preCallActions.append("""
-                                %1$s = %2$s;
-                                if ~isempty(varargin) && ~ischar(varargin{1}) && ~isstring(varargin{1})
-                                    %1$s = varargin{1};
-                                    varargin(1) = [];
-                                end
-                                """.formatted(param.getParamName(), getMatlabDefaultValue(param)));
+                        preCallActions.set("NAME", param.getParamName())
+                                .set("DEFAULT", getMatlabDefaultValue(param))
+                                .add("""
+                                        %%NAME%% = %%DEFAULT%%;
+                                        if ~isempty(varargin) && ~ischar(varargin{1}) && ~isstring(varargin{1})
+                                            %%NAME%% = varargin{1};
+                                            varargin(1) = [];
+                                        end
+                                        """);
                     }
 
                 }
@@ -1087,7 +1098,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             if (!overload.hasParameters() && !overload.hasCall()) {
                 for (var param : method.getParameters()) {
                     if (param.getIsIndex()) {
-                        preCallActions.append(getIndexInputConversion(param));
+                        preCallActions.add(getIndexInputConversion(param));
                     }
                 }
             }
@@ -1280,7 +1291,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         for (var value : desc.getValues()) {
             choices.add("'" + value.getName() + "'");
         }
-        return joiner.join(choices);
+        return String.join(", ", choices);
     }
 
     private String mapToJson(Object obj) {
