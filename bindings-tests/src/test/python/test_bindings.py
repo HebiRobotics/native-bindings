@@ -579,6 +579,17 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual(15.0, result)
 
+    def test_struct_argument_callback(self):
+        # A user struct crosses like a span, packed from the dataclass on the way in and
+        # arriving as a pointer to the ctypes mirror
+        def score(progress):
+            return progress.contents.step + progress.contents.fraction
+
+        progress = bindings_tests.Progress(step=3, fraction=0.25)
+        result = bindings_tests.Callbacks.invoke_progress_callback(score, progress)
+
+        self.assertEqual(3.25, result)
+
     def test_callback_with_raw_pointer_arguments(self):
         # The solver-objective shape. Raw pointers carry no length, so the count is agreed on
         # out of band.

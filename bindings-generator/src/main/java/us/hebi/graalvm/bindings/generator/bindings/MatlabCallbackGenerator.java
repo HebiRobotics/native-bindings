@@ -271,6 +271,23 @@ class MatlabCallbackGenerator {
     }
 
     /**
+     * Whether a dispatched callback hands the struct to MATLAB, which needs the gateway's writer
+     */
+    boolean isCallbackArgument(StructDescription struct) {
+        var visible = getVisibleCallbacks();
+        for (var callback : lib.getCallbacks()) {
+            if (!visible.contains(callback.getName())) continue;
+            for (var parameter : callback.getParameters()) {
+                if (parameter.getDataType() == DataType.STRUCT
+                    && parameter.getTypeName().equals(struct.getName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * The enumerators of the call site enum
      */
     private Set<String> getCallbackSites() {

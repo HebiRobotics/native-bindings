@@ -460,6 +460,13 @@ classdef BindingsTest < matlab.unittest.TestCase
                 @(a, b) numel(a) * 10 + numel(b), [1 2 3], [4 5]), 32);
         end
 
+        function testStructArgumentCallback(testCase)
+            % A user struct that only a callback hands to MATLAB still gets its 1x1 struct
+            progress = struct('step', 3, 'fraction', 0.25);
+            testCase.verifyEqual(bindings_tests.Callbacks.invokeProgressCallback( ...
+                @(p) p.step + p.fraction, progress), 3.25);
+        end
+
         function testPlainCallbacks(testCase)
             % The supported shape: no void* anywhere
             collected = [];

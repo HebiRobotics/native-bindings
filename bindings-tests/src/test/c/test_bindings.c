@@ -708,6 +708,11 @@ static double sum_spans(const bindings_tests_DoubleSpan* a, const bindings_tests
     return total;
 }
 
+/* A user struct arrives the same way as a span, by pointer */
+static double progress_score(const bindings_tests_Progress* progress) {
+    return progress->step + progress->fraction;
+}
+
 static void test_callbacks(void) {
     CallbackState state;
     bindings_tests_ErrorInfo error;
@@ -717,6 +722,7 @@ static void test_callbacks(void) {
     double right[2];
     bindings_tests_DoubleSpan a;
     bindings_tests_DoubleSpan b;
+    bindings_tests_Progress progress;
     int i;
 
     /* Fires synchronously, five times, with indices 0..4. The void* is passed through unread. */
@@ -746,6 +752,11 @@ static void test_callbacks(void) {
     b.data = right;
     b.length = 2;
     assert(bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(&sum_spans, a, b) == 15.0);
+
+    /* A user struct crosses the same way, by value in and by pointer into the callback. */
+    progress.step = 3;
+    progress.fraction = 0.25;
+    assert(bindings_tests_Callbacks_invokeProgressCallback(&progress_score, progress) == 3.25);
 
     /* A callback whose own arguments are raw pointers, the shape a solver objective has.
        Only the MATLAB face cannot express it, C hands the pointers straight through. */

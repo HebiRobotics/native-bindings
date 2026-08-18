@@ -459,14 +459,14 @@ public class MatlabBindingsGenerator extends BindingGenerator {
     }
 
     /**
-     * Writers for the structs that a method returns. They fill their own token rather than
-     * joining the readers above, because they call the scalar helpers that are declared
-     * further down in the template.
+     * Writers for the structs that reach MATLAB, as a method return or a callback argument. They
+     * fill their own token rather than joining the readers above, because they call the scalar
+     * helpers that are declared further down in the template.
      */
     private String createStructReturnHelpers() {
         var out = new IndentingTextRenderer();
         for (var struct : lib.getStructs()) {
-            if (!isReturnedByValue(struct)) continue;
+            if (!isReturnedByValue(struct) && !callbacks.isCallbackArgument(struct)) continue;
             if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::matlab).isPresent()) continue;
             var content = out.snapshot().set("STRUCT_NAME", struct.getName());
             var fields = struct.getFields();
@@ -479,7 +479,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             content.add("""
 
 
-                    // The 1x1 MATLAB struct a returned %%STRUCT_NAME%% maps to
+                    // The 1x1 MATLAB struct a %%STRUCT_NAME%% maps to on its way into MATLAB
                     inline mxArray* createMex%%STRUCT_NAME%%(const %%STRUCT_NAME%%& value) {
                     """).indent()
                     .addLine("const char* fields[] = {" + String.join(", ", names) + "};")

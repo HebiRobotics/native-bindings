@@ -1,11 +1,15 @@
 package us.hebi.graalvm.bindings.tests.api;
 
+import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
+import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CConst;
 import org.graalvm.nativeimage.c.type.CDoublePointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
+import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.annotations.*;
 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
@@ -46,6 +50,41 @@ public class TestCallbacks {
     @CLibMethod(flags = Noexcept)
     public static double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunction func, DoubleSpan a, DoubleSpan b) {
         return func.invoke(a, b);
+    }
+
+    /**
+     * A user struct that only ever crosses into a callback, never out of a method. The MEX
+     * gateway has to emit its writer for that use alone.
+     */
+    @CLibStruct
+    @CContext(us.hebi.graalvm.bindings.tests.api.generated.TestCallbacks_Progress$$Directives.class)
+    @CStruct("Progress")
+    public interface Progress extends PointerBase {
+
+        @CField("step")
+        int step();
+
+        @CField("step")
+        void setStep(int step);
+
+        @CField("fraction")
+        double fraction();
+
+        @CField("fraction")
+        void setFraction(double fraction);
+
+    }
+
+    @CLibCallback("ProgressCallbackFunc")
+    public interface ProgressCallbackFunction extends CFunctionPointer {
+        @InvokeCFunctionPointer
+        double invoke(Progress progress);
+    }
+
+    @CLibMethod(flags = Noexcept)
+    @CLibComment("Invokes the callback once with the given record and returns its result.")
+    public static double invokeProgressCallback(ProgressCallbackFunction func, Progress progress) {
+        return func.invoke(progress);
     }
 
     // The only remaining void* callback. C, C++ and Python pass the address through untouched,

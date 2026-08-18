@@ -569,6 +569,11 @@ static void testCallbacks() {
             },
             left, right) == 15.0);
 
+  // A user struct crosses the same way, by value in and by pointer into the callback
+  const bt::Progress progress{3, 0.25};
+  CHECK(bt::callbacks::invokeProgressCallback(
+            [](const bt::Progress* p) { return p->step + p->fraction; }, progress) == 3.25);
+
   // Raw pointer arguments, the shape of a solver objective. The const input still gets its
   // vector overload.
   CallbackState transformed = {};
