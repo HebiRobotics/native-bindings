@@ -43,6 +43,12 @@ struct FieldTypes {
 };
 
 // Plain data struct, passed by value. Layout changes are not ABI backwards compatible
+struct Progress {
+  int32_t step;
+  double fraction;
+};
+
+// Plain data struct, passed by value. Layout changes are not ABI backwards compatible
 struct StatusInfo {
   double voltage;
   int32_t state;
@@ -90,6 +96,7 @@ using DoubleSpanToScalarCallbackFunc = double (*)(const internal::DoubleSpan* a,
 using IndexCallbackFunction = void (*)(void* userData, int index);
 using PlainIndexCallbackFunction = void (*)(int index);
 using PlainNotifyCallbackFunction = void (*)();
+using ProgressCallbackFunc = double (*)(const Progress* progress);
 using TransformCallbackFunction = void (*)(void* userData, const double* input, double* output);
 
 class Exception : public std::runtime_error {
@@ -398,6 +405,14 @@ namespace callbacks {
 double invokeDoubleCallback(DoubleCallbackFunc func, double a, double b) noexcept;
 double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, internal::DoubleSpan a, internal::DoubleSpan b) noexcept;
 double invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept;
+
+/**
+ * @brief Invokes the callback once with the given record and returns its result.
+ *
+ * @param func
+ * @param progress
+ */
+double invokeProgressCallback(ProgressCallbackFunc func, Progress progress) noexcept;
 
 /**
  * @details
@@ -1206,6 +1221,10 @@ inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCall
 }
 inline double callbacks::invokeDoubleSpanToScalarCallback(DoubleSpanToScalarCallbackFunc func, const std::vector<double>& a, const std::vector<double>& b) noexcept {
   return invokeDoubleSpanToScalarCallback(func, {a.data(), a.size()}, {b.data(), b.size()});
+}
+inline double callbacks::invokeProgressCallback(ProgressCallbackFunc func, Progress progress) noexcept {
+  static auto bindings_tests_Callbacks_invokeProgressCallback = DynamicLookup::instance().getFunc<double(*)(ProgressCallbackFunc, Progress)>("bindings_tests_Callbacks_invokeProgressCallback");
+  return bindings_tests_Callbacks_invokeProgressCallback(func, progress);
 }
 inline void callbacks::invokeTimes(IndexCallbackFunction func, void* userData, size_t times) noexcept {
   static auto bindings_tests_Callbacks_invokeTimes = DynamicLookup::instance().getFunc<void(*)(IndexCallbackFunction, void*, size_t)>("bindings_tests_Callbacks_invokeTimes");

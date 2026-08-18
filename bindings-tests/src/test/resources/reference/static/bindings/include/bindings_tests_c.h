@@ -60,6 +60,11 @@ typedef struct {
 } bindings_tests_IntSpan;
 
 typedef struct {
+    int32_t step;
+    double fraction;
+} bindings_tests_Progress;
+
+typedef struct {
     double voltage;
     int32_t state;
     int32_t enabled;
@@ -70,6 +75,7 @@ typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const bindings_t
 typedef void (*bindings_tests_IndexCallbackFunction)(void* userData, int index);
 typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
 typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef double (*bindings_tests_ProgressCallbackFunc)(const bindings_tests_Progress* progress);
 typedef void (*bindings_tests_TransformCallbackFunction)(void* userData, const double* input, double* output);
 
 typedef struct bindings_tests_Counter_* bindings_tests_CounterPtr;
@@ -167,6 +173,7 @@ bindings_tests_DoubleSpan bindings_tests_Arrays_getSequence(size_t count);
 // ==== Callbacks ====
 double bindings_tests_Callbacks_invokeDoubleCallback(bindings_tests_DoubleCallbackFunc func, double a, double b);
 double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(bindings_tests_DoubleSpanToScalarCallbackFunc func, bindings_tests_DoubleSpan a, bindings_tests_DoubleSpan b);
+double bindings_tests_Callbacks_invokeProgressCallback(bindings_tests_ProgressCallbackFunc func, bindings_tests_Progress progress);
 void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times);
 void bindings_tests_Callbacks_transformOnce(bindings_tests_TransformCallbackFunction func, void* userData, const double* input, double* output);
 void bindings_tests_Callbacks_invokePlainTimes(bindings_tests_PlainIndexCallbackFunction func, size_t times);

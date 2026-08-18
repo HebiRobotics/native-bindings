@@ -39,6 +39,19 @@ public final class TestCallbacks$CEntries {
     }
 
     @CEntryPoint(
+            name = "__bindings_tests_Callbacks_invokeProgressCallback"
+    )
+    public static double bindings_tests_Callbacks_invokeProgressCallback(IsolateThread _isolate,
+            TestCallbacks.ProgressCallbackFunction func, TestCallbacks.Progress progress) {
+        try {
+            return TestCallbacks.invokeProgressCallback(func, progress);
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return 0;
+        }
+    }
+
+    @CEntryPoint(
             name = "__bindings_tests_Callbacks_invokeTimes"
     )
     public static void bindings_tests_Callbacks_invokeTimes(IsolateThread _isolate,

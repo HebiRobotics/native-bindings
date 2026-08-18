@@ -199,6 +199,17 @@
         "type": ["numeric"]
       }]
   },
+  "bindings_tests.Callbacks.invokeProgressCallback": {
+    "inputs": [{
+        "kind": "required",
+        "name": "func",
+        "type": ["function_handle"]
+      }, {
+        "kind": "required",
+        "name": "progress",
+        "type": ["struct"]
+      }]
+  },
   "bindings_tests.Callbacks.notifyPlainOnce": {
     "inputs": [{
         "kind": "required",

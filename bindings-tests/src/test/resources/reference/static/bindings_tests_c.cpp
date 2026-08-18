@@ -256,6 +256,10 @@ double __bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(bindings_test
 double bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(bindings_tests_DoubleSpanToScalarCallbackFunc func, bindings_tests_DoubleSpan a, bindings_tests_DoubleSpan b) {
     return __bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(isolate::global(), func, &a, &b);
 }
+double __bindings_tests_Callbacks_invokeProgressCallback(bindings_tests_IsolateThread* isolate, bindings_tests_ProgressCallbackFunc func, const bindings_tests_Progress* progress);
+double bindings_tests_Callbacks_invokeProgressCallback(bindings_tests_ProgressCallbackFunc func, bindings_tests_Progress progress) {
+    return __bindings_tests_Callbacks_invokeProgressCallback(isolate::global(), func, &progress);
+}
 void __bindings_tests_Callbacks_invokeTimes(bindings_tests_IsolateThread* isolate, bindings_tests_IndexCallbackFunction func, void* userData, long long times);
 void bindings_tests_Callbacks_invokeTimes(bindings_tests_IndexCallbackFunction func, void* userData, size_t times) {
     __bindings_tests_Callbacks_invokeTimes(isolate::global(), func, userData, static_cast<long long>(times));

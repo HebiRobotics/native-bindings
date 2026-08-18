@@ -145,6 +145,10 @@ class _IntSpan(Structure):
     # Layout of the by-value struct in the C ABI, mirroring IntSpan
     _fields_ = [("data", POINTER(c_int32)), ("length", c_size_t)]
 
+class _Progress(Structure):
+    # Layout of the by-value struct in the C ABI, mirroring Progress
+    _fields_ = [("step", c_int32), ("fraction", c_double)]
+
 class _StatusInfo(Structure):
     # Layout of the by-value struct in the C ABI, mirroring StatusInfo
     _fields_ = [("voltage", c_double), ("state", c_int32), ("enabled", c_int32)]
@@ -214,6 +218,7 @@ DoubleSpanToScalarCallbackFunc = CFUNCTYPE(c_double, POINTER(_DoubleSpan), POINT
 IndexCallbackFunction = CFUNCTYPE(None, c_void_p, c_int)
 PlainIndexCallbackFunction = CFUNCTYPE(None, c_int)
 PlainNotifyCallbackFunction = CFUNCTYPE(None)
+ProgressCallbackFunc = CFUNCTYPE(c_double, POINTER(_Progress))
 TransformCallbackFunction = CFUNCTYPE(None, c_void_p, POINTER(c_double), POINTER(c_double))
 
 # ==== Counter ====
@@ -315,6 +320,8 @@ libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.argtypes = [Doub
 libbindings_tests.bindings_tests_Callbacks_invokeDoubleCallback.restype = c_double
 libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.argtypes = [DoubleSpanToScalarCallbackFunc, _DoubleSpan, _DoubleSpan]
 libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback.restype = c_double
+libbindings_tests.bindings_tests_Callbacks_invokeProgressCallback.argtypes = [ProgressCallbackFunc, _Progress]
+libbindings_tests.bindings_tests_Callbacks_invokeProgressCallback.restype = c_double
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.argtypes = [IndexCallbackFunction, c_void_p, c_size_t]
 libbindings_tests.bindings_tests_Callbacks_invokeTimes.restype = None
 libbindings_tests.bindings_tests_Callbacks_transformOnce.argtypes = [TransformCallbackFunction, c_void_p, POINTER(c_double), POINTER(c_double)]
@@ -457,6 +464,11 @@ libbindings_tests.bindings_tests_Structs_getCheckedStatus.restype = _StatusInfo
 @dataclass
 class FieldTypes:
     unit: int
+
+@dataclass
+class Progress:
+    step: int
+    fraction: float
 
 @dataclass
 class StatusInfo:
@@ -938,6 +950,21 @@ class Callbacks:
             b_arr = np.ascontiguousarray(b, dtype=np.float64)
             b = _DoubleSpan(b_arr.ctypes.data_as(POINTER(c_double)), len(b_arr))
         return libbindings_tests.bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func, a, b)
+
+    @classmethod
+    def invoke_progress_callback(cls, func: Callable[[Any], float], progress: Progress) -> float:
+        """Invokes the callback once with the given record and returns its result.
+
+        Args:
+            func: Any callable is accepted, and a plain one is wrapped into a fresh
+                ProgressCallbackFunc per call. Build the prototype once for a hot loop.
+            progress:
+        """
+        if func is not None and not isinstance(func, ProgressCallbackFunc):
+            func = ProgressCallbackFunc(func)
+        if not isinstance(progress, _Progress):
+            progress = _Progress(progress.step, progress.fraction)
+        return libbindings_tests.bindings_tests_Callbacks_invokeProgressCallback(func, progress)
 
     @classmethod
     def invoke_times(cls, func: Callable[[Any, int], None], user_data: Any | bytes | None, times: int) -> None:
@@ -1616,6 +1643,7 @@ class Structs:
 __all__ = [
     'Error',
     'FieldTypes',
+    'Progress',
     'StatusInfo',
     'CircleColor',
     'Color',
@@ -1625,6 +1653,7 @@ __all__ = [
     'IndexCallbackFunction',
     'PlainIndexCallbackFunction',
     'PlainNotifyCallbackFunction',
+    'ProgressCallbackFunc',
     'TransformCallbackFunction',
     'Counter',
     'Naming',

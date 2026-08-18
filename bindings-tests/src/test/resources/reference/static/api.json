@@ -721,6 +721,29 @@
       }],
       "flags": ["Noexcept"]
     }, {
+      "name": "invokeProgressCallback",
+      "lowerUnderscoreName": "invoke_progress_callback",
+      "isStatic": true,
+      "cName": "bindings_tests_Callbacks_invokeProgressCallback",
+      "returnType": {
+        "dataType": "FLOAT64"
+      },
+      "parameters": [{
+        "paramName": "func",
+        "lowerUnderscoreParamName": "func",
+        "cPrefix": "bindings_tests_",
+        "typeName": "ProgressCallbackFunc",
+        "dataType": "CALLBACK"
+      }, {
+        "paramName": "progress",
+        "lowerUnderscoreParamName": "progress",
+        "cPrefix": "bindings_tests_",
+        "typeName": "Progress",
+        "dataType": "STRUCT"
+      }],
+      "documentation": "Invokes the callback once with the given record and returns its result.",
+      "flags": ["Noexcept"]
+    }, {
       "name": "invokeTimes",
       "lowerUnderscoreName": "invoke_times",
       "isStatic": true,
@@ -1988,6 +2011,19 @@
     }],
     "comment": "A (pointer, length) view of a contiguous int32 buffer, passed and returned\nby value. Inputs are caller-owned and only read during the call. Returned\nspans are library-owned and stay valid until the calling thread's next\nlibrary call, so they have to be copied immediately.\n"
   }, {
+    "name": "Progress",
+    "cPrefix": "bindings_tests_",
+    "cName": "bindings_tests_Progress",
+    "fields": [{
+      "name": "step",
+      "lowerUnderscoreName": "step",
+      "dataType": "INT32"
+    }, {
+      "name": "fraction",
+      "lowerUnderscoreName": "fraction",
+      "dataType": "FLOAT64"
+    }]
+  }, {
     "name": "StatusInfo",
     "cPrefix": "bindings_tests_",
     "cName": "bindings_tests_StatusInfo",
@@ -2064,6 +2100,18 @@
     "returnType": {
       "dataType": "VOID"
     }
+  }, {
+    "name": "ProgressCallbackFunc",
+    "cPrefix": "bindings_tests_",
+    "returnType": {
+      "dataType": "FLOAT64"
+    },
+    "parameters": [{
+      "paramName": "progress",
+      "cPrefix": "bindings_tests_",
+      "typeName": "Progress",
+      "dataType": "STRUCT"
+    }]
   }, {
     "name": "TransformCallbackFunction",
     "cPrefix": "bindings_tests_",

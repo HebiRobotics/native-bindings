@@ -11,6 +11,15 @@ classdef (Sealed) Callbacks
             result = bindings_tests_native('bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback', func, a, b);
         end
 
+        function result = invokeProgressCallback(func, progress)
+            % Invokes the callback once with the given record and returns its result.
+            %
+            %   Inputs:
+            %       func
+            %       progress
+            result = bindings_tests_native('bindings_tests_Callbacks_invokeProgressCallback', func, progress);
+        end
+
         function varargout = invokeTimes(varargin)
             % Invokes the callback exactly 'times' times with indices 0 to times-1, then
             %   returns. A null function pointer is ignored, and a non-positive count does

@@ -205,6 +205,7 @@ inline void checkCallbackError(const CallbackOutcome& outcome) {
 enum CallbackSite {
     bindings_tests_Callbacks_invokeDoubleCallback_func,
     bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback_func,
+    bindings_tests_Callbacks_invokeProgressCallback_func,
     bindings_tests_Callbacks_invokePlainTimes_func,
     bindings_tests_Callbacks_invokePlainChecked_func,
     bindings_tests_Callbacks_invokePlainOnWorkerThread_func,
@@ -316,6 +317,23 @@ inline mxArray* createMexIntArray(IntSpan span) {
     return array;
 }
 
+// Layout-compatible with the by-value Progress struct in the C ABI
+struct Progress {
+    int32_t step;
+    double fraction;
+};
+
+inline Progress getProgress(const mxArray* arg) {
+    // mxIsStruct is not part of the clean-room SDK subset, and is documented as this check
+    if (mxGetClassID(arg) != mxSTRUCT_CLASS) {
+        mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument must be a 'Progress' struct.");
+    }
+    return Progress{
+        getStructField<int32_t>(arg, "Progress", "step"),
+        getStructField<double>(arg, "Progress", "fraction")
+    };
+}
+
 // Layout-compatible with the by-value StatusInfo struct in the C ABI
 struct StatusInfo {
     double voltage;
@@ -339,6 +357,7 @@ typedef double (*bindings_tests_DoubleCallbackFunc)(double a, double b);
 typedef double (*bindings_tests_DoubleSpanToScalarCallbackFunc)(const DoubleSpan* a, const DoubleSpan* b);
 typedef void (*bindings_tests_PlainIndexCallbackFunction)(int index);
 typedef void (*bindings_tests_PlainNotifyCallbackFunction)();
+typedef double (*bindings_tests_ProgressCallbackFunc)(const Progress* progress);
 
 // MATLAB char data is UTF-16, and the Matrix API has no UTF-8 aware way to build it.
 // mxCreateString decodes in MATLAB's default character set, which its own header describes
@@ -433,7 +452,7 @@ inline mxArray* createMexSize(size_t value) {
     return array;
 }
 
-// The 1x1 MATLAB struct a returned FieldTypes maps to
+// The 1x1 MATLAB struct a FieldTypes maps to on its way into MATLAB
 inline mxArray* createMexFieldTypes(const FieldTypes& value) {
     const char* fields[] = {"unit"};
     mxArray* result = mxCreateStructMatrix(1, 1, 1, fields);
@@ -442,7 +461,17 @@ inline mxArray* createMexFieldTypes(const FieldTypes& value) {
 }
 
 
-// The 1x1 MATLAB struct a returned StatusInfo maps to
+// The 1x1 MATLAB struct a Progress maps to on its way into MATLAB
+inline mxArray* createMexProgress(const Progress& value) {
+    const char* fields[] = {"step", "fraction"};
+    mxArray* result = mxCreateStructMatrix(1, 1, 2, fields);
+    mxSetField(result, 0, "step", createMexScalar(value.step));
+    mxSetField(result, 0, "fraction", createMexScalar(value.fraction));
+    return result;
+}
+
+
+// The 1x1 MATLAB struct a StatusInfo maps to on its way into MATLAB
 inline mxArray* createMexStatusInfo(const StatusInfo& value) {
     const char* fields[] = {"voltage", "state", "enabled"};
     mxArray* result = mxCreateStructMatrix(1, 1, 3, fields);
@@ -638,6 +667,54 @@ struct PlainNotifyCallbackFunctionScope {
 };
 template <CallbackSite Site>
 PlainNotifyCallbackFunctionScope<Site>* PlainNotifyCallbackFunctionScope<Site>::current = nullptr;
+
+// Wrapper handle for ProgressCallbackFunc (alive for one call)
+template <CallbackSite Site>
+struct ProgressCallbackFuncScope {
+    static ProgressCallbackFuncScope* current;
+    const mxArray* const handle;    // borrowed from prhs, or null for a null function pointer
+    ProgressCallbackFuncScope* const previous;
+    mxArray* error = nullptr;       // what a failed invocation trapped, raised after the scope closes
+    std::atomic<int> dropped{0};    // invocations that never reached MATLAB
+
+    explicit ProgressCallbackFuncScope(const mxArray* handle) : handle(handle), previous(current) { current = this; }
+    ~ProgressCallbackFuncScope() { current = previous; }
+    ProgressCallbackFuncScope(const ProgressCallbackFuncScope&) = delete;
+
+    bindings_tests_ProgressCallbackFunc function() const { return handle != nullptr ? &invoke : nullptr; }
+
+    CallbackOutcome outcome() const { return {error, dropped.load(std::memory_order_relaxed)}; }
+
+    // Errors are trapped rather than raised, a longjmp from here would tear down the
+    // library's frames. One mxArray copy per argument per call is inherent to MATLAB.
+    static double invoke(const Progress* progress) {
+        ProgressCallbackFuncScope* scope = current;
+        // An unsupported fire after the scope closed means the library kept the pointer past the call
+        if (scope == nullptr || scope->error != nullptr) {
+            return double{};
+        }
+        if (std::this_thread::get_id() != matlabThread) {
+            scope->dropped.fetch_add(1, std::memory_order_relaxed);
+            return double{};
+        }
+        mxArray* args[2] = {const_cast<mxArray*>(scope->handle), createMexProgress(*progress)};
+        double value{};
+        mxArray* result = nullptr;
+        mxArray* error = mexCallMATLABWithTrap(1, &result, 2, args, "feval");
+        if (error == nullptr) {
+            error = checkCallbackResult(result, "ProgressCallbackFunc");
+            if (error == nullptr) {
+                value = static_cast<double>(mxGetScalar(result));
+            }
+            mxDestroyArray(result);
+        }
+        scope->error = error;
+        mxDestroyArray(args[1]);
+        return value;
+    }
+};
+template <CallbackSite Site>
+ProgressCallbackFuncScope<Site>* ProgressCallbackFuncScope<Site>::current = nullptr;
 
 // Determine the path to the library by calling into MATLAB (may auto-download)
 std::string getLibraryPath() {
@@ -1096,6 +1173,22 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             {
                 DoubleSpanToScalarCallbackFuncScope<bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback_func> func(funcHandle);
                 _value = bindings_tests_Callbacks_invokeDoubleSpanToScalarCallback(func.function(), a, b);
+                funcOutcome = func.outcome();
+            }
+            checkCallbackError(funcOutcome);
+            if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Callbacks_invokeProgressCallback") */ 3467303763: {
+            static auto bindings_tests_Callbacks_invokeProgressCallback = libLoader.getFunc<double(*)(bindings_tests_ProgressCallbackFunc, Progress)>("bindings_tests_Callbacks_invokeProgressCallback");
+            checkArgCount(nrhs, 2, "bindings_tests_Callbacks_invokeProgressCallback");
+            const mxArray* funcHandle = getFunctionHandle(prhs[1], "func");
+            Progress progress = getProgress(prhs[2]);
+            double _value;
+            CallbackOutcome funcOutcome;
+            {
+                ProgressCallbackFuncScope<bindings_tests_Callbacks_invokeProgressCallback_func> func(funcHandle);
+                _value = bindings_tests_Callbacks_invokeProgressCallback(func.function(), progress);
                 funcOutcome = func.outcome();
             }
             checkCallbackError(funcOutcome);
