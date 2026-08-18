@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import static com.google.common.base.Preconditions.*;
 import static java.util.function.Predicate.*;
+import static us.hebi.graalvm.bindings.generator.generators.ProcessingException.*;
 
 /**
  * Wrapper for native classes
@@ -131,9 +132,9 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         while (parent != null && !Object.class.getName().equals(parent.getQualifiedName().toString())) {
             var annotation = parent.getAnnotation(CLibClass.class);
             if (annotation != null && !annotation.ignore()) {
-                checkState(enableInstancing(), "Only instantiable classes can inherit");
-                checkState(annotation.enableInstancing(), "Parent classes must be instantiable");
-                checkState(annotation.abstractClass(), "Parent classes must be abstract");
+                check(enableInstancing(), element, "Only instantiable classes can inherit");
+                check(annotation.enableInstancing(), element, "Parent classes must be instantiable");
+                check(annotation.abstractClass(), element, "Parent classes must be abstract");
                 return Optional.of(AnnotatedClibType.fromType(parent.asType(), env));
             }
             parent = (TypeElement) env.getTypeUtils().asElement(parent.getSuperclass());
@@ -150,9 +151,9 @@ public class AnnotatedCLibClass extends AnnotatedCLibElement<TypeElement> {
         while (!Object.class.getName().equals(parent.getQualifiedName().toString())) {
             var annotation = parent.getAnnotation(CLibClass.class);
             if (annotation != null && !annotation.ignore()) {
-                checkState(enableInstancing(), "Only instantiable classes can inherit");
-                checkState(annotation.enableInstancing(), "Parent classes must be instantiable");
-                checkState(annotation.abstractClass(), "Parent classes must be abstract");
+                check(enableInstancing(), element, "Only instantiable classes can inherit");
+                check(annotation.enableInstancing(), element, "Parent classes must be instantiable");
+                check(annotation.abstractClass(), element, "Parent classes must be abstract");
                 root = Optional.of(AnnotatedClibType.fromType(parent.asType(), env));
             }
             parent = (TypeElement) env.getTypeUtils().asElement(parent.getSuperclass());

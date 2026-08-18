@@ -32,7 +32,7 @@ import javax.lang.model.type.TypeMirror;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.google.common.base.Preconditions.*;
+import static us.hebi.graalvm.bindings.generator.generators.ProcessingException.*;
 
 /**
  * @author Florian Enner
@@ -101,7 +101,7 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
 
     public boolean isSizeType() {
         if (mirror.toString().contains(CSizeType.class.getSimpleName())) {
-            checkState(unboxedType == TypeName.INT || unboxedType == TypeName.LONG, "size_t is may only be long or int");
+            check(unboxedType == TypeName.INT || unboxedType == TypeName.LONG, sourceElement, "size_t is may only be long or int");
             return true;
         }
         return false;
@@ -270,6 +270,13 @@ public class AnnotatedClibType extends AnnotatedCLibElement<TypeElement> {
 
     public String getName() {
         return name;
+    }
+
+    /**
+     * @return the element this type was read from, i.e. the parameter itself for a parameter
+     */
+    Element getSourceElement() {
+        return sourceElement;
     }
 
     /**

@@ -7,6 +7,15 @@ import javax.lang.model.element.Element;
  */
 public class ProcessingException extends RuntimeException {
 
+    /**
+     * Guava-shaped precondition whose failure reports at the offending element
+     */
+    public static void check(boolean condition, Element element, String message, Object... args) {
+        if (!condition) {
+            throw new ProcessingException(element, message, args);
+        }
+    }
+
     public static ProcessingException processException(Element element, String msg, Object... args) {
         return new ProcessingException(element, msg, args);
     }

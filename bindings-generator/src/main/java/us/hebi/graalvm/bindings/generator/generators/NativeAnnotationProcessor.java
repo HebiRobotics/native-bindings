@@ -81,10 +81,10 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
             @Override
             public Set<? extends Element> process(ImmutableSetMultimap<String, Element> elementsByAnnotation) {
                 for (Element element : elementsByAnnotation.get(CLibCallback.class.getCanonicalName())) {
-                    reportErrors(() -> checkIsCallbackType(element));
+                    reportErrors(element, () -> checkIsCallbackType(element));
                 }
                 for (Element element : elementsByAnnotation.get(CLibClass.class.getCanonicalName())) {
-                    reportErrors(() -> processElement(castToTypeElement(element), processingEnv));
+                    reportErrors(element, () -> processElement(castToTypeElement(element), processingEnv));
                 }
                 return Collections.emptySet();
             }
@@ -105,13 +105,21 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
         }
     }
 
-    private void reportErrors(Runnable task) {
+    /**
+     * A rejected API is a diagnostic for its author, so it reports at the offending element
+     * without a stack trace. Anything else is a generator bug and at least points at the class
+     * that was being processed.
+     */
+    private void reportErrors(Element element, Runnable task) {
         try {
             task.run();
+        } catch (ProcessingException e) {
+            processingEnv.getMessager().printMessage(ERROR, e.getMessage(),
+                    e.getElement() != null ? e.getElement() : element);
         } catch (Throwable t) {
             StringWriter sw = new StringWriter();
             t.printStackTrace(new PrintWriter(sw));
-            processingEnv.getMessager().printMessage(ERROR, sw.toString());
+            processingEnv.getMessager().printMessage(ERROR, sw.toString(), element);
         }
     }
 

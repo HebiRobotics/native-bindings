@@ -42,91 +42,107 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsConstOnStaticMethod() {
-        assertThat(compile(source("ConstStatic", """
+        var source = source("ConstStatic", """
                 @CLibClass("ConstStatic")
                 public class ConstStatic {
                     @CLibMethod(flags = Const)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("only instance methods may be marked const");
+                """);
+        assertThat(compile(source)).hadErrorContaining("only instance methods may be marked const")
+                .inFile(source).onLineContaining("public static int value()");
     }
 
     @Test
     public void rejectsConstWhenInstancingIsDisabled() {
-        assertThat(compile(source("NoInstancing", """
+        var source = source("NoInstancing", """
                 @CLibClass(value = "NoInstancing", enableInstancing = false)
                 public class NoInstancing {
                     @CLibMethod(flags = Const)
                     public int value() { return 1; }
                 }
-                """))).hadErrorContaining("only instance methods may be marked const");
+                """);
+        assertThat(compile(source)).hadErrorContaining("only instance methods may be marked const")
+                .inFile(source).onLineContaining("public int value()");
     }
 
     @Test
     public void rejectsNoexceptOnThrowingMethod() {
-        assertThat(compile(source("Throwing", """
+        var source = source("Throwing", """
                 @CLibClass("Throwing")
                 public class Throwing {
                     @CLibMethod(flags = Noexcept)
                     public static int value() throws Exception { return 1; }
                 }
-                """))).hadErrorContaining("throwing methods may not be marked noexcept");
+                """);
+        assertThat(compile(source)).hadErrorContaining("throwing methods may not be marked noexcept")
+                .inFile(source).onLineContaining("throws Exception");
     }
 
     @Test
     public void rejectsDoubleSpanReturn() {
-        assertThat(compile(source("SpanReturn", """
+        var source = source("SpanReturn", """
                 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
                 @CLibClass("SpanReturn")
                 public class SpanReturn {
                     @CLibMethod(flags = Noexcept)
                     public static DoubleSpan values() { return null; }
                 }
-                """))).hadErrorContaining("Span returns must be declared as double[]");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Span returns must be declared as double[]")
+                .inFile(source).onLineContaining("public static DoubleSpan values()");
     }
 
     @Test
     public void rejectsDoubleArrayParameter() {
-        assertThat(compile(source("ArrayParam", """
+        var source = source("ArrayParam", """
                 @CLibClass("ArrayParam")
                 public class ArrayParam {
                     @CLibMethod(flags = Noexcept)
                     public static double sum(double[] values) { return 0; }
                 }
-                """))).hadErrorContaining("Span parameters must be declared as DoubleSpan");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Span parameters must be declared as DoubleSpan")
+                .inFile(source).onLineContaining("double sum(double[] values)");
     }
 
     @Test
     public void rejectsNonIntegralIndexParameter() {
-        assertThat(compile(source("IndexParam", """
+        var source = source("IndexParam", """
                 @CLibClass("IndexParam")
                 public class IndexParam {
                     @CLibMethod(flags = Noexcept)
                     public static int at(@CLibIndex double index) { return 0; }
                 }
-                """))).hadErrorContaining("@CLibIndex may only be used on integral types");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibIndex may only be used on integral types")
+                .inFile(source).onLineContaining("int at(@CLibIndex double index)");
     }
 
     @Test
     public void rejectsNonIntegralIndexReturn() {
-        assertThat(compile(source("IndexReturn", """
+        var source = source("IndexReturn", """
                 @CLibClass("IndexReturn")
                 public class IndexReturn {
                     @CLibMethod(flags = Noexcept)
                     public static @CLibIndex double first() { return 0; }
                 }
-                """))).hadErrorContaining("@CLibIndex may only be used on integral types");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibIndex may only be used on integral types")
+                .inFile(source).onLineContaining("@CLibIndex double first()");
     }
 
     @Test
     public void rejectsNonIntegerIndexDefault() {
-        assertThat(compile(source("IndexDefault", """
+        var source = source("IndexDefault", """
                 @CLibClass("IndexDefault")
                 public class IndexDefault {
                     @CLibMethod(flags = Noexcept)
                     public static int at(@CLibIndex @CDefault("first") int index) { return 0; }
                 }
-                """))).hadErrorContaining("@CLibIndex requires an integer @CDefault");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibIndex requires an integer @CDefault")
+                .inFile(source).onLineContaining("@CDefault(\"first\")");
     }
 
     @Test
@@ -150,7 +166,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsInnerClass() {
-        assertThat(compile(source("InnerHolder", """
+        var source = source("InnerHolder", """
                 public class InnerHolder {
                     @CLibClass("Inner")
                     public class Inner {
@@ -158,12 +174,14 @@ public class ProcessorValidationTest {
                         public int value() { return 1; }
                     }
                 }
-                """))).hadErrorContaining("@CLibClass requires a top-level or static nested class");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibClass requires a top-level or static nested class")
+                .inFile(source).onLineContaining("public class Inner {");
     }
 
     @Test
     public void rejectsDuplicateClassName() {
-        assertThat(compile(source("Twins", """
+        var source = source("Twins", """
                 @CLibClass("Twin")
                 public class Twins {
                     @CLibMethod(flags = Noexcept)
@@ -175,12 +193,14 @@ public class ProcessorValidationTest {
                         public static int value() { return 2; }
                     }
                 }
-                """))).hadErrorContaining("Duplicate @CLibClass value 'Twin'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Duplicate @CLibClass value 'Twin'")
+                .inFile(source).onLineContaining("public static class Other");
     }
 
     @Test
     public void rejectsDuplicateEnumName() {
-        assertThat(compile(source("Palettes", """
+        var source = source("Palettes", """
                 @CLibClass("Palettes")
                 public class Palettes {
                     @CLibEnum("Color")
@@ -198,45 +218,53 @@ public class ProcessorValidationTest {
                         public static Shade first() { return Shade.Dark; }
                     }
                 }
-                """))).hadErrorContaining("Duplicate @CLibEnum value 'Color'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Duplicate @CLibEnum value 'Color'")
+                .inFile(source).onLineContaining("public enum Shade");
     }
 
     @Test
     public void rejectsClassNameThatIsNotACIdentifier() {
-        assertThat(compile(source("BadClass", """
+        var source = source("BadClass", """
                 @CLibClass("Bad Name")
                 public class BadClass {
                     @CLibMethod(flags = Noexcept)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("'Bad Name' is not a valid C identifier");
+                """);
+        assertThat(compile(source)).hadErrorContaining("'Bad Name' is not a valid C identifier")
+                .inFile(source).onLineContaining("public class BadClass");
     }
 
     @Test
     public void rejectsClassPrefixThatIsNotACIdentifier() {
-        assertThat(compile(source("BadPrefix", """
+        var source = source("BadPrefix", """
                 @CLibClass(value = "BadPrefix", cPrefix = "bad prefix")
                 public class BadPrefix {
                     @CLibMethod(flags = Noexcept)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("'bad prefix' is not a valid C identifier");
+                """);
+        assertThat(compile(source)).hadErrorContaining("'bad prefix' is not a valid C identifier")
+                .inFile(source).onLineContaining("public class BadPrefix");
     }
 
     @Test
     public void rejectsMethodNameThatIsNotACIdentifier() {
-        assertThat(compile(source("BadMethod", """
+        var source = source("BadMethod", """
                 @CLibClass("BadMethod")
                 public class BadMethod {
                     @CLibMethod(flags = Noexcept, name = "2ndValue")
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("'2ndValue' is not a valid C identifier");
+                """);
+        assertThat(compile(source)).hadErrorContaining("'2ndValue' is not a valid C identifier")
+                .inFile(source).onLineContaining("public static int value()");
     }
 
     @Test
     public void rejectsStructNameThatIsNotACIdentifier() {
-        assertThat(compile(source("BadStruct", """
+        var source = source("BadStruct", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -251,12 +279,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("'Bad Point' is not a valid C identifier");
+                """);
+        assertThat(compile(source)).hadErrorContaining("'Bad Point' is not a valid C identifier")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsStructNameThatCollidesWithAClass() {
-        assertThat(compile(source("ClassStructCollision", """
+        var source = source("ClassStructCollision", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -271,13 +301,15 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining(
-                "Struct name 'Point' collides with class Point: validation.ClassStructCollision.Coord");
+                """);
+        assertThat(compile(source)).hadErrorContaining(
+                "Struct name 'Point' collides with class Point: validation.ClassStructCollision.Coord")
+                .inFile(source).onLineContaining("public interface Coord extends PointerBase");
     }
 
     @Test
     public void rejectsEnumNameThatCollidesWithAClass() {
-        assertThat(compile(source("EnumClassCollision", """
+        var source = source("EnumClassCollision", """
                 @CLibClass("Shade")
                 public class EnumClassCollision {
                     @CLibEnum("Shade")
@@ -286,8 +318,10 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static Tone first() { return Tone.Dark; }
                 }
-                """))).hadErrorContaining(
-                "Enum name 'Shade' collides with class Shade: validation.EnumClassCollision.Tone");
+                """);
+        assertThat(compile(source)).hadErrorContaining(
+                "Enum name 'Shade' collides with class Shade: validation.EnumClassCollision.Tone")
+                .inFile(source).onLineContaining("public enum Tone");
     }
 
     @Test
@@ -343,7 +377,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsStructViewOnNonInterface() {
-        assertThat(compile(source("StructClass", """
+        var source = source("StructClass", """
                 @CLibClass("StructClass")
                 public class StructClass {
                     @CLibStruct("Point")
@@ -352,12 +386,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct may only be used on an interface");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibStruct may only be used on an interface")
+                .inFile(source).onLineContaining("public static class Point");
     }
 
     @Test
     public void rejectsStructViewWithoutCStruct() {
-        assertThat(compile(source("NoCStruct", """
+        var source = source("NoCStruct", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.word.PointerBase;
                 @CLibClass("NoCStruct")
@@ -370,12 +406,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct requires a GraalVM @CStruct annotation");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibStruct requires a GraalVM @CStruct annotation")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsStructViewWithoutPointerBase() {
-        assertThat(compile(source("NoPointerBase", """
+        var source = source("NoPointerBase", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 @CLibClass("NoPointerBase")
@@ -389,12 +427,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct view must extend PointerBase");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibStruct view must extend PointerBase")
+                .inFile(source).onLineContaining("public interface Point {");
     }
 
     @Test
     public void rejectsNonAccessorOnStructView() {
-        assertThat(compile(source("DefaultMethod", """
+        var source = source("DefaultMethod", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -410,12 +450,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("may only declare @CField accessors, found 'twiceX'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("may only declare @CField accessors, found 'twiceX'")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsStructSetterWithoutGetter() {
-        assertThat(compile(source("SetterOnly", """
+        var source = source("SetterOnly", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -431,12 +473,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CField 'y' has a setter but no matching getter");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CField 'y' has a setter but no matching getter")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsNonPrimitiveStructField() {
-        assertThat(compile(source("StringField", """
+        var source = source("StringField", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -451,7 +495,9 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibStruct fields may only be primitives, @CSizeType long, or typed GraalVM pointers");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibStruct fields may only be primitives, @CSizeType long, or typed GraalVM pointers")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
@@ -491,7 +537,7 @@ public class ProcessorValidationTest {
     public void rejectsBoolAccessorWithoutCastAnnotation() {
         // The field is stored as int32 while a Java boolean is 1 byte, so the image build
         // rejects the accessor unless it allows the cast explicitly
-        assertThat(compile(source("BoolField", """
+        var source = source("BoolField", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -506,12 +552,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int count() { return 1; }
                 }
-                """))).hadErrorContaining("boolean accessor 'enabled' requires @AllowNarrowingCast");
+                """);
+        assertThat(compile(source)).hadErrorContaining("boolean accessor 'enabled' requires @AllowNarrowingCast")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsStructViewReturn() {
-        assertThat(compile(source("StructReturn", """
+        var source = source("StructReturn", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -526,12 +574,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static Point origin() { return null; }
                 }
-                """))).hadErrorContaining("@CLibStruct views may not be returned, declare void with a @CLibOut parameter");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibStruct views may not be returned, declare void with a @CLibOut parameter")
+                .inFile(source).onLineContaining("public static Point origin()");
     }
 
     @Test
     public void rejectsStructFieldWithDisagreeingConstness() {
-        assertThat(compile(source("MixedConst", """
+        var source = source("MixedConst", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.nativeimage.c.type.CConst;
@@ -546,12 +596,14 @@ public class ProcessorValidationTest {
                         @CField("data") void setData(CDoublePointer data);
                     }
                 }
-                """))).hadErrorContaining("is declared @CConst on one accessor and not the other");
+                """);
+        assertThat(compile(source)).hadErrorContaining("is declared @CConst on one accessor and not the other")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsConstOnANonPointerStructField() {
-        assertThat(compile(source("ConstValue", """
+        var source = source("ConstValue", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.nativeimage.c.type.CConst;
@@ -564,7 +616,9 @@ public class ProcessorValidationTest {
                         @CField("x") @CConst double x();
                     }
                 }
-                """))).hadErrorContaining("@CConst field 'x' must be a pointer");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CConst field 'x' must be a pointer")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
@@ -615,7 +669,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsANonTrailingOutParameter() {
-        assertThat(compile(source("LeadingOutParam", """
+        var source = source("LeadingOutParam", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -631,23 +685,27 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void corner(@CLibOut Point point, int index) { }
                 }
-                """))).hadErrorContaining("the @CLibOut parameter must be declared last");
+                """);
+        assertThat(compile(source)).hadErrorContaining("the @CLibOut parameter must be declared last")
+                .inFile(source).onLineContaining("public static void corner(@CLibOut Point point, int index)");
     }
 
     @Test
     public void rejectsOutParameterOnNonStructView() {
-        assertThat(compile(source("OutOnPrimitive", """
+        var source = source("OutOnPrimitive", """
                 @CLibClass("OutOnPrimitive")
                 public class OutOnPrimitive {
                     @CLibMethod(flags = Noexcept)
                     public static void origin(@CLibOut double x) { }
                 }
-                """))).hadErrorContaining("@CLibOut may only be used with a @CLibStruct annotated type, got 'x'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibOut may only be used with a @CLibStruct annotated type, got 'x'")
+                .inFile(source).onLineContaining("public static void origin(@CLibOut double x)");
     }
 
     @Test
     public void rejectsTwoOutParameters() {
-        assertThat(compile(source("TwoOutParams", """
+        var source = source("TwoOutParams", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -663,12 +721,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void corners(@CLibOut Point first, @CLibOut Point second) { }
                 }
-                """))).hadErrorContaining("at most one @CLibOut parameter is allowed, found a second one on 'second'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("at most one @CLibOut parameter is allowed, found a second one on 'second'")
+                .inFile(source).onLineContaining("public static void corners(");
     }
 
     @Test
     public void rejectsOutParameterWithNonVoidReturn() {
-        assertThat(compile(source("OutWithReturn", """
+        var source = source("OutWithReturn", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -684,12 +744,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int origin(@CLibOut Point point) { return 0; }
                 }
-                """))).hadErrorContaining("a method with a @CLibOut parameter must be declared void");
+                """);
+        assertThat(compile(source)).hadErrorContaining("a method with a @CLibOut parameter must be declared void")
+                .inFile(source).onLineContaining("public static int origin(@CLibOut Point point)");
     }
 
     @Test
     public void rejectsOutViewWithoutSetterForEveryField() {
-        assertThat(compile(source("PartialOutView", """
+        var source = source("PartialOutView", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -706,12 +768,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void origin(@CLibOut Point point) { }
                 }
-                """))).hadErrorContaining("@CLibOut view requires a setter for every field, missing [y]");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibOut view requires a setter for every field, missing [y]")
+                .inFile(source).onLineContaining("public interface Point extends PointerBase");
     }
 
     @Test
     public void rejectsDuplicateStructName() {
-        assertThat(compile(source("Shapes", """
+        var source = source("Shapes", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -738,7 +802,9 @@ public class ProcessorValidationTest {
                         public static int count() { return 2; }
                     }
                 }
-                """))).hadErrorContaining("Duplicate @CLibStruct value 'Point'");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Duplicate @CLibStruct value 'Point'")
+                .inFile(source).onLineContaining("public interface Corner extends PointerBase");
     }
 
     @Test
@@ -785,7 +851,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsAClassThatIsNotAMarshaller() {
-        assertThat(compile(source("NotAMarshaller", """
+        var source = source("NotAMarshaller", """
                 import org.graalvm.nativeimage.c.struct.CField;
                 import org.graalvm.nativeimage.c.struct.CStruct;
                 import org.graalvm.word.PointerBase;
@@ -800,7 +866,9 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static double x(BadView view) { return 0; }
                 }
-                """))).hadErrorContaining("Struct marshaller does not implement");
+                """);
+        assertThat(compile(source)).hadErrorContaining("Struct marshaller does not implement")
+                .inFile(source).onLineContaining("public interface BadView extends PointerBase");
     }
 
     @Test
@@ -834,7 +902,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsCallbackWithoutInvokeMethod() {
-        assertThat(compile(source("NoInvoke", """
+        var source = source("NoInvoke", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 @CLibClass("NoInvoke")
                 public class NoInvoke {
@@ -844,12 +912,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found none");
+                """);
+        assertThat(compile(source)).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found none")
+                .inFile(source).onLineContaining("public interface Callback extends CFunctionPointer");
     }
 
     @Test
     public void rejectsCallbackWithTwoInvokeMethods() {
-        assertThat(compile(source("TwoInvokes", """
+        var source = source("TwoInvokes", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("TwoInvokes")
@@ -862,12 +932,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found [first, second]");
+                """);
+        assertThat(compile(source)).hadErrorContaining("exactly one @InvokeCFunctionPointer method, found [first, second]")
+                .inFile(source).onLineContaining("public interface Callback extends CFunctionPointer");
     }
 
     @Test
     public void rejectsCallbackWithUnmappableParameter() {
-        assertThat(compile(source("HandleCallback", """
+        var source = source("HandleCallback", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("HandleCallback")
@@ -879,7 +951,9 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining("is not supported in a callback signature: Callback.invoke");
+                """);
+        assertThat(compile(source)).hadErrorContaining("is not supported in a callback signature: Callback.invoke")
+                .inFile(source).onLineContaining("void invoke(HandleCallback handle)");
     }
 
     /**
@@ -888,7 +962,7 @@ public class ProcessorValidationTest {
      */
     @Test
     public void rejectsCallbackReturningAStructView() {
-        assertThat(compile(source("SpanCallback", """
+        var source = source("SpanCallback", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 import us.hebi.graalvm.bindings.runtime.structs.DoubleSpan;
@@ -901,9 +975,11 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining("@InvokeCFunctionPointer return type"
+                """);
+        assertThat(compile(source)).hadErrorContaining("@InvokeCFunctionPointer return type"
                                           + " 'us.hebi.graalvm.bindings.runtime.structs.DoubleSpan'"
-                                          + " is not supported in a callback signature: Callback.invoke");
+                                          + " is not supported in a callback signature: Callback.invoke")
+                .inFile(source).onLineContaining("DoubleSpan invoke(DoubleSpan span)");
     }
 
     /**
@@ -914,7 +990,7 @@ public class ProcessorValidationTest {
      */
     @Test
     public void rejectsCallbackWithJavaEnumParameter() {
-        assertThat(compile(source("EnumCallback", """
+        var source = source("EnumCallback", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("EnumCallback")
@@ -929,14 +1005,16 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining("@InvokeCFunctionPointer parameter type 'validation.EnumCallback.Color'"
+                """);
+        assertThat(compile(source)).hadErrorContaining("@InvokeCFunctionPointer parameter type 'validation.EnumCallback.Color'"
                                           + " is a Java enum, which a callback signature cannot use because GraalVM"
-                                          + " only accepts @CEnum types there: Callback.invoke");
+                                          + " only accepts @CEnum types there: Callback.invoke")
+                .inFile(source).onLineContaining("void invoke(Color value)");
     }
 
     @Test
     public void rejectsCallbackAnnotationOnNonFunctionPointer() {
-        assertThat(compile(source("NotAPointer", """
+        var source = source("NotAPointer", """
                 @CLibClass("NotAPointer")
                 public class NotAPointer {
                     @CLibCallback
@@ -946,7 +1024,9 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static int value() { return 1; }
                 }
-                """))).hadErrorContaining("@CLibCallback requires an interface extending CFunctionPointer: validation.NotAPointer.Callback");
+                """);
+        assertThat(compile(source)).hadErrorContaining("@CLibCallback requires an interface extending CFunctionPointer: validation.NotAPointer.Callback")
+                .inFile(source).onLineContaining("public interface Callback {");
     }
 
     @Test
@@ -999,7 +1079,7 @@ public class ProcessorValidationTest {
 
     @Test
     public void rejectsCallbackNameThatIsNotACIdentifier() {
-        assertThat(compile(source("BadName", """
+        var source = source("BadName", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("BadName")
@@ -1012,13 +1092,14 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining(
-                "'on value' is not a valid C identifier");
+                """);
+        assertThat(compile(source)).hadErrorContaining("'on value' is not a valid C identifier")
+                .inFile(source).onLineContaining("public interface Callback extends CFunctionPointer");
     }
 
     @Test
     public void rejectsCallbackNameThatCollidesWithAClass() {
-        assertThat(compile(source("Collision", """
+        var source = source("Collision", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("Collision")
@@ -1031,13 +1112,15 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static void run(Callback callback) { }
                 }
-                """))).hadErrorContaining(
-                "Callback name 'Collision' collides with class Collision: validation.Collision.Callback");
+                """);
+        assertThat(compile(source)).hadErrorContaining(
+                "Callback name 'Collision' collides with class Collision: validation.Collision.Callback")
+                .inFile(source).onLineContaining("public interface Callback extends CFunctionPointer");
     }
 
     @Test
     public void rejectsCallbackReturn() {
-        assertThat(compile(source("CallbackReturn", """
+        var source = source("CallbackReturn", """
                 import org.graalvm.nativeimage.c.function.CFunctionPointer;
                 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
                 @CLibClass("CallbackReturn")
@@ -1049,8 +1132,10 @@ public class ProcessorValidationTest {
                     @CLibMethod(flags = Noexcept)
                     public static Callback current() { return null; }
                 }
-                """))).hadErrorContaining(
-                "a CFunctionPointer return is not supported until a use case needs it: current");
+                """);
+        assertThat(compile(source)).hadErrorContaining(
+                "a CFunctionPointer return is not supported until a use case needs it: current")
+                .inFile(source).onLineContaining("public static Callback current()");
     }
 
     private String readGeneratedFile(String fileName) throws IOException {

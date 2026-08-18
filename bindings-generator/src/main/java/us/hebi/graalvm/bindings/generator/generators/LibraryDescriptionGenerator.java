@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static javax.tools.Diagnostic.Kind.*;
+import static us.hebi.graalvm.bindings.generator.generators.ProcessingException.*;
 import static us.hebi.quickbuf.ProtoUtil.*;
 
 /**
@@ -74,9 +75,9 @@ public class LibraryDescriptionGenerator extends AbstractGenerator {
 
             // TODO: move verification to a better place
             if (method.isConstructor()) {
-                checkArgument(method.isStatic(), "Constructors must be static");
-                checkArgument(classDesc.getInstantiable(), "Classes with constructors must have instancing enabled");
-                checkArgument(Objects.equals(method.getReturnType().getCEntryType(), apiClass.getNativeType().getCEntryType()), "Constructors must return their containing class type");
+                check(method.isStatic(), method.getElement(), "Constructors must be static");
+                check(classDesc.getInstantiable(), method.getElement(), "Classes with constructors must have instancing enabled");
+                check(Objects.equals(method.getReturnType().getCEntryType(), apiClass.getNativeType().getCEntryType()), method.getElement(), "Constructors must return their containing class type");
             }
 
             // Custom method overloads

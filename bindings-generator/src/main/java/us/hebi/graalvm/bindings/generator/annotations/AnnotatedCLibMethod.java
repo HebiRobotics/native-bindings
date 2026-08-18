@@ -13,8 +13,8 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import java.util.*;
 
-import static com.google.common.base.Preconditions.*;
 import static java.util.function.Predicate.*;
+import static us.hebi.graalvm.bindings.generator.generators.ProcessingException.*;
 
 /**
  * Wrapper for methods contained inside native classes
@@ -38,10 +38,10 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         for (var flag : AnnotationUtil.getAnnotation(element, CLibMethod.class).map(CLibMethod::flags).orElseGet(() -> new us.hebi.graalvm.bindings.annotations.MethodFlag[0])) {
             switch (flag) {
                 case Const -> {
-                    checkArgument(!isStatic() && parent.enableInstancing(), "only instance methods may be marked const: %s", executableElement.getSimpleName());
+                    check(!isStatic() && parent.enableInstancing(), executableElement, "only instance methods may be marked const: %s", executableElement.getSimpleName());
                 }
                 case Noexcept -> {
-                    checkArgument(element.getThrownTypes().isEmpty(), "throwing methods may not be marked noexcept: %s", executableElement.getSimpleName());
+                    check(element.getThrownTypes().isEmpty(), executableElement, "throwing methods may not be marked noexcept: %s", executableElement.getSimpleName());
                 }
                 default -> throw new IllegalArgumentException("Unknown flag " + flag);
             }
@@ -55,11 +55,11 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
             if (allocating.isEmpty()) continue;
             var view = ClassName.bestGuess(entry.getKey());
             var javaType = allocating.get().javaType();
-            checkArgument(!view.equals(returnType.getJavaType()),
+            check(!view.equals(returnType.getJavaType()), executableElement,
                     "%s returns must be declared as %s, not %s: %s",
                     view.simpleName(), javaType, view.simpleName(), executableElement.getSimpleName());
             for (var parameter : getParameters()) {
-                checkArgument(!javaType.equals(parameter.getJavaType()),
+                check(!javaType.equals(parameter.getJavaType()), parameter.getSourceElement(),
                         "%s parameters must be declared as %s, not %s: %s",
                         view.simpleName(), view.simpleName(), javaType, executableElement.getSimpleName());
             }
@@ -67,13 +67,13 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
 
         // A struct view leaves the ABI through a caller-provided @CLibOut parameter, which
         // every public face presents as a by-value return
-        checkArgument(!returnType.isStructView(),
+        check(!returnType.isStructView(), executableElement,
                 "@CLibStruct views may not be returned, declare void with a @CLibOut parameter instead: %s",
                 executableElement.getSimpleName());
 
         // Handing a function pointer back out would need every face to wrap it into a callable,
         // which is the opposite direction of the parameter path they all implement
-        checkArgument(!isCallbackType(executableElement.getReturnType()),
+        check(!isCallbackType(executableElement.getReturnType()), executableElement,
                 "a CFunctionPointer return is not supported until a use case needs it: %s",
                 executableElement.getSimpleName());
 
@@ -83,21 +83,21 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         for (int i = 0; i < parameters.size(); i++) {
             var parameter = parameters.get(i);
             if (!parameter.isOutParameter()) continue;
-            checkArgument(parameter.isStructView(),
+            check(parameter.isStructView(), parameter.getSourceElement(),
                     "@CLibOut may only be used with a @CLibStruct annotated type, got '%s': %s",
                     parameter.getName(), executableElement.getSimpleName());
-            checkArgument(outParam == null,
+            check(outParam == null, parameter.getSourceElement(),
                     "at most one @CLibOut parameter is allowed, found a second one on '%s': %s",
                     parameter.getName(), executableElement.getSimpleName());
             outParam = parameter;
             outIndex = i;
         }
         if (outParam != null) {
-            checkArgument(returnType.isVoid(),
+            check(returnType.isVoid(), executableElement,
                     "a method with a @CLibOut parameter must be declared void, the out struct is the return value: %s",
                     executableElement.getSimpleName());
             // The C signature always carries the out struct last, so the Java form must match
-            checkArgument(outIndex == parameters.size() - 1,
+            check(outIndex == parameters.size() - 1, outParam.getSourceElement(),
                     "the @CLibOut parameter must be declared last: %s",
                     executableElement.getSimpleName());
         }
@@ -108,14 +108,14 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
         }
 
         // One-based languages convert indices by arithmetic, so the type has to be integral
-        checkArgument(!returnType.isIndex() || isIndexType(returnType),
+        check(!returnType.isIndex() || isIndexType(returnType), executableElement,
                 "@CLibIndex may only be used on integral types: %s", executableElement.getSimpleName());
         for (var parameter : getParameters()) {
             if (!parameter.isIndex()) continue;
-            checkArgument(isIndexType(parameter),
+            check(isIndexType(parameter), parameter.getSourceElement(),
                     "@CLibIndex may only be used on integral types: %s", executableElement.getSimpleName());
             // A one-based language shifts the default into its own space, which needs a number
-            parameter.getDefaultValue().ifPresent(value -> checkArgument(isInteger(value),
+            parameter.getDefaultValue().ifPresent(value -> check(isInteger(value), parameter.getSourceElement(),
                     "@CLibIndex requires an integer @CDefault, got '%s': %s", value, executableElement.getSimpleName()));
         }
     }
@@ -231,6 +231,10 @@ public class AnnotatedCLibMethod extends AnnotatedCLibElement<ExecutableElement>
 
     public String getCEntryPointName() {
         return parent.getCEntryName(getMethodName());
+    }
+
+    public ExecutableElement getElement() {
+        return element;
     }
 
     public boolean isConstructor() {
