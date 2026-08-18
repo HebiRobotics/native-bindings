@@ -70,6 +70,11 @@ public class CocoaFeature implements FeatureGenerator {
     }
 
     @Override
+    public List<String> getPythonExports() {
+        return prefix == null ? Collections.emptyList() : List.of("run_application");
+    }
+
+    @Override
     public String getPythonWrapper() {
         if (prefix == null) return "";
         var out = renderer().add("""

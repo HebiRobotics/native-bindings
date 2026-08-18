@@ -22,6 +22,11 @@ public interface FeatureGenerator {
 
     String getPythonWrapper();
 
+    /** The names getPythonWrapper defines that belong in the module's __all__ */
+    default List<String> getPythonExports() {
+        return Collections.emptyList();
+    }
+
     default List<String> getAppleLibraries() {
         return Collections.emptyList();
     }

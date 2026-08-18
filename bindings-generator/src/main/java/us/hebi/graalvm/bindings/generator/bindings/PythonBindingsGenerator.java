@@ -50,7 +50,40 @@ public class PythonBindingsGenerator extends BindingGenerator {
         for (FeatureGenerator feature : features) {
             out.add(feature.getPythonWrapper());
         }
+        writeExports(out, apiClasses);
         return out.render();
+    }
+
+    /**
+     * The public names, in module order. __init__.py re-exports the module with a star import,
+     * so without this list the package face is every ctypes name plus the plumbing.
+     */
+    private void writeExports(IndentingTextRenderer out, List<ClassDescription> apiClasses) {
+        var names = new ArrayList<String>();
+        names.add("Error");
+        for (var struct : lib.getStructs()) {
+            if (StructMarshallers.resolve(struct).flatMap(StructMarshaller::python).isPresent()) continue;
+            names.add(struct.getName());
+        }
+        for (var generatedEnum : lib.getEnums()) {
+            names.add(generatedEnum.getName());
+        }
+        // The prototypes are public, a caller building one up front skips the per-call wrap
+        for (var callback : lib.getCallbacks()) {
+            names.add(callback.getName());
+        }
+        for (var apiClass : apiClasses) {
+            names.add(apiClass.getType().getTypeName());
+        }
+        for (var feature : features) {
+            names.addAll(feature.getPythonExports());
+        }
+        out.addLine().addLine("# ==== Public API ====");
+        out.addLine("__all__ = [").indent();
+        for (var name : names) {
+            out.addLine("'" + name + "',");
+        }
+        out.unindent().addLine("]");
     }
 
     private void writeLibLoader(IndentingTextRenderer out) {

@@ -1610,3 +1610,35 @@ class Structs:
         error_ = _ErrorInfo()
         struct_ = _checked(error_, libbindings_tests.bindings_tests_Structs_getCheckedStatus(byref(error_), index))
         return StatusInfo(struct_.voltage, struct_.state, bool(struct_.enabled))
+
+
+# ==== Public API ====
+__all__ = [
+    'Error',
+    'FieldTypes',
+    'StatusInfo',
+    'CircleColor',
+    'Color',
+    'Marker',
+    'DoubleCallbackFunc',
+    'DoubleSpanToScalarCallbackFunc',
+    'IndexCallbackFunction',
+    'PlainIndexCallbackFunction',
+    'PlainNotifyCallbackFunction',
+    'TransformCallbackFunction',
+    'Counter',
+    'Naming',
+    'Shape',
+    'Circle',
+    'Square',
+    'Arrays',
+    'Callbacks',
+    'Errors',
+    'Indices',
+    'Isolated',
+    'Math',
+    'Overloads',
+    'Palette',
+    'Strings',
+    'Structs',
+]
