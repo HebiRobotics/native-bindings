@@ -34,6 +34,25 @@
       "isConstructor": true,
       "documentation": "Creates a counter starting at the given value, or at zero by default."
     }, {
+      "name": "parse",
+      "lowerUnderscoreName": "parse",
+      "isStatic": true,
+      "cName": "bindings_tests_Counter_parse",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "Counter",
+        "comment": "A mutable counter, used to check handle creation and release.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "text",
+        "lowerUnderscoreParamName": "text",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": true,
+      "documentation": "Creates a counter starting at the value written in text."
+    }, {
       "name": "getValue",
       "lowerUnderscoreName": "get_value",
       "cName": "bindings_tests_Counter_getValue",
@@ -85,6 +104,18 @@
         "dataType": "BOOL"
       },
       "documentation": "Returns true once close() has run. Only observable before the handle is released.",
+      "flags": ["Noexcept", "Const"]
+    }, {
+      "name": "copy",
+      "lowerUnderscoreName": "copy",
+      "cName": "bindings_tests_Counter_copy",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "Counter",
+        "comment": "A mutable counter, used to check handle creation and release.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "documentation": "Creates an independent counter with the same value.",
       "flags": ["Noexcept", "Const"]
     }, {
       "name": "getClosedCount",

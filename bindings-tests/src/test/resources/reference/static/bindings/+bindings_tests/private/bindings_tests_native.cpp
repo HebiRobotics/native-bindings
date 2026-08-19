@@ -815,6 +815,16 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
+        case /* hash32_fnv1a("bindings_tests_Counter_parse") */ 1871033130: {
+            static auto bindings_tests_Counter_parse = libLoader.getFunc<void*(*)(ErrorInfo*, const char*)>("bindings_tests_Counter_parse");
+            checkArgCount(nrhs, 1, "bindings_tests_Counter_parse");
+            ErrorInfo _error = {};
+            MatlabString text(prhs[1]);
+            void* _value = bindings_tests_Counter_parse(&_error, text);
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Counter_getValue") */ 1593629966: {
             static auto bindings_tests_Counter_getValue = libLoader.getFunc<int(*)(void*)>("bindings_tests_Counter_getValue");
             checkArgCount(nrhs, 1, "bindings_tests_Counter_getValue");
@@ -847,6 +857,13 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 1, "bindings_tests_Counter_isClosed");
             int _value = bindings_tests_Counter_isClosed(getPtr<void*>(prhs[1]));
             if (nlhs > 0) plhs[0] = createMexScalar(_value);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Counter_copy") */ 701736998: {
+            static auto bindings_tests_Counter_copy = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Counter_copy");
+            checkArgCount(nrhs, 1, "bindings_tests_Counter_copy");
+            void* _value = bindings_tests_Counter_copy(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Counter_getClosedCount") */ 4282038152: {

@@ -68,6 +68,10 @@ bindings_tests_CounterPtr __bindings_tests_Counter_create(bindings_tests_Isolate
 bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start) {
     return __bindings_tests_Counter_create(isolate::global(), _error, start);
 }
+bindings_tests_CounterPtr __bindings_tests_Counter_parse(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, const char* text);
+bindings_tests_CounterPtr bindings_tests_Counter_parse(bindings_tests_ErrorInfo* _error, const char* text) {
+    return __bindings_tests_Counter_parse(isolate::global(), _error, text);
+}
 int __bindings_tests_Counter_getValue(bindings_tests_IsolateThread* isolate, bindings_tests_CounterPtr obj);
 int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj) {
     return __bindings_tests_Counter_getValue(isolate::global(), obj);
@@ -87,6 +91,10 @@ void bindings_tests_Counter_add(bindings_tests_CounterPtr obj, int amount) {
 int __bindings_tests_Counter_isClosed(bindings_tests_IsolateThread* isolate, bindings_tests_CounterPtr obj);
 int bindings_tests_Counter_isClosed(bindings_tests_CounterPtr obj) {
     return __bindings_tests_Counter_isClosed(isolate::global(), obj);
+}
+bindings_tests_CounterPtr __bindings_tests_Counter_copy(bindings_tests_IsolateThread* isolate, bindings_tests_CounterPtr obj);
+bindings_tests_CounterPtr bindings_tests_Counter_copy(bindings_tests_CounterPtr obj) {
+    return __bindings_tests_Counter_copy(isolate::global(), obj);
 }
 int __bindings_tests_Counter_getClosedCount(bindings_tests_IsolateThread* isolate);
 int bindings_tests_Counter_getClosedCount() {

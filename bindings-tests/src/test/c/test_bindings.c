@@ -64,6 +64,8 @@ static void test_math(void) {
 static void test_counter(void) {
     bindings_tests_CounterPtr counter;
     bindings_tests_CounterPtr defaultCounter;
+    bindings_tests_CounterPtr copied;
+    bindings_tests_CounterPtr parsed;
 
     bindings_tests_Counter_resetClosedCount();
     assert(bindings_tests_Counter_getClosedCount() == 0);
@@ -88,10 +90,24 @@ static void test_counter(void) {
     assert(defaultCounter != NULL);
     assert(bindings_tests_Counter_getValue(defaultCounter) == 0);
 
+    /* The second constructor is one more factory symbol. */
+    parsed = bindings_tests_Counter_parse(NULL, "42");
+    assert(parsed != NULL);
+    assert(bindings_tests_Counter_getValue(parsed) == 42);
+    bindings_tests_Counter_release(parsed);
+
+    /* A handle returned by a class that also has a constructor. */
+    copied = bindings_tests_Counter_copy(counter);
+    assert(copied != NULL && copied != counter);
+    assert(bindings_tests_Counter_getValue(copied) == 3);
+    bindings_tests_Counter_increment(copied);
+    assert(bindings_tests_Counter_getValue(counter) == 3);
+
     /* Releasing runs the generated destructor, which calls close() on the Java side. */
     bindings_tests_Counter_release(counter);
     bindings_tests_Counter_release(defaultCounter);
-    assert(bindings_tests_Counter_getClosedCount() == 2);
+    bindings_tests_Counter_release(copied);
+    assert(bindings_tests_Counter_getClosedCount() == 4);
 
     printf("counter ok\n");
 }

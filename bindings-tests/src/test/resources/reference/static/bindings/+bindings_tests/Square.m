@@ -23,9 +23,14 @@ classdef (Sealed) Square < bindings_tests.Shape
 
     methods(Access = public)
         function this = Square(side, varargin)
-            ptr_ = bindings_tests_native('bindings_tests_Square_create', side);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Square in Square.Square');
+            % A uint64 scalar is a handle the library created
+            if nargin >= 1 && isa(side, 'uint64') && isscalar(side)
+                ptr_ = side;
+            else
+                ptr_ = bindings_tests_native('bindings_tests_Square_create', side);
+                if isempty(ptr_)
+                    error('Failed to create bindings_tests.Square in Square.Square');
+                end
             end
             this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Square_to_Shape', ptr_));
             this.ref_Square = ptr_;

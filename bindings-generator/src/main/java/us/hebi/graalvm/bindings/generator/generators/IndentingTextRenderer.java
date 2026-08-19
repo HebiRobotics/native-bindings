@@ -42,6 +42,10 @@ public class IndentingTextRenderer {
         return unindent().addLine(text);
     }
 
+    public IndentingTextRenderer nextControlFlow(String text) {
+        return unindent().addLine(text).indent();
+    }
+
     public IndentingTextRenderer indent(int level) {
         this.indentLevel = Math.max(0, level);
         return this;

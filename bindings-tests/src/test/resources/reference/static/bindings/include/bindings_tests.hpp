@@ -131,6 +131,16 @@ public:
    * @throw on internal errors
    */
   Counter(int start = 0);
+
+  /**
+   * @brief Creates a counter starting at the value written in text.
+   *
+   * @param text
+   * @return A mutable counter, used to check handle creation and release.
+   * @throw on internal errors
+   */
+  Counter(const char* text);
+  Counter(const std::string& text);
   int getValue() const noexcept;
   void setValue(int value) noexcept;
   void increment() noexcept;
@@ -140,6 +150,13 @@ public:
    * @brief Returns true once close() has run. Only observable before the handle is released.
    */
   bool isClosed() const noexcept;
+
+  /**
+   * @brief Creates an independent counter with the same value.
+   *
+   * @return A mutable counter, used to check handle creation and release.
+   */
+  Counter copy() const noexcept;
 
   /**
    * @details
@@ -158,6 +175,7 @@ public:
   ~Counter() noexcept;
 private:
   void cleanup() noexcept;
+  explicit Counter(internal::CounterPtr cPointer) noexcept : ptr_(cPointer) {}
   internal::CounterPtr ptr_{};
 };
 
@@ -194,6 +212,7 @@ public:
   ~Naming() noexcept;
 private:
   void cleanup() noexcept;
+  explicit Naming(internal::NamingPtr cPointer) noexcept : ptr_(cPointer) {}
   internal::NamingPtr ptr_{};
 };
 
@@ -883,11 +902,13 @@ StatusInfo getCheckedStatus(int index);
 // ==== C Library Functions ====
 extern "C" {
   internal::CounterPtr bindings_tests_Counter_create(internal::ErrorInfo*, int);
+  internal::CounterPtr bindings_tests_Counter_parse(internal::ErrorInfo*, const char*);
   int bindings_tests_Counter_getValue(internal::CounterPtr);
   void bindings_tests_Counter_setValue(internal::CounterPtr, int);
   void bindings_tests_Counter_increment(internal::CounterPtr);
   void bindings_tests_Counter_add(internal::CounterPtr, int);
   int bindings_tests_Counter_isClosed(internal::CounterPtr);
+  internal::CounterPtr bindings_tests_Counter_copy(internal::CounterPtr);
   int bindings_tests_Counter_getClosedCount();
   void bindings_tests_Counter_resetClosedCount();
   void bindings_tests_Counter_release(internal::CounterPtr);
@@ -997,6 +1018,13 @@ inline Counter::Counter(int start) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Counter");
 }
+inline Counter::Counter(const char* text) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counter_parse(&error_, text);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Counter");
+}
+inline Counter::Counter(const std::string& text) : Counter(text.c_str()) {}
 inline int Counter::getValue() const noexcept {
   return bindings_tests_Counter_getValue(ptr_);
 }
@@ -1011,6 +1039,10 @@ inline void Counter::add(int amount) noexcept {
 }
 inline bool Counter::isClosed() const noexcept {
   return bindings_tests_Counter_isClosed(ptr_);
+}
+inline Counter Counter::copy() const noexcept {
+  auto ptr = bindings_tests_Counter_copy(ptr_);
+  return Counter(ptr);
 }
 inline int Counter::getClosedCount() noexcept {
   return bindings_tests_Counter_getClosedCount();

@@ -44,6 +44,18 @@ classdef (Sealed) Counter < handle & matlab.mixin.SetGet
             result = bindings_tests_native('bindings_tests_Counter_isClosed', this.ptr);
         end
 
+        function obj = copy(this, varargin)
+            % Creates an independent counter with the same value.
+            %
+            %   Outputs:
+            %       A mutable counter, used to check handle creation and release.
+            ptr_ = bindings_tests_native('bindings_tests_Counter_copy', this.ptr);
+            if isempty(ptr_)
+                error('Failed to create bindings_tests.Counter in Counter.copy');
+            end
+            obj = bindings_tests.Counter(ptr_, varargin{:});
+        end
+
     end
 
     methods(Access = public)
@@ -58,15 +70,51 @@ classdef (Sealed) Counter < handle & matlab.mixin.SetGet
             %
             %   Throws:
             %       Error on internal errors
-            start = 0;
-            if ~isempty(varargin) && ~ischar(varargin{1}) && ~isstring(varargin{1})
-                start = varargin{1};
-                varargin(1) = [];
+            %
+            % Creates a counter starting at the value written in text.
+            %
+            %   Inputs:
+            %       text
+            %
+            %   Outputs:
+            %       A mutable counter, used to check handle creation and release.
+            %
+            %   Throws:
+            %       Error on internal errors
+
+            % A uint64 scalar is a handle the library created
+            if nargin >= 1 && isa(varargin{1}, 'uint64') && isscalar(varargin{1})
+                ptr_ = varargin{1};
+                nargs_ = 1;
+            else
+                % Positional arguments end at the first property name
+                nargs_ = nargin;
+                for i = 1:nargin
+                    if (ischar(varargin{i}) || isstring(varargin{i})) && any(strcmpi(varargin{i}, {'value'}))
+                        nargs_ = i - 1;
+                        break
+                    end
+                end
+                if nargs_ <= 1 && (nargs_ < 1 || (isnumeric(varargin{1}) || islogical(varargin{1})))
+                    start = 0;
+                    if nargs_ >= 1
+                        start = varargin{1};
+                    end
+                    ptr_ = bindings_tests_native('bindings_tests_Counter_create', start);
+                    if isempty(ptr_)
+                        error('Failed to create bindings_tests.Counter in Counter.Counter');
+                    end
+                elseif nargs_ == 1 && (ischar(varargin{1}) || isstring(varargin{1}))
+                    text = varargin{1};
+                    ptr_ = bindings_tests_native('bindings_tests_Counter_parse', text);
+                    if isempty(ptr_)
+                        error('Failed to create bindings_tests.Counter in Counter.Counter');
+                    end
+                else
+                    error('bindings_tests:TypeError', 'Counter has no constructor for these arguments');
+                end
             end
-            ptr_ = bindings_tests_native('bindings_tests_Counter_create', start);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Counter in Counter.Counter');
-            end
+            varargin(1:nargs_) = [];
             this.ptr = ptr_;
             if numel(varargin) > 0
                 this.set(varargin{:});

@@ -4,7 +4,9 @@ import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
+import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.runtime.pointers.Handles;
 import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
 import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
@@ -37,6 +39,20 @@ public final class TestCounter$CEntries {
         CLibErrors.clear(_error);
         try {
             return TestCounter$CEntries._registerInstance(TestCounter.create(start));
+        } catch (Throwable throwable) {
+            CLibErrors.fill(throwable, _error, "bindings_tests");
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Counter_parse"
+    )
+    public static ObjectHandle bindings_tests_Counter_parse(IsolateThread _isolate,
+            ErrorInfo _error, CCharPointer text) {
+        CLibErrors.clear(_error);
+        try {
+            return TestCounter$CEntries._registerInstance(TestCounter.parse(CPointers.utf8ToJavaString(text)));
         } catch (Throwable throwable) {
             CLibErrors.fill(throwable, _error, "bindings_tests");
             return WordFactory.nullPointer();
@@ -100,6 +116,19 @@ public final class TestCounter$CEntries {
         } catch (Throwable throwable) {
             // Declared noexcept, so there is no error struct to report through
             return false;
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Counter_copy"
+    )
+    public static ObjectHandle bindings_tests_Counter_copy(IsolateThread _isolate,
+            ObjectHandle _obj) {
+        try {
+            return TestCounter$CEntries._registerInstance(_getInstance(_obj).copy());
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return WordFactory.nullPointer();
         }
     }
 

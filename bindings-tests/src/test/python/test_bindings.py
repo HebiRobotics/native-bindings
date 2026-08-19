@@ -92,11 +92,30 @@ class CounterTest(unittest.TestCase):
         default_counter = bindings_tests.Counter()
         self.assertEqual(0, default_counter.value)
 
+        # The second constructor dispatches on the argument type inside __init__
+        parsed = bindings_tests.Counter("42")
+        self.assertEqual(42, parsed.value)
+        parsed_with_property = bindings_tests.Counter("42", value=7)
+        self.assertEqual(7, parsed_with_property.value)
+        with self.assertRaises(TypeError):
+            bindings_tests.Counter([1, 2])
+        del parsed
+        del parsed_with_property
+
+        # A handle returned by a class that also has a constructor wraps without
+        # running __init__, which used to take the pointer as the start value
+        copied = counter.copy()
+        self.assertIsInstance(copied, bindings_tests.Counter)
+        self.assertEqual(3, copied.value)
+        copied.increment()
+        self.assertEqual(3, counter.value)
+
         # Dropping the last reference runs __del__, which releases the handle
         del counter
         del default_counter
+        del copied
         gc.collect()
-        self.assertEqual(2, bindings_tests.Counter.get_closed_count())
+        self.assertEqual(5, bindings_tests.Counter.get_closed_count())
 
 
 class NamingTest(unittest.TestCase):

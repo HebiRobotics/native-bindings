@@ -88,10 +88,32 @@ classdef BindingsTest < matlab.unittest.TestCase
             defaultCounter = bindings_tests.Counter();
             testCase.verifyEqual(defaultCounter.value, 0);
 
+            % The second constructor dispatches on the argument class inside the one
+            % classdef constructor, and a property name still starts the name-value tail
+            parsed = bindings_tests.Counter('42');
+            testCase.verifyEqual(parsed.value, 42);
+            parsedWithTail = bindings_tests.Counter('42', 'value', 7);
+            testCase.verifyEqual(parsedWithTail.value, 7);
+            named = bindings_tests.Counter('value', 5);
+            testCase.verifyEqual(named.value, 5);
+            testCase.verifyError(@() bindings_tests.Counter(struct()), 'bindings_tests:TypeError');
+            delete(parsed);
+            delete(parsedWithTail);
+            delete(named);
+
+            % A handle returned by a class that also has a constructor wraps through
+            % the uint64 pointer case, which the value constructor used to shadow
+            copied = counter.copy();
+            testCase.verifyClass(copied, 'bindings_tests.Counter');
+            testCase.verifyEqual(copied.value, 3);
+            copied.increment();
+            testCase.verifyEqual(counter.value, 3);
+
             % delete runs the generated destructor, which calls close() in Java
             delete(counter);
             delete(defaultCounter);
-            testCase.verifyEqual(bindings_tests.Counter.getClosedCount(), 2);
+            delete(copied);
+            testCase.verifyEqual(bindings_tests.Counter.getClosedCount(), 6);
         end
 
         function testNaming(testCase)
