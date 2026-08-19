@@ -44,7 +44,12 @@ inline T getScalar(const mxArray* arg, const char* name) {
     if (!isNumericScalar(arg)) {
         mexErrMsgIdAndTxt("bindings_tests:TypeError", "Argument '%s' must be a numeric scalar.", name);
     }
-    return static_cast<T>(mxGetScalar(arg));
+    // mxGetScalar goes through a double, which loses 64 bit integers above 2^53
+    switch (mxGetClassID(arg)) {
+        case mxINT64_CLASS: return static_cast<T>(((const int64_t*)mxGetData(arg))[0]);
+        case mxUINT64_CLASS: return static_cast<T>(((const uint64_t*)mxGetData(arg))[0]);
+        default: return static_cast<T>(mxGetScalar(arg));
+    }
 }
 
 // Only the generated wrappers can reach the gateway, so this guards against a generator

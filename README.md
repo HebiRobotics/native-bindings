@@ -354,9 +354,10 @@ are documented rather than fixed so that the extraction stayed behaviour preserv
   `cls` has to be written into the annotation.
 - **MATLAB echoes non-const pointer parameters as extra outputs**, while the MEX
   dispatch only ever fills the first one.
-- **MATLAB returns every number as a double**, so an `int64` or `size_t` return above
-  2^53 loses precision at the call site with no warning. Object handles are unaffected,
-  they cross as `uint64`.
+- **MATLAB returns numbers as doubles while they fit the mantissa.** An `int64` or
+  `size_t` value up to 2^53 comes back as a double, a larger one as an exact `int64` or
+  `uint64`, and `int64`/`uint64` inputs are read exactly on the way in. Object handles
+  always cross as `uint64`.
 - **Structs are not supported.** There is no by-value struct mapping, and `@CExternalEnums`
   is declared but never read by the processor.
 - **Only leaf classes may declare constructors**, and an abstract parent shares its

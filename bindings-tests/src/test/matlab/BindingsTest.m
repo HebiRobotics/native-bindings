@@ -58,6 +58,14 @@ classdef BindingsTest < matlab.unittest.TestCase
             % it as a double and rounds it up to 2^63 before the conversion sees it.
             testCase.verifyEqual(bindings_tests.Math.maxSize(), uint64(intmax('int64')));
 
+            % 64 bit inputs past the mantissa stay exact as well, the gateway reads
+            % int64 and uint64 arguments directly instead of through mxGetScalar.
+            % A size_t above the 63 bit cap is capped on the Java side, not lost.
+            testCase.verifyEqual(bindings_tests.Math.addInt64(intmax('int64'), 0), intmax('int64'));
+            testCase.verifyEqual(bindings_tests.Math.addInt64(intmin('int64'), 0), intmin('int64'));
+            testCase.verifyEqual(bindings_tests.Math.addSize(uint64(intmax('int64')), 0), uint64(intmax('int64')));
+            testCase.verifyEqual(bindings_tests.Math.addSize(intmax('uint64'), 0), uint64(intmax('int64')));
+
             % A wrong type on a scalar parameter raises in the MEX gateway
             % instead of producing garbage through mxGetScalar. Unlike the
             % wrapper errors, this one carries an identifier.
