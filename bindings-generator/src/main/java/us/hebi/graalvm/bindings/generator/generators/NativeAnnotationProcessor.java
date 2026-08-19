@@ -195,10 +195,10 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
 
             try {
                 apiDescription.writeTo(this::createFile);
-                new CBindingsGenerator(apiDescription.getDescription()).writeTo(this::createFile);
-                new PythonBindingsGenerator(apiDescription.getDescription()).writeTo(this::createFile);
-                new CppBindingsGenerator(apiDescription.getDescription()).writeTo(this::createFile);
-                new MatlabBindingsGenerator(apiDescription.getDescription()).writeTo(this::createFile);
+                new CBindingsGenerator(apiDescription.getDescription().clone()).writeTo(this::createFile);
+                new PythonBindingsGenerator(apiDescription.getDescription().clone()).writeTo(this::createFile);
+                new CppBindingsGenerator(apiDescription.getDescription().clone()).writeTo(this::createFile);
+                new MatlabBindingsGenerator(apiDescription.getDescription().clone()).writeTo(this::createFile);
             } catch (IOException ioe) {
                 throw new RuntimeException(ioe);
             }

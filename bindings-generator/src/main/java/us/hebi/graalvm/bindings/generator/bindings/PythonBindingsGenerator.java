@@ -22,6 +22,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
 
     public PythonBindingsGenerator(LibraryDescription lib) {
         super(lib);
+        GeneratorUtil.filterOverloadedConstructors(this.lib, null, PythonBindingsGenerator::getOverloadKeys);
     }
 
     @Override
@@ -95,7 +96,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 from enum import IntEnum
                 import os
                 import platform
-                from typing import Sequence, Tuple, Any, Callable
+                from typing import Sequence, Tuple, Any, Callable, overload
 
                 # Load the shared library relative to this file
                 def load_library():
@@ -436,33 +437,57 @@ public class PythonBindingsGenerator extends BindingGenerator {
             return;
         }
 
-        // Check for a defined constructor first - it gets its own wrapper method
-        var constructor = GeneratorUtil.getConstructor(apiClass);
-        if (constructor.isPresent()) {
+        // Check for defined constructors first - they get their own wrapper methods
+        var constructors = GeneratorUtil.getConstructors(apiClass);
+        if (!constructors.isEmpty()) {
             // A defined constructor means that users instantiate this class by themselves. Currently
             // this means that we do not have a raw ptr argument and thus can't support being called
             // from child constructors
             checkArgument(!apiClass.hasChildren(), "Constructors are currently not supported parent classes");
             // Note: the base initialization is part of the generated __init__ body (see getReturnTemplate)
-            writeMethod(new MethodScope(scope, constructor.get()));
+            if (constructors.size() == 1) {
+                writeMethod(new MethodScope(scope, constructors.get(0)));
+            } else {
+                writeConstructorDispatch(scope, constructors);
+            }
         } else {
-            // Not defining a constructor means that this class can't be instantiated by users
-            // and that we only need to support an 'internal' constructor for generating wrappers
-            out.setIf("SUPER_INIT", apiClass.hasParent(), "\n    super().__init__(%%LIB_FIELD%%.%%CAST%%(%%REF_FIELD%%))");
+            // Without a constructor only the library creates instances, through _wrap
             out.add("""
-                    def __init__(self, %%REF_FIELD%%: %%CLASS_PTR%%):
-                        if not isinstance(%%REF_FIELD%%, %%CLASS_PTR%%):
-                            raise TypeError(f'Expected %%CLASS_PTR%%, got {type(%%REF_FIELD%%).__name__}')
-                        self.%%REF_FIELD%% = %%REF_FIELD%%%%SUPER_INIT%%
+                    def __init__(self, *args, **kwargs):
+                        raise TypeError('%%CLASS_NAME%% instances are created by the library')
+
+                    """);
+        }
+
+        // Handles the library returns are wrapped without running __init__. _wrap is inherited, so
+        // each class only attaches its own pointer and the parent chain attaches the casts.
+        if (!apiClass.hasParent()) {
+            out.add("""
+                    @classmethod
+                    def _wrap(cls, ptr: %%CLASS_PTR%%):
+                        self = object.__new__(cls)
+                        self._attach(ptr)
+                        return self
+
+                    def _attach(self, %%REF_FIELD%%: %%CLASS_PTR%%):
+                        self.%%REF_FIELD%% = %%REF_FIELD%%
+
+                    """);
+        } else {
+            out.add("""
+                    def _attach(self, %%REF_FIELD%%: %%CLASS_PTR%%):
+                        self.%%REF_FIELD%% = %%REF_FIELD%%
+                        super()._attach(%%LIB_FIELD%%.%%CAST%%(%%REF_FIELD%%))
 
                     """);
         }
 
         // Always add a destructor
+        // A constructor that raised never attached, so the slot may be unset
         if (!apiClass.hasParent()) {
             out.add("""
                     def __del__(self):
-                        if self.%%REF_FIELD%% is not None:
+                        if getattr(self, '%%REF_FIELD%%', None) is not None:
                             %%LIB_FIELD%%.%%DESTR%%(self.%%REF_FIELD%%)
                         self.%%REF_FIELD%% = None
 
@@ -489,6 +514,78 @@ public class PythonBindingsGenerator extends BindingGenerator {
                 """);
     }
 
+    /**
+     * Python has one __init__, so several constructors become typed overload stubs for tools, one
+     * dispatcher on the positional arguments, and one _init_<name> per constructor with the usual
+     * body. The overload pass kept only constructors that stay apart under getOverloadKeys, so
+     * the first match in declaration order is the only match.
+     */
+    private void writeConstructorDispatch(ClassScope scope, List<MethodDescription> constructors) {
+        var out = scope.out;
+        for (var constructor : constructors) {
+            var params = new ParameterLists(lib, constructor);
+            out.set("PARAMS", String.join(", ", params.externalInput));
+            out.addLine("@overload");
+            out.beginControlFlow("def __init__(%%PARAMS%%) -> None:");
+            out.addLine(constructor.hasDocumentation() ? escapeBackslashes(generatePydoc(constructor)) : "...");
+            out.unindent().addLine();
+        }
+        out.beginControlFlow("def __init__(self, *args, **kwargs) -> None:");
+        String branch = "if";
+        for (var constructor : constructors) {
+            out.set("INIT", getInitName(constructor));
+            out.beginControlFlow(branch + " " + getDispatchCondition(constructor) + ":");
+            out.addLine("self.%%INIT%%(*args, **kwargs)");
+            out.unindent();
+            branch = "elif";
+        }
+        out.beginControlFlow("else:");
+        out.addLine("raise TypeError('%%CLASS_NAME%%(' + ', '.join(type(a).__name__ for a in args) + ') matches no constructor')");
+        out.unindent().unindent().addLine();
+        for (var constructor : constructors) {
+            writeMethod(new MethodScope(scope, constructor, getInitName(constructor)));
+        }
+    }
+
+    private static String getInitName(MethodDescription constructor) {
+        return "_init_" + constructor.getLowerUnderscoreName();
+    }
+
+    /**
+     * The condition under which a constructor accepts the positional arguments: the count fits
+     * and every supplied argument is of a kind the parameter accepts.
+     */
+    private String getDispatchCondition(MethodDescription constructor) {
+        var params = constructor.getParameters();
+        int required = 0;
+        for (var param : params) {
+            if (!param.hasDefaultValue()) required++;
+        }
+        var terms = new ArrayList<String>();
+        if (required == params.length()) {
+            terms.add("len(args) == " + required);
+        } else {
+            terms.add((required > 0 ? required + " <= " : "") + "len(args) <= " + params.length());
+        }
+        for (int i = 0; i < params.length(); i++) {
+            String check = getPythonTypeCheck(params.get(i), "args[" + i + "]");
+            terms.add(i < required ? check : "(len(args) < " + (i + 1) + " or " + check + ")");
+        }
+        return String.join(" and ", terms);
+    }
+
+    /** The Python expression that tests one argument against the kind a parameter accepts */
+    private String getPythonTypeCheck(TypeDescription param, String arg) {
+        String key = getOverloadKeys(param).get(0);
+        return switch (key) {
+            case "number" -> "isinstance(" + arg + ", (int, float))";
+            case "str" -> "isinstance(" + arg + ", str)";
+            case "callable" -> "callable(" + arg + ")";
+            case "sequence" -> "hasattr(" + arg + ", '__len__')";
+            default -> "isinstance(" + arg + ", " + key + ")"; // a handle class or a struct dataclass
+        };
+    }
+
     private static String getPropertyName(MethodDescription method) {
         return CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, method.getPropertyName());
     }
@@ -511,7 +608,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
             out.addLine("@property");
             funcName = propName;
         } else if (method.getIsConstructor()) {
-            funcName = "__init__";
+            funcName = m.initName;
             returnHint = " -> None";
         } else {
             funcName = method.getLowerUnderscoreName();
@@ -547,7 +644,7 @@ public class PythonBindingsGenerator extends BindingGenerator {
         boolean usesNumpy = isUsingNumpy(body, conversions, postBody, returnTemplate);
 
         out.beginControlFlow("def %%METHOD%%(%%PARAMS%%)%%HINT%%:");
-        if (method.hasDocumentation()) {
+        if (method.hasDocumentation() && "__init__".equals(m.initName)) { // a dispatched body is documented by its stub
             out.addLine(escapeBackslashes(generatePydoc(method)));
         }
         out.addLineIf(usesNumpy, "np = _require_numpy()");
@@ -583,19 +680,16 @@ public class PythonBindingsGenerator extends BindingGenerator {
                             raise RuntimeError('Failed to create %%RETURN_TYPE%% in %%CLASS_NAME%%::%%METHOD%%')
                         """;
                 if (isConstructor) {
-                    string += "self.%%REF_FIELD%% = ptr_\n";
-                    if (apiClass.hasParent()) {
-                        // The inherited part has to be set up before any properties get applied because
-                        // inherited setters access the parent pointer
-                        string += "super().__init__(%%LIB_FIELD%%.%%CAST%%(ptr_))\n";
-                    }
+                    // The whole chain has to be attached before any properties get applied because
+                    // inherited setters access the parent pointer
+                    string += "self._attach(ptr_)\n";
                     string += getPropertySetBlock(props, "self", "");
                 } else if (!props.isEmpty()) {
-                    string += "obj_ = %%RETURN_TYPE%%(ptr_)\n"
+                    string += "obj_ = %%RETURN_TYPE%%._wrap(ptr_)\n"
                               + getPropertySetBlock(props, "obj_", "")
                               + "return obj_";
                 } else {
-                    string += "return %%RETURN_TYPE%%(ptr_)\n";
+                    string += "return %%RETURN_TYPE%%._wrap(ptr_)\n";
                 }
                 yield string;
             }
@@ -664,6 +758,24 @@ public class PythonBindingsGenerator extends BindingGenerator {
             return "Callable[[" + String.join(", ", args) + "], " + TypeMap.toPythonTypeHint(callback.getReturnType()) + "]";
         }
         return TypeMap.toPythonTypeHint(type);
+    }
+
+    /**
+     * What isinstance can tell apart. Every number is one key: bool is an int, enums are IntEnum,
+     * and passing 5 to a float parameter must not pick a different overload than passing 5.0.
+     */
+    private static List<String> getOverloadKeys(TypeDescription type) {
+        return List.of(switch (type.getDataType()) {
+            case BOOL, INT8, INT16, INT32, INT64, SIZE_T, FLOAT32, FLOAT64, ENUM -> "number";
+            case CHAR_POINTER -> "str";
+            case CALLBACK -> "callable";
+            case OBJECT_HANDLE -> type.getTypeName();
+            default -> {
+                // Spans, raw pointers and char** all arrive as sequences, a user struct as its dataclass
+                String hint = TypeMap.toPythonTypeHint(type);
+                yield hint.startsWith("Sequence[") ? "sequence" : hint;
+            }
+        });
     }
 
     private static String getCPythonType(TypeDescription typeDescription) {
@@ -775,14 +887,21 @@ public class PythonBindingsGenerator extends BindingGenerator {
     private final class MethodScope {
 
         MethodScope(ClassScope scope, MethodDescription method) {
+            this(scope, method, "__init__");
+        }
+
+        /** A constructor emits under initName, which is __init__ unless a dispatcher owns that name */
+        MethodScope(ClassScope scope, MethodDescription method, String initName) {
             this.apiClass = scope.apiClass;
             this.method = method;
+            this.initName = initName;
             this.out = scope.out.snapshot()
                     .set("CNAME", method.getCName());
         }
 
         final ClassDescription apiClass;
         final MethodDescription method;
+        final String initName;
         final IndentingTextRenderer out;
 
     }

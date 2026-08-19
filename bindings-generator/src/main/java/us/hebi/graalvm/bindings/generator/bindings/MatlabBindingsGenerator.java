@@ -25,7 +25,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
     public MatlabBindingsGenerator(LibraryDescription lib) {
         super(lib);
-        this.callbacks = new MatlabCallbackGenerator(lib, this::getCToMex);
+        GeneratorUtil.filterOverloadedConstructors(this.lib, NATIVE_HANDLE_KEY, MatlabBindingsGenerator::getOverloadKeys);
+        this.callbacks = new MatlabCallbackGenerator(this.lib, this::getCToMex);
     }
 
     @Override
@@ -696,8 +697,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                 content.add("""
                         methods(Access = public, Hidden = true)
                             function this = %%CLASS_NAME%%(%%REF_FIELD%%, varargin)
-                                if ~isnumeric(%%REF_FIELD%%) && ~isa(%%REF_FIELD%%, 'lib.pointer')
-                                    error('%%CLASS_NAME%% constructor expects a C pointer type');
+                                if ~isa(%%REF_FIELD%%, 'uint64') || ~isscalar(%%REF_FIELD%%)
+                                    error('%%CLASS_NAME%% instances are created by the library');
                                 end
                                 this.%%REF_FIELD%% = %%REF_FIELD%%;
 
@@ -715,13 +716,173 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         }
 
         // Currently real constructors are only supported at the leaf nodes as we'd have to overload the first argument
-        checkState(constructors.size() == 1, "A class can only have one constructor");
         checkState(!apiClass.hasChildren(), "Only leaf nodes can have defined constructors");
         content.beginControlFlow("methods(Access = public)");
-        addWrapperMethod(apiClass, constructors.get(0), content.snapshot());
+        if (constructors.size() == 1) {
+            addWrapperMethod(apiClass, constructors.get(0), content.snapshot());
+        } else {
+            addConstructorDispatch(apiClass, constructors, content.snapshot());
+        }
         content.stripTrailingWhitespace().endControlFlow("\nend");
 
     }
+
+    /**
+     * A classdef has one constructor, so several share a body that picks one by argument count
+     * and class, in declaration order. The overload pass kept only constructors that stay apart
+     * under getOverloadKeys. Positional arguments end at the first argument that spells a
+     * settable property, where the name-value tail begins.
+     */
+    private void addConstructorDispatch(ClassDescription apiClass, List<MethodDescription> constructors,
+                                        IndentingTextRenderer content) {
+        var setters = GeneratorUtil.getSetters(lib, apiClass.getType());
+        boolean hasTail = !setters.isEmpty();
+        content.set("FUNC_NAME", "%%CLASS_NAME%%");
+        content.set("RETURN_TYPE", getFullyQualifiedClassName(apiClass.getType()));
+        content.set("SUPER_CTOR", apiClass.hasParent()
+                ? "this@%%PARENT_NAME%%(%%DISPATCH%%(%%CAST%%, ptr_));\n"
+                : "");
+
+        content.beginControlFlow("function this = %%CLASS_NAME%%(varargin)");
+        String separator = "";
+        for (var constructor : constructors) {
+            if (!constructor.hasDocumentation()) continue;
+            content.add(separator).addLine(DocumentationUtil.generateMatlabdoc(constructor));
+            separator = "%\n";
+        }
+        content.addLineIf(!separator.isEmpty(), ""); // ends the help text
+
+        content.addLine("% A uint64 scalar is a handle the library created");
+        content.beginControlFlow("if nargin >= 1 && isa(varargin{1}, 'uint64') && isscalar(varargin{1})");
+        content.addLine("ptr_ = varargin{1};");
+        content.addLineIf(hasTail, "nargs_ = 1;");
+        content.nextControlFlow("else");
+        if (hasTail) {
+            var names = new ArrayList<String>();
+            for (var setter : setters) {
+                names.add(quoted(setter.getPropertyName()));
+            }
+            content.setArgs("PROPERTY_NAMES", names).add("""
+                    % Positional arguments end at the first property name
+                    nargs_ = nargin;
+                    for i = 1:nargin
+                        if (ischar(varargin{i}) || isstring(varargin{i})) && any(strcmpi(varargin{i}, {%%PROPERTY_NAMES%%}))
+                            nargs_ = i - 1;
+                            break
+                        end
+                    end
+                    """);
+        } else {
+            content.addLine("nargs_ = nargin;");
+        }
+
+        String nextCheck = "if";
+        ParameterLists params = null;
+        for (var constructor : constructors) {
+            params = new ParameterLists(lib, constructor);
+            content.setArgs("INTERNAL_ARGS", params.internalInput);
+            content.beginControlFlow(nextCheck + " " + getDispatchCondition(constructor));
+            int position = 0;
+            for (var param : constructor.getParameters()) {
+                position++;
+                content.set("NAME", param.getParamName()).set("POSITION", position);
+                if (param.hasDefaultValue()) {
+                    content.set("DEFAULT", getMatlabDefaultValue(param)).add("""
+                            %%NAME%% = %%DEFAULT%%;
+                            if nargs_ >= %%POSITION%%
+                                %%NAME%% = varargin{%%POSITION%%};
+                            end
+                            """);
+                } else {
+                    content.addLine("%%NAME%% = varargin{%%POSITION%%};");
+                }
+                if (param.getIsIndex()) {
+                    content.add(getIndexInputConversion(param));
+                }
+            }
+            content.add(wrapOutputAssignment(params.internalOutput)).addLine("%%DISPATCH%%(%%INTERNAL_ARGS%%);");
+            content.add(params.postCallActions.render());
+            content.unindent();
+            nextCheck = "elseif";
+        }
+        content.beginControlFlow("else");
+        content.addLine("error('%%LIB_NAME%%:TypeError', '%%CLASS_NAME%% has no constructor for these arguments');");
+        content.endControlFlow("end");
+        content.endControlFlow("end");
+
+        // The attach part is the same for every constructor
+        content.addLineIf(hasTail, "varargin(1:nargs_) = [];");
+        content.add(params.attachActions.render());
+        content.endControlFlow("end\n");
+    }
+
+    /**
+     * The condition under which a constructor accepts the positional arguments: the count fits
+     * and every supplied argument has a class the parameter accepts.
+     */
+    private String getDispatchCondition(MethodDescription constructor) {
+        var params = constructor.getParameters();
+        int required = 0;
+        for (var param : params) {
+            if (!param.hasDefaultValue()) required++;
+        }
+        var terms = new ArrayList<String>();
+        if (required == params.length()) {
+            terms.add("nargs_ == " + required);
+        } else {
+            if (required > 0) terms.add("nargs_ >= " + required);
+            terms.add("nargs_ <= " + params.length());
+        }
+        for (int i = 0; i < params.length(); i++) {
+            String check = getMatlabTypeCheck(params.get(i), "varargin{" + (i + 1) + "}");
+            terms.add(i < required ? check : "(nargs_ < " + (i + 1) + " || " + check + ")");
+        }
+        return String.join(" && ", terms);
+    }
+
+    /** The MATLAB expression that tests one argument against the classes a parameter accepts */
+    private String getMatlabTypeCheck(TypeDescription param, String arg) {
+        var checks = new ArrayList<String>();
+        for (String key : getOverloadKeys(param)) {
+            if (key.equals(NATIVE_HANDLE_KEY)) continue; // numeric covers it
+            checks.add(switch (key) {
+                case "numeric" -> "isnumeric(" + arg + ") || islogical(" + arg + ")";
+                case "char" -> "ischar(" + arg + ") || isstring(" + arg + ")";
+                case "cell" -> "iscell(" + arg + ")";
+                case "struct" -> "isstruct(" + arg + ")";
+                case "function_handle" -> "isa(" + arg + ", 'function_handle')";
+                default -> "isa(" + arg + ", " + quoted(getFullyQualifiedClassName(param)) + ")";
+            });
+        }
+        String check = String.join(" || ", checks);
+        return checks.size() > 1 || check.contains("||") ? "(" + check + ")" : check;
+    }
+
+    /**
+     * The MATLAB classes a parameter accepts. Numbers, logicals and spans all arrive as numeric,
+     * an enum also accepts its name or ordinal, and a 64-bit integer is what a size_t comes back
+     * as, which is the uint64 the wrap path reserves for native handles.
+     */
+    private static List<String> getOverloadKeys(TypeDescription type) {
+        return switch (type.getDataType()) {
+            case INT64, SIZE_T -> List.of("numeric", NATIVE_HANDLE_KEY);
+            case BOOL, INT8, INT16, INT32, FLOAT32, FLOAT64, VOID_POINTER,
+                 UINT8_POINTER, INT16_POINTER, INT32_POINTER, INT64_POINTER,
+                 FLOAT32_POINTER, FLOAT64_POINTER -> List.of("numeric");
+            case CHAR16 -> List.of("char", "numeric");
+            case CHAR_POINTER -> List.of("char");
+            case CHAR_POINTER_POINTER -> List.of("cell");
+            case CALLBACK -> List.of("function_handle");
+            case STRUCT -> List.of(getMexMarshaller(type)
+                    .map(StructMarshaller.MexStructMarshaller::typeHint)
+                    .orElse("struct"));
+            case OBJECT_HANDLE -> List.of(type.getTypeName());
+            case ENUM -> List.of(type.getTypeName(), "char", "numeric");
+            default -> List.of(type.getDataType().name());
+        };
+    }
+
+    private static final String NATIVE_HANDLE_KEY = "uint64";
 
     private void addBoilerplateCode(ClassDescription apiClass, IndentingTextRenderer content) {
         if (!apiClass.getInstantiable()) {
@@ -834,6 +995,22 @@ public class MatlabBindingsGenerator extends BindingGenerator {
             content.addLine(DocumentationUtil.generateMatlabdoc(method));
         }
 
+        // A constructor also wraps handles the library created. Those arrive as a uint64 scalar
+        // in first position, a class MATLAB values never have by accident, and the superclass
+        // call has to stay unconditional, so the two paths only differ in where ptr_ comes from.
+        final boolean isConstructor = GeneratorUtil.isConstructor(method);
+        if (isConstructor) {
+            String firstArg = params.externalInput.get(0).split(",")[0].trim();
+            boolean viaVarargin = "varargin".equals(firstArg);
+            content.set("FIRST_ARG", viaVarargin ? "varargin{1}" : firstArg);
+            content.addLineIf(method.hasDocumentation(), ""); // ends the help text
+            content.addLine("% A uint64 scalar is a handle the library created");
+            content.beginControlFlow("if nargin >= 1 && isa(%%FIRST_ARG%%, 'uint64') && isscalar(%%FIRST_ARG%%)");
+            content.addLine("ptr_ = %%FIRST_ARG%%;");
+            content.addLineIf(viaVarargin, "varargin(1) = [];");
+            content.nextControlFlow("else");
+        }
+
         // Anything that has to happen before the call
         var overload = method.getMatlabOverload();
         overload.tryGetBody().map(String::stripTrailing).ifPresent(content::addLine);
@@ -847,6 +1024,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         // Anything that has to happen after the call
         content.add(params.postCallActions.render());
         overload.tryGetPostCall().map(String::stripTrailing).ifPresent(content::addLine);
+
+        if (isConstructor) {
+            content.endControlFlow("end");
+            content.add(params.attachActions.render());
+        }
 
         content.endControlFlow("end\n");
 
@@ -937,6 +1119,8 @@ public class MatlabBindingsGenerator extends BindingGenerator {
         final List<String> internalOutput = new ArrayList<>();
         final IndentingTextRenderer preCallActions = new IndentingTextRenderer();
         final IndentingTextRenderer postCallActions = new IndentingTextRenderer();
+        /** Constructor only: stores the pointer, whether it was created or handed in */
+        final IndentingTextRenderer attachActions = new IndentingTextRenderer();
 
         ParameterLists(LibraryDescription lib, MethodDescription method) {
             final boolean needsSelfRef = !method.getIsStatic() && !method.getIsConstructor();
@@ -959,9 +1143,9 @@ public class MatlabBindingsGenerator extends BindingGenerator {
                             """);
                     if (GeneratorUtil.isConstructor(method)) {
                         externalOutput.add("this");
-                        postCallActions.addLine("%%SUPER_CTOR%%this.%%REF_FIELD%% = ptr_;");
+                        attachActions.addLine("%%SUPER_CTOR%%this.%%REF_FIELD%% = ptr_;");
                         if (needsVarargin) {
-                            postCallActions.add("""
+                            attachActions.add("""
                                     if numel(varargin) > 0
                                         this.set(varargin{:});
                                     end
@@ -1088,6 +1272,11 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
             }
 
+            // A constructor always takes at least the pointer the wrap path passes in
+            if (GeneratorUtil.isConstructor(method) && externalInput.isEmpty()) {
+                externalInput.add("varargin");
+            }
+
             // MATLAB counts from one. Index parameters convert here, which is after any
             // default has been applied and before a user supplied postBody runs. An overload
             // that replaces the signature or the call site owns the conversion itself.
@@ -1192,6 +1381,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         for (var apiClass : lib.getClasses()) {
             String classPrefix = getFullyQualifiedType(lib, apiClass.getType());
+            List<Map<String, Object>> constructorSignatures = new ArrayList<>();
             for (var method : apiClass.getMethods()) {
                 if (GeneratorUtil.isAccessor(method)) continue;
                 if (callbacks.getMatlabExclusionReason(method).isPresent()) continue;
@@ -1248,16 +1438,46 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
                 methodData.put("inputs", inputs);
 
-                // Key format: package.Class.method
-                String key = classPrefix;
-                if (!method.getIsConstructor()) {
-                    key += "." + method.getName();
+                // Key format: package.Class.method. Constructors share the class key.
+                if (method.getIsConstructor()) {
+                    constructorSignatures.add(methodData);
+                } else {
+                    root.put(classPrefix + "." + method.getName(), methodData);
                 }
-                root.put(key, methodData);
+            }
+            if (constructorSignatures.size() == 1) {
+                root.put(classPrefix, constructorSignatures.get(0));
+            } else if (constructorSignatures.size() > 1) {
+                root.put(classPrefix, mergeConstructorSignatures(constructorSignatures));
             }
         }
 
         return mapToJson(root);
+    }
+
+    /**
+     * One key holds one signature, so several constructors become a mutuallyExclusiveGroup of
+     * their positional arguments followed by the name-value tail they share. The wrap path's
+     * uint64 pointer is not listed, it is not for users to type.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mergeConstructorSignatures(List<Map<String, Object>> signatures) {
+        List<List<Map<String, Object>>> alternatives = new ArrayList<>();
+        List<Map<String, Object>> tail = new ArrayList<>();
+        for (var signature : signatures) {
+            List<Map<String, Object>> positional = new ArrayList<>();
+            tail.clear();
+            for (var input : (List<Map<String, Object>>) signature.get("inputs")) {
+                ("namevalue".equals(input.get("kind")) ? tail : positional).add(input);
+            }
+            alternatives.add(positional);
+        }
+        List<Map<String, Object>> inputs = new ArrayList<>();
+        inputs.add(Map.of("mutuallyExclusiveGroup", alternatives));
+        inputs.addAll(tail);
+        Map<String, Object> merged = new LinkedHashMap<>(signatures.get(0));
+        merged.put("inputs", inputs);
+        return merged;
     }
 
     private List<String> mapToMatlabType(TypeDescription type) {

@@ -7,6 +7,7 @@ import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
 import us.hebi.graalvm.bindings.generator.bindings.marshallers.StructMarshallers;
 import us.hebi.graalvm.bindings.generator.generators.CEnumGenerator;
 import us.hebi.graalvm.bindings.generator.generators.DocumentationUtil;
+import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.IndentingTextRenderer;
 import us.hebi.graalvm.bindings.model.*;
 
@@ -25,6 +26,8 @@ public class CppBindingsGenerator extends BindingGenerator {
 
     public CppBindingsGenerator(LibraryDescription lib) {
         super(lib);
+        GeneratorUtil.filterOverloadedConstructors(lib, null, type ->
+                List.of(type.hasTypeName() ? type.getDataType() + " " + type.getTypeName() : type.getDataType().name()));
     }
 
     @Override
@@ -414,8 +417,7 @@ public class CppBindingsGenerator extends BindingGenerator {
             }
             writeAccessLabel(decl, "private:");
             decl.addLine("void cleanup() noexcept;");
-            decl.addLineIf(!apiClass.hasChildren() && !scope.hasDedicatedConstructor,
-                    "explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
+            decl.addLineIf(!apiClass.hasChildren(), "explicit %%CLASS%%(%%CTYPE%% cPointer) noexcept : ptr_(cPointer) {}");
             decl.addLine("%%CTYPE%% ptr_{};");
 
             def.beginControlFlow("inline void %%CLASS%%::cleanup() noexcept {");
@@ -521,7 +523,6 @@ public class CppBindingsGenerator extends BindingGenerator {
             this.methods = StreamSupport.stream(apiClass.getMethods().spliterator(), false)
                     .sorted(Comparator.comparing(MethodDescription::getIsConstructor).reversed())
                     .toList();
-            this.hasDedicatedConstructor = methods.stream().anyMatch(MethodDescription::getIsConstructor);
 
             this.decl = decl.snapshot();
             this.def = def.snapshot();
@@ -546,7 +547,6 @@ public class CppBindingsGenerator extends BindingGenerator {
         final String parentCType;
         final String castToParent;
         final List<MethodDescription> methods;
-        final boolean hasDedicatedConstructor;
         final IndentingTextRenderer decl;
         final IndentingTextRenderer def;
 
@@ -790,6 +790,12 @@ public class CppBindingsGenerator extends BindingGenerator {
         var def = m.def.snapshot()
                 .set("PARAMS", params.replaceAll(" = [^,)]*", "")) // no default args in impl
                 .set("CALL", call);
+        if (m.method.getIsConstructor()) {
+            // A constructor overload delegates without a body
+            decl.addLine("%%CLASS%%(%%PARAMS%%);");
+            def.addLine("inline %%CLASS%%::%%CLASS%%(%%PARAMS%%) : %%CLASS%%(%%CALL%%) {}");
+            return;
+        }
         decl.addLine("%%STATIC%%%%RETURN_TYPE%% %%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%%;");
         def.beginControlFlow("inline %%RETURN_TYPE%% %%NAMESPACE%%::%%NAME%%(%%PARAMS%%)%%CONST%%%%NOEXCEPT%% {");
         def.addLineIf(!body.isBlank(), body.strip());
