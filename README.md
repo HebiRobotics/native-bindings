@@ -343,23 +343,23 @@ time and therefore cannot live in a source tree that has to compile.
 
 ## Known gaps
 
-These are pre-existing behaviours carried over from the original implementation. They
-are documented rather than fixed so that the extraction stayed behaviour preserving.
+Limits worth knowing before annotating an API. Some are carried over from the original
+implementation, some are decisions.
 
+- **Methods do not overload, only constructors do.** Two exported methods on one class
+  need distinct names (distinct Java names or `@CLibMethod(name = ...)`), and a
+  duplicate C symbol is rejected at compile time. Clear names read better in every
+  target language than a dispatcher would, so this is a decision rather than a gap.
 - **`cppOverloads` ignores `postBody`.** The C++ generator never emits that field, so
   anything placed there is silently dropped. Put the whole prologue in `body`. Python
   emits `postBody`, and MATLAB emits both `postBody` and `postCall`.
-- **Python static overloads need an explicit `cls`.** Static methods are emitted as
-  `@classmethod` but the overload parameter list is copied verbatim, so the leading
-  `cls` has to be written into the annotation.
-- **MATLAB echoes non-const pointer parameters as extra outputs**, while the MEX
-  dispatch only ever fills the first one.
 - **MATLAB returns numbers as doubles while they fit the mantissa.** An `int64` or
   `size_t` value up to 2^53 comes back as a double, a larger one as an exact `int64` or
   `uint64`, and `int64`/`uint64` inputs are read exactly on the way in. Object handles
   always cross as `uint64`.
-- **Structs are not supported.** There is no by-value struct mapping, and `@CExternalEnums`
-  is declared but never read by the processor.
+- **Struct fields are primitives, `@CSizeType` sizes and pointers.** Nested structs by
+  value, function pointer fields and fixed-size inline arrays are not supported, and
+  `@CExternalEnums` is declared but never read by the processor.
 - **An abstract parent shares its handle registry with the whole hierarchy.**
   `pythonOverload` and `matlabOverload` on a constructor are ignored once its class
   declares more than one, and a `cppOverloads` entry on a constructor delegates, so its
