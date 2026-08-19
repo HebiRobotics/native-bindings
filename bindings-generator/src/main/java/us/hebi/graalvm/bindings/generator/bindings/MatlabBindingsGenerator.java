@@ -715,8 +715,7 @@ public class MatlabBindingsGenerator extends BindingGenerator {
 
         }
 
-        // Currently real constructors are only supported at the leaf nodes as we'd have to overload the first argument
-        checkState(!apiClass.hasChildren(), "Only leaf nodes can have defined constructors");
+        // A child constructor calls this@Parent with the cast pointer, which the uint64 case takes
         content.beginControlFlow("methods(Access = public)");
         if (constructors.size() == 1) {
             addWrapperMethod(apiClass, constructors.get(0), content.snapshot());

@@ -437,13 +437,10 @@ public class PythonBindingsGenerator extends BindingGenerator {
             return;
         }
 
-        // Check for defined constructors first - they get their own wrapper methods
+        // Check for defined constructors first - they get their own wrapper methods. A child's
+        // __init__ attaches through _attach and never runs this one, so a parent may have them.
         var constructors = GeneratorUtil.getConstructors(apiClass);
         if (!constructors.isEmpty()) {
-            // A defined constructor means that users instantiate this class by themselves. Currently
-            // this means that we do not have a raw ptr argument and thus can't support being called
-            // from child constructors
-            checkArgument(!apiClass.hasChildren(), "Constructors are currently not supported parent classes");
             // Note: the base initialization is part of the generated __init__ body (see getReturnTemplate)
             if (constructors.size() == 1) {
                 writeMethod(new MethodScope(scope, constructors.get(0)));
