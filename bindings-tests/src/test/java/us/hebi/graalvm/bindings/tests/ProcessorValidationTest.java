@@ -1138,6 +1138,51 @@ public class ProcessorValidationTest {
                 .inFile(source).onLineContaining("public static Callback current()");
     }
 
+    @Test
+    public void acceptsDistinguishableConstructors() {
+        assertThat(compile(source("Two", """
+                @CLibClass("Two")
+                public class Two {
+                    @CLibMethod(constructor = true)
+                    public static Two create(@CDefault("0") int value) { return new Two(); }
+
+                    @CLibMethod(constructor = true)
+                    public static Two parse(String text) { return new Two(); }
+                }
+                """))).succeeded();
+    }
+
+    @Test
+    public void demotesConstructorsPerFace() throws IOException {
+        assertThat(compile(source("Ints", """
+                @CLibClass("Ints")
+                public class Ints {
+                    @CLibMethod(constructor = true)
+                    public static Ints create(int value) { return new Ints(); }
+
+                    @CLibMethod(constructor = true)
+                    public static Ints createFromDouble(double value) { return new Ints(); }
+
+                    @CLibMethod(constructor = true)
+                    public static Ints createFromId(long id) { return new Ints(); }
+                }
+                """))).succeeded();
+
+        // C++ overloads on all three types, Python sees every number alike, and MATLAB also
+        // reserves a leading 64-bit integer for native handles. Each generator decides on its
+        // own copy, so one face's demotion must not leak into another.
+        String hpp = readGeneratedFile("validation.hpp");
+        assertTrue(hpp.contains("  Ints(double value);"));
+        assertTrue(hpp.contains("  Ints(long long id);"));
+        String py = readGeneratedFile("validation.py");
+        assertTrue(py.contains("def create_from_double(cls, value: float) -> Ints:"));
+        assertTrue(py.contains("def create_from_id(cls, id: int) -> Ints:"));
+        String m = readGeneratedFile("Ints.m");
+        assertTrue(m.contains("function obj = createFromDouble(value)"));
+        assertTrue(m.contains("Not a constructor here, its arguments cannot be told from create."));
+        assertTrue(m.contains("function obj = createFromId(id)"));
+    }
+
     private String readGeneratedFile(String fileName) throws IOException {
         try (var files = Files.walk(outputDir.getRoot().toPath())) {
             var file = files.filter(f -> f.getFileName().toString().equals(fileName)).findFirst();

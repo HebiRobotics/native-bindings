@@ -135,11 +135,13 @@ _Static_assert(sizeof(bindings_tests_Marker) == 4, "error: unexpected size for b
 
 // ==== Counter ====
 DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_create(bindings_tests_ErrorInfo* _error, int start);
+DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_parse(bindings_tests_ErrorInfo* _error, const char* text);
 DLL_PUBLIC int bindings_tests_Counter_getValue(bindings_tests_CounterPtr obj);
 DLL_PUBLIC void bindings_tests_Counter_setValue(bindings_tests_CounterPtr obj, int value);
 DLL_PUBLIC void bindings_tests_Counter_increment(bindings_tests_CounterPtr obj);
 DLL_PUBLIC void bindings_tests_Counter_add(bindings_tests_CounterPtr obj, int amount);
 DLL_PUBLIC int bindings_tests_Counter_isClosed(bindings_tests_CounterPtr obj);
+DLL_PUBLIC bindings_tests_CounterPtr bindings_tests_Counter_copy(bindings_tests_CounterPtr obj);
 DLL_PUBLIC int bindings_tests_Counter_getClosedCount();
 DLL_PUBLIC void bindings_tests_Counter_resetClosedCount();
 DLL_PUBLIC void bindings_tests_Counter_release(bindings_tests_CounterPtr obj);

@@ -35,12 +35,18 @@ classdef (Sealed) Naming < handle & matlab.mixin.SetGet
             %
             %   Throws:
             %       Error on internal errors
-            if nargin < 1
-                startValue = 0;
-            end
-            ptr_ = bindings_tests_native('custom_prefix_Naming_create', startValue);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Naming in Naming.Naming');
+
+            % A uint64 scalar is a handle the library created
+            if nargin >= 1 && isa(startValue, 'uint64') && isscalar(startValue)
+                ptr_ = startValue;
+            else
+                if nargin < 1
+                    startValue = 0;
+                end
+                ptr_ = bindings_tests_native('custom_prefix_Naming_create', startValue);
+                if isempty(ptr_)
+                    error('Failed to create bindings_tests.Naming in Naming.Naming');
+                end
             end
             this.ptr = ptr_;
         end

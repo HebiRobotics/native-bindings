@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import os
 import platform
-from typing import Sequence, Tuple, Any, Callable
+from typing import Sequence, Tuple, Any, Callable, overload
 
 # Load the shared library relative to this file
 def load_library():
@@ -224,6 +224,8 @@ TransformCallbackFunction = CFUNCTYPE(None, c_void_p, POINTER(c_double), POINTER
 # ==== Counter ====
 libbindings_tests.bindings_tests_Counter_create.argtypes = [POINTER(_ErrorInfo), c_int]
 libbindings_tests.bindings_tests_Counter_create.restype = CounterPtr
+libbindings_tests.bindings_tests_Counter_parse.argtypes = [POINTER(_ErrorInfo), c_char_p]
+libbindings_tests.bindings_tests_Counter_parse.restype = CounterPtr
 libbindings_tests.bindings_tests_Counter_getValue.argtypes = [CounterPtr]
 libbindings_tests.bindings_tests_Counter_getValue.restype = c_int
 libbindings_tests.bindings_tests_Counter_setValue.argtypes = [CounterPtr, c_int]
@@ -234,6 +236,8 @@ libbindings_tests.bindings_tests_Counter_add.argtypes = [CounterPtr, c_int]
 libbindings_tests.bindings_tests_Counter_add.restype = None
 libbindings_tests.bindings_tests_Counter_isClosed.argtypes = [CounterPtr]
 libbindings_tests.bindings_tests_Counter_isClosed.restype = c_int
+libbindings_tests.bindings_tests_Counter_copy.argtypes = [CounterPtr]
+libbindings_tests.bindings_tests_Counter_copy.restype = CounterPtr
 libbindings_tests.bindings_tests_Counter_getClosedCount.argtypes = []
 libbindings_tests.bindings_tests_Counter_getClosedCount.restype = c_int
 libbindings_tests.bindings_tests_Counter_resetClosedCount.argtypes = []
@@ -499,6 +503,7 @@ class Counter:
 
     __slots__ = ('ptr',)
 
+    @overload
     def __init__(self, start: int = 0, *, value: int = None) -> None:
         """Creates a counter starting at the given value, or at zero by default.
 
@@ -511,15 +516,58 @@ class Counter:
         Raises:
             Exception: on internal errors
         """
+
+    @overload
+    def __init__(self, text: str, *, value: int = None) -> None:
+        """Creates a counter starting at the value written in text.
+
+        Args:
+            text:
+
+        Returns:
+            A mutable counter, used to check handle creation and release.
+
+        Raises:
+            Exception: on internal errors
+        """
+
+    def __init__(self, *args, **kwargs) -> None:
+        if len(args) <= 1 and (len(args) < 1 or isinstance(args[0], (int, float))):
+            self._init_create(*args, **kwargs)
+        elif len(args) == 1 and isinstance(args[0], str):
+            self._init_parse(*args, **kwargs)
+        else:
+            raise TypeError('Counter(' + ', '.join(type(a).__name__ for a in args) + ') matches no constructor')
+
+    def _init_create(self, start: int = 0, *, value: int = None) -> None:
         error_ = _ErrorInfo()
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counter_create(byref(error_), start))
         if not ptr_:
-            raise RuntimeError('Failed to create Counter in Counter::__init__')
-        self.ptr = ptr_
+            raise RuntimeError('Failed to create Counter in Counter::_init_create')
+        self._attach(ptr_)
         if value is not None: self.value = value
 
+    def _init_parse(self, text: str, *, value: int = None) -> None:
+        if text is not None and not isinstance(text, c_char_p):
+            text = c_char_p(text.encode('utf-8') if isinstance(text, str) else text)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Counter_parse(byref(error_), text))
+        if not ptr_:
+            raise RuntimeError('Failed to create Counter in Counter::_init_parse')
+        self._attach(ptr_)
+        if value is not None: self.value = value
+
+    @classmethod
+    def _wrap(cls, ptr: CounterPtr):
+        self = object.__new__(cls)
+        self._attach(ptr)
+        return self
+
+    def _attach(self, ptr: CounterPtr):
+        self.ptr = ptr
+
     def __del__(self):
-        if self.ptr is not None:
+        if getattr(self, 'ptr', None) is not None:
             libbindings_tests.bindings_tests_Counter_release(self.ptr)
         self.ptr = None
 
@@ -543,6 +591,19 @@ class Counter:
     def is_closed(self) -> bool:
         """Returns true once close() has run. Only observable before the handle is released."""
         return libbindings_tests.bindings_tests_Counter_isClosed(self.ptr) != 0
+
+    def copy(self, *, value: int = None) -> Counter:
+        """Creates an independent counter with the same value.
+
+        Returns:
+            A mutable counter, used to check handle creation and release.
+        """
+        ptr_ = libbindings_tests.bindings_tests_Counter_copy(self.ptr)
+        if not ptr_:
+            raise RuntimeError('Failed to create Counter in Counter::copy')
+        obj_ = Counter._wrap(ptr_)
+        if value is not None: obj_.value = value
+        return obj_
 
     @classmethod
     def get_closed_count(cls) -> int:
@@ -579,10 +640,19 @@ class Naming:
         ptr_ = _checked(error_, libbindings_tests.custom_prefix_Naming_create(byref(error_), start_value))
         if not ptr_:
             raise RuntimeError('Failed to create Naming in Naming::__init__')
-        self.ptr = ptr_
+        self._attach(ptr_)
+
+    @classmethod
+    def _wrap(cls, ptr: NamingPtr):
+        self = object.__new__(cls)
+        self._attach(ptr)
+        return self
+
+    def _attach(self, ptr: NamingPtr):
+        self.ptr = ptr
 
     def __del__(self):
-        if self.ptr is not None:
+        if getattr(self, 'ptr', None) is not None:
             libbindings_tests.custom_prefix_Naming_release(self.ptr)
         self.ptr = None
 
@@ -609,13 +679,20 @@ class Shape:
 
     __slots__ = ('ptr',)
 
-    def __init__(self, ptr: ShapePtr):
-        if not isinstance(ptr, ShapePtr):
-            raise TypeError(f'Expected ShapePtr, got {type(ptr).__name__}')
+    def __init__(self, *args, **kwargs):
+        raise TypeError('Shape instances are created by the library')
+
+    @classmethod
+    def _wrap(cls, ptr: ShapePtr):
+        self = object.__new__(cls)
+        self._attach(ptr)
+        return self
+
+    def _attach(self, ptr: ShapePtr):
         self.ptr = ptr
 
     def __del__(self):
-        if self.ptr is not None:
+        if getattr(self, 'ptr', None) is not None:
             libbindings_tests.bindings_tests_Shape_release(self.ptr)
         self.ptr = None
 
@@ -652,9 +729,12 @@ class Circle(Shape):
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Circle_create(byref(error_), radius))
         if not ptr_:
             raise RuntimeError('Failed to create Circle in Circle::__init__')
-        self.ref_Circle = ptr_
-        super().__init__(libbindings_tests.bindings_tests_Circle_to_Shape(ptr_))
+        self._attach(ptr_)
         if name is not None: self.name = name
+
+    def _attach(self, ref_Circle: CirclePtr):
+        self.ref_Circle = ref_Circle
+        super()._attach(libbindings_tests.bindings_tests_Circle_to_Shape(ref_Circle))
 
     def __del__(self):
         super().__del__()
@@ -692,9 +772,12 @@ class Square(Shape):
         ptr_ = _checked(error_, libbindings_tests.bindings_tests_Square_create(byref(error_), side))
         if not ptr_:
             raise RuntimeError('Failed to create Square in Square::__init__')
-        self.ref_Square = ptr_
-        super().__init__(libbindings_tests.bindings_tests_Square_to_Shape(ptr_))
+        self._attach(ptr_)
         if name is not None: self.name = name
+
+    def _attach(self, ref_Square: SquarePtr):
+        self.ref_Square = ref_Square
+        super()._attach(libbindings_tests.bindings_tests_Square_to_Shape(ref_Square))
 
     def __del__(self):
         super().__del__()

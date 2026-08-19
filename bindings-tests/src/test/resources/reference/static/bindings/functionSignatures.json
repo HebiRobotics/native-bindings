@@ -256,9 +256,15 @@
   },
   "bindings_tests.Counter": {
     "inputs": [{
-        "kind": "ordered",
-        "name": "start",
-        "type": ["numeric"]
+        "mutuallyExclusiveGroup": [[{
+              "kind": "ordered",
+              "name": "start",
+              "type": ["numeric"]
+            }], [{
+              "kind": "required",
+              "name": "text",
+              "type": ["char"]
+            }]]
       }, {
         "kind": "namevalue",
         "name": "value",
@@ -277,6 +283,20 @@
         "kind": "required",
         "name": "amount",
         "type": ["numeric"]
+      }]
+  },
+  "bindings_tests.Counter.copy": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Counter"
+      }, {
+        "kind": "namevalue",
+        "name": "value",
+        "type": ["numeric"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Counter"]
       }]
   },
   "bindings_tests.Counter.getClosedCount": {

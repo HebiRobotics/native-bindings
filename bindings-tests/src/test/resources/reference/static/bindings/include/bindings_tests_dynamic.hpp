@@ -139,6 +139,16 @@ public:
    * @throw on internal errors
    */
   Counter(int start = 0);
+
+  /**
+   * @brief Creates a counter starting at the value written in text.
+   *
+   * @param text
+   * @return A mutable counter, used to check handle creation and release.
+   * @throw on internal errors
+   */
+  Counter(const char* text);
+  Counter(const std::string& text);
   int getValue() const noexcept;
   void setValue(int value) noexcept;
   void increment() noexcept;
@@ -148,6 +158,13 @@ public:
    * @brief Returns true once close() has run. Only observable before the handle is released.
    */
   bool isClosed() const noexcept;
+
+  /**
+   * @brief Creates an independent counter with the same value.
+   *
+   * @return A mutable counter, used to check handle creation and release.
+   */
+  Counter copy() const noexcept;
 
   /**
    * @details
@@ -166,6 +183,7 @@ public:
   ~Counter() noexcept;
 private:
   void cleanup() noexcept;
+  explicit Counter(internal::CounterPtr cPointer) noexcept : ptr_(cPointer) {}
   internal::CounterPtr ptr_{};
 };
 
@@ -202,6 +220,7 @@ public:
   ~Naming() noexcept;
 private:
   void cleanup() noexcept;
+  explicit Naming(internal::NamingPtr cPointer) noexcept : ptr_(cPointer) {}
   internal::NamingPtr ptr_{};
 };
 
@@ -925,6 +944,14 @@ inline Counter::Counter(int start) {
   checkError(error_);
   checkNotNull(ptr_, "Could not create Counter");
 }
+inline Counter::Counter(const char* text) {
+  static auto bindings_tests_Counter_parse = DynamicLookup::instance().getFunc<internal::CounterPtr(*)(internal::ErrorInfo*, const char*)>("bindings_tests_Counter_parse");
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Counter_parse(&error_, text);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Counter");
+}
+inline Counter::Counter(const std::string& text) : Counter(text.c_str()) {}
 inline int Counter::getValue() const noexcept {
   static auto bindings_tests_Counter_getValue = DynamicLookup::instance().getFunc<int(*)(internal::CounterPtr)>("bindings_tests_Counter_getValue");
   return bindings_tests_Counter_getValue(ptr_);
@@ -944,6 +971,11 @@ inline void Counter::add(int amount) noexcept {
 inline bool Counter::isClosed() const noexcept {
   static auto bindings_tests_Counter_isClosed = DynamicLookup::instance().getFunc<int(*)(internal::CounterPtr)>("bindings_tests_Counter_isClosed");
   return bindings_tests_Counter_isClosed(ptr_);
+}
+inline Counter Counter::copy() const noexcept {
+  static auto bindings_tests_Counter_copy = DynamicLookup::instance().getFunc<internal::CounterPtr(*)(internal::CounterPtr)>("bindings_tests_Counter_copy");
+  auto ptr = bindings_tests_Counter_copy(ptr_);
+  return Counter(ptr);
 }
 inline int Counter::getClosedCount() noexcept {
   static auto bindings_tests_Counter_getClosedCount = DynamicLookup::instance().getFunc<int(*)()>("bindings_tests_Counter_getClosedCount");

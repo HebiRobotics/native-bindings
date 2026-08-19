@@ -31,9 +31,14 @@ classdef (Sealed) Circle < bindings_tests.Shape
 
     methods(Access = public)
         function this = Circle(radius, varargin)
-            ptr_ = bindings_tests_native('bindings_tests_Circle_create', radius);
-            if isempty(ptr_)
-                error('Failed to create bindings_tests.Circle in Circle.Circle');
+            % A uint64 scalar is a handle the library created
+            if nargin >= 1 && isa(radius, 'uint64') && isscalar(radius)
+                ptr_ = radius;
+            else
+                ptr_ = bindings_tests_native('bindings_tests_Circle_create', radius);
+                if isempty(ptr_)
+                    error('Failed to create bindings_tests.Circle in Circle.Circle');
+                end
             end
             this@bindings_tests.Shape(bindings_tests_native('bindings_tests_Circle_to_Shape', ptr_));
             this.ref_Circle = ptr_;

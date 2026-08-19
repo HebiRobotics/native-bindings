@@ -180,6 +180,23 @@ return type gets a type specific default on failure (`false`, `0`, or a null poi
 `flags = Const` marks an instance method that does not mutate state and becomes a
 `const` member function in C++.
 
+`@CLibMethod(constructor = true)` marks a static factory as the constructor of its
+class. A class may declare several, each under its own Java name or
+`@CLibMethod(name = ...)` so that every one gets a distinct C symbol. C++ overloads on
+the parameter types, while Python and MATLAB have one constructor body and dispatch on
+the arguments at runtime: Python on `isinstance` with `@overload` stubs for tools,
+MATLAB on `nargin` and class with a `mutuallyExclusiveGroup` in `functionSignatures.json`.
+A face keeps the constructors it can tell apart by argument count and type and turns
+the rest into static factories under their C name, first declared wins: `(int)` next to
+`(double)` is an overload in C++ but `Counter.createFromDouble(x)` in Python and MATLAB,
+`(int)` next to `(DoubleSpan)` only demotes in MATLAB, and a constructor whose first
+parameter is a 64-bit integer demotes in MATLAB because its wrap path passes native
+handles as a `uint64` scalar in first position. A demoted method says so in its
+documentation. A string argument that spells a settable property name starts the MATLAB
+name-value tail. Every handle class also wraps pointers the library returns
+(`Type._wrap` in Python, the uint64 case in MATLAB, a private constructor in C++),
+independent of what constructors it declares.
+
 Function pointer callbacks need no annotation. A parameter declared as a GraalVM
 `CFunctionPointer` interface is derived from its `@InvokeCFunctionPointer` method, and
 every language face declares the matching typedef under the interface's simple name.
@@ -309,7 +326,7 @@ between languages is immediately visible.
 | Class | Covers |
 |---|---|
 | `TestMath` | Every primitive width, `size_t`, and the 31 and 63 bit caps |
-| `TestCounter` | Constructor, instance methods, properties, and the generated destructor |
+| `TestCounter` | Two constructors, a handle-returning method on the same class, instance methods, properties, and the generated destructor |
 | `TestStrings` | String marshalling both ways, `const char**` arrays, UTF-8 versus UTF-16 lengths |
 | `TestArrays` | The (pointer, length) pattern for input and output buffers, spans, and `@CConst` |
 | `TestShape`, `TestCircle`, `TestSquare` | Inheritance, a shared handle registry, and the generated upcast |
@@ -329,9 +346,6 @@ time and therefore cannot live in a source tree that has to compile.
 These are pre-existing behaviours carried over from the original implementation. They
 are documented rather than fixed so that the extraction stayed behaviour preserving.
 
-- **A class may declare at most one constructor.** The MATLAB generator asserts this,
-  because it cannot overload on the first argument of a classdef constructor. Use
-  `@CDefault` for the no-argument case.
 - **`cppOverloads` ignores `postBody`.** The C++ generator never emits that field, so
   anything placed there is silently dropped. Put the whole prologue in `body`. Python
   emits `postBody`, and MATLAB emits both `postBody` and `postCall`.
@@ -346,7 +360,9 @@ are documented rather than fixed so that the extraction stayed behaviour preserv
 - **Structs are not supported.** There is no by-value struct mapping, and `@CExternalEnums`
   is declared but never read by the processor.
 - **Only leaf classes may declare constructors**, and an abstract parent shares its
-  handle registry with the whole hierarchy.
+  handle registry with the whole hierarchy. `pythonOverload` and `matlabOverload` on a
+  constructor are ignored once its class declares more than one, and a `cppOverloads`
+  entry on a constructor delegates, so its `body` is not emitted.
 
 ## License
 

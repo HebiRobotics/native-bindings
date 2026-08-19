@@ -95,9 +95,23 @@ static void testCounter() {
     // The single constructor defaults 'start' to 0, so this resolves to Counter(0)
     bt::Counter defaultCounter;
     CHECK(defaultCounter.getValue() == 0);
+
+    // The second constructor is a real C++ overload, with the std::string convenience
+    // overload delegating to it
+    bt::Counter parsed("42");
+    CHECK(parsed.getValue() == 42);
+    bt::Counter parsedString(std::string("7"));
+    CHECK(parsedString.getValue() == 7);
+
+    // A handle returned by a class that also has a constructor wraps through the
+    // pointer constructor, which the value constructor used to replace
+    bt::Counter copied = counter.copy();
+    CHECK(copied.getValue() == 3);
+    copied.increment();
+    CHECK(counter.getValue() == 3);
   }
-  // Both handles went out of scope, so the generated destructor ran twice.
-  CHECK(bt::Counter::getClosedCount() == 2);
+  // Every handle went out of scope, so the generated destructor ran once each.
+  CHECK(bt::Counter::getClosedCount() == 5);
 }
 
 // ---------------------------------------------------------------------------

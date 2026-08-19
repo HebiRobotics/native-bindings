@@ -23,14 +23,20 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 public class TestCounter implements AutoCloseable {
 
     /**
-     * A class may declare at most one constructor. The MATLAB generator asserts this,
-     * because overloading on the first argument of a classdef constructor is not
-     * something it can express. The default value covers the no-argument case instead.
+     * Two constructors, distinguishable in every language: C gets one symbol each, C++
+     * overloads on the type, and Python and MATLAB dispatch on it inside their single
+     * constructor body. The default value covers the no-argument case.
      */
     @CLibMethod(constructor = true)
     @CLibComment("Creates a counter starting at the given value, or at zero by default.")
     public static TestCounter create(@CDefault("0") int start) {
         return new TestCounter(start);
+    }
+
+    @CLibMethod(constructor = true)
+    @CLibComment("Creates a counter starting at the value written in text.")
+    public static TestCounter parse(String text) {
+        return new TestCounter(Integer.parseInt(text.trim()));
     }
 
     @CLibMethod(flags = Noexcept)
@@ -57,6 +63,16 @@ public class TestCounter implements AutoCloseable {
     @CLibComment("Returns true once close() has run. Only observable before the handle is released.")
     public boolean isClosed() {
         return closed;
+    }
+
+    /**
+     * A handle returned by a class that also declares a constructor. The wrappers used to
+     * replace their pointer constructor with the value one, so this did not wrap in any of them.
+     */
+    @CLibMethod(flags = {Noexcept, Const})
+    @CLibComment("Creates an independent counter with the same value.")
+    public TestCounter copy() {
+        return new TestCounter(value);
     }
 
     @CLibMethod(flags = Noexcept)
