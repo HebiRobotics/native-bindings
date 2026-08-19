@@ -149,4 +149,47 @@ public class GeneratorUtil {
         return symbols;
     }
 
+    /**
+     * The names of every type the library declares, which share one namespace in the flat wrappers
+     */
+    private static List<String> getAllTypeNames(LibraryDescription lib) {
+        List<String> names = new ArrayList<>();
+        for (var clazz : lib.getClasses()) {
+            names.add(clazz.getType().getTypeName());
+        }
+        for (var enumDesc : lib.getEnums()) {
+            names.add(enumDesc.getName());
+        }
+        for (var struct : lib.getStructs()) {
+            names.add(struct.getName());
+        }
+        for (var callback : lib.getCallbacks()) {
+            names.add(callback.getName());
+        }
+        return names;
+    }
+
+    /**
+     * Type names and C entry points are each one namespace per library. Checked on the finished
+     * description so that it also covers one that was not built from annotations, a duplicate
+     * would otherwise only surface at the native-image link or as an overwritten wrapper file.
+     */
+    public static void checkUniqueSymbols(LibraryDescription lib) {
+        var duplicates = new ArrayList<String>();
+        findDuplicates(getAllTypeNames(lib)).forEach(name -> duplicates.add("type " + name));
+        findDuplicates(getAllCMethodSymbols(lib)).forEach(symbol -> duplicates.add("C symbol " + symbol));
+        if (!duplicates.isEmpty()) {
+            throw new IllegalArgumentException(String.format("Declared more than once: %s", String.join(", ", duplicates)));
+        }
+    }
+
+    private static List<String> findDuplicates(List<String> names) {
+        var seen = new HashSet<String>();
+        var duplicates = new LinkedHashSet<String>();
+        for (var name : names) {
+            if (!seen.add(name)) duplicates.add(name);
+        }
+        return new ArrayList<>(duplicates);
+    }
+
 }

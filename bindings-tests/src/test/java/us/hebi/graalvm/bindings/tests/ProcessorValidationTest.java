@@ -1153,6 +1153,40 @@ public class ProcessorValidationTest {
     }
 
     @Test
+    public void rejectsMethodsOnTheSameSymbol() {
+        var source = source("Dup", """
+                @CLibClass("Dup")
+                public class Dup {
+                    @CLibMethod(flags = Noexcept)
+                    public static int add(int value) { return value; }
+
+                    @CLibMethod(flags = Noexcept)
+                    public static double add(double value) { return value; }
+                }
+                """);
+        assertThat(compile(source)).hadErrorContaining("Declared more than once: C symbol validation_Dup_add");
+    }
+
+    @Test
+    public void rejectsEntryPointsOnTheSameSymbolAcrossClasses() {
+        // Class and method name join with an underscore, so the split is not unique
+        var source = source("Outer", """
+                @CLibClass("Outer")
+                public class Outer {
+                    @CLibMethod(flags = Noexcept)
+                    public static int inner_value() { return 1; }
+
+                    @CLibClass("Outer_inner")
+                    public static class Inner {
+                        @CLibMethod(flags = Noexcept)
+                        public static int value() { return 2; }
+                    }
+                }
+                """);
+        assertThat(compile(source)).hadErrorContaining("Declared more than once: C symbol validation_Outer_inner_value");
+    }
+
+    @Test
     public void demotesConstructorsPerFace() throws IOException {
         assertThat(compile(source("Ints", """
                 @CLibClass("Ints")

@@ -5,6 +5,7 @@ import org.stringtemplate.v4.ST;
 import us.hebi.graalvm.bindings.generator.bindings.features.CocoaFeature;
 import us.hebi.graalvm.bindings.generator.bindings.features.FeatureGenerator;
 import us.hebi.graalvm.bindings.generator.bindings.features.LibraryInfoFeature;
+import us.hebi.graalvm.bindings.generator.generators.GeneratorUtil;
 import us.hebi.graalvm.bindings.generator.generators.ProtoSortUtil;
 import us.hebi.graalvm.bindings.model.*;
 
@@ -26,6 +27,7 @@ import static com.google.common.base.Preconditions.*;
 public abstract class BindingGenerator {
 
     protected BindingGenerator(LibraryDescription lib) {
+        GeneratorUtil.checkUniqueSymbols(lib);
         // Make sure classes are sorted properly
         ProtoSortUtil.sortClassDescriptions(lib.getClasses());
         this.lib = lib;

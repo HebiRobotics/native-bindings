@@ -193,6 +193,14 @@ public class NativeAnnotationProcessor extends BasicAnnotationProcessor {
             // generators would crash on it and bury the reported diagnostic.
             if (apiDescription.hasReportedErrors()) return;
 
+            // Two declarations may share a symbol without any element being wrong on its own
+            try {
+                GeneratorUtil.checkUniqueSymbols(apiDescription.getDescription());
+            } catch (IllegalArgumentException e) {
+                processingEnv.getMessager().printMessage(ERROR, e.getMessage());
+                return;
+            }
+
             try {
                 apiDescription.writeTo(this::createFile);
                 new CBindingsGenerator(apiDescription.getDescription().clone()).writeTo(this::createFile);
