@@ -128,6 +128,10 @@ void custom_prefix_Naming_release(custom_prefix_NamingPtr obj) {
 }
 
 // ==== Shape ====
+bindings_tests_ShapePtr __bindings_tests_Shape_create(bindings_tests_IsolateThread* isolate, bindings_tests_ErrorInfo* _error, const char* name);
+bindings_tests_ShapePtr bindings_tests_Shape_create(bindings_tests_ErrorInfo* _error, const char* name) {
+    return __bindings_tests_Shape_create(isolate::global(), _error, name);
+}
 const char* __bindings_tests_Shape_getName(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj);
 const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj) {
     return __bindings_tests_Shape_getName(isolate::global(), obj);
@@ -135,6 +139,10 @@ const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj) {
 void __bindings_tests_Shape_setName(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj, const char* name);
 void bindings_tests_Shape_setName(bindings_tests_ShapePtr obj, const char* name) {
     __bindings_tests_Shape_setName(isolate::global(), obj, name);
+}
+bindings_tests_ShapePtr __bindings_tests_Shape_plainCopy(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj);
+bindings_tests_ShapePtr bindings_tests_Shape_plainCopy(bindings_tests_ShapePtr obj) {
+    return __bindings_tests_Shape_plainCopy(isolate::global(), obj);
 }
 double __bindings_tests_Shape_area(bindings_tests_IsolateThread* isolate, bindings_tests_ShapePtr obj);
 double bindings_tests_Shape_area(bindings_tests_ShapePtr obj) {

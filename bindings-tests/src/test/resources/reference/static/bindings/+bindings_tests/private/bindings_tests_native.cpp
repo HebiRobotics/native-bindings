@@ -926,6 +926,16 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
         }
 
         // Shape
+        case /* hash32_fnv1a("bindings_tests_Shape_create") */ 2328736020: {
+            static auto bindings_tests_Shape_create = libLoader.getFunc<void*(*)(ErrorInfo*, const char*)>("bindings_tests_Shape_create");
+            checkArgCount(nrhs, 1, "bindings_tests_Shape_create");
+            ErrorInfo _error = {};
+            MatlabString name(prhs[1]);
+            void* _value = bindings_tests_Shape_create(&_error, name);
+            checkError(_error);
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
+            break;
+        }
         case /* hash32_fnv1a("bindings_tests_Shape_getName") */ 109245415: {
             static auto bindings_tests_Shape_getName = libLoader.getFunc<const char*(*)(void*)>("bindings_tests_Shape_getName");
             checkArgCount(nrhs, 1, "bindings_tests_Shape_getName");
@@ -938,6 +948,13 @@ MEX_EXPORT void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *
             checkArgCount(nrhs, 2, "bindings_tests_Shape_setName");
             MatlabString name(prhs[2]);
             bindings_tests_Shape_setName(getPtr<void*>(prhs[1]), name);
+            break;
+        }
+        case /* hash32_fnv1a("bindings_tests_Shape_plainCopy") */ 245583433: {
+            static auto bindings_tests_Shape_plainCopy = libLoader.getFunc<void*(*)(void*)>("bindings_tests_Shape_plainCopy");
+            checkArgCount(nrhs, 1, "bindings_tests_Shape_plainCopy");
+            void* _value = bindings_tests_Shape_plainCopy(getPtr<void*>(prhs[1]));
+            if (nlhs > 0) plhs[0] = createMexPointer(_value);
             break;
         }
         case /* hash32_fnv1a("bindings_tests_Shape_area") */ 557141481: {

@@ -216,6 +216,25 @@
       "dataType": "OBJECT_HANDLE"
     }],
     "methods": [{
+      "name": "create",
+      "lowerUnderscoreName": "create",
+      "isStatic": true,
+      "cName": "bindings_tests_Shape_create",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "Shape",
+        "comment": "Base class for the shape hierarchy.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "parameters": [{
+        "isConst": true,
+        "paramName": "name",
+        "lowerUnderscoreParamName": "name",
+        "dataType": "CHAR_POINTER"
+      }],
+      "isConstructor": true,
+      "documentation": "Creates a plain named shape without area or sides."
+    }, {
       "name": "getName",
       "lowerUnderscoreName": "get_name",
       "cName": "bindings_tests_Shape_getName",
@@ -241,13 +260,25 @@
       "propertyName": "name",
       "flags": ["Noexcept"]
     }, {
+      "name": "plainCopy",
+      "lowerUnderscoreName": "plain_copy",
+      "cName": "bindings_tests_Shape_plainCopy",
+      "returnType": {
+        "cPrefix": "bindings_tests_",
+        "typeName": "Shape",
+        "comment": "Base class for the shape hierarchy.",
+        "dataType": "OBJECT_HANDLE"
+      },
+      "documentation": "Creates a plain shape with the same name, without area or sides.",
+      "flags": ["Noexcept", "Const"]
+    }, {
       "name": "area",
       "lowerUnderscoreName": "area",
       "cName": "bindings_tests_Shape_area",
       "returnType": {
         "dataType": "FLOAT64"
       },
-      "documentation": "Area of the shape. Dispatches to the concrete subclass.",
+      "documentation": "Area of the shape. Dispatches to the concrete subclass, zero for a plain shape.",
       "flags": ["Noexcept", "Const"]
     }, {
       "name": "sideCount",

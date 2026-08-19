@@ -15,8 +15,20 @@ classdef Shape < handle & matlab.mixin.SetGet
             bindings_tests_native('bindings_tests_Shape_setName', this.ptr, name);
         end
 
+        function obj = plainCopy(this, varargin)
+            % Creates a plain shape with the same name, without area or sides.
+            %
+            %   Outputs:
+            %       Base class for the shape hierarchy.
+            ptr_ = bindings_tests_native('bindings_tests_Shape_plainCopy', this.ptr);
+            if isempty(ptr_)
+                error('Failed to create bindings_tests.Shape in Shape.plainCopy');
+            end
+            obj = bindings_tests.Shape(ptr_, varargin{:});
+        end
+
         function result = area(this)
-            % Area of the shape. Dispatches to the concrete subclass.
+            % Area of the shape. Dispatches to the concrete subclass, zero for a plain shape.
             result = bindings_tests_native('bindings_tests_Shape_area', this.ptr);
         end
 
@@ -27,15 +39,30 @@ classdef Shape < handle & matlab.mixin.SetGet
 
     end
 
-    methods(Access = public, Hidden = true)
-        function this = Shape(ptr, varargin)
-            if ~isa(ptr, 'uint64') || ~isscalar(ptr)
-                error('Shape instances are created by the library');
-            end
-            this.ptr = ptr;
+    methods(Access = public)
+        function this = Shape(name, varargin)
+            % Creates a plain named shape without area or sides.
+            %
+            %   Inputs:
+            %       name
+            %
+            %   Outputs:
+            %       Base class for the shape hierarchy.
+            %
+            %   Throws:
+            %       Error on internal errors
 
-            % Apply name-value pairs to properties, if provided
-            if numel(varargin) > 1
+            % A uint64 scalar is a handle the library created
+            if nargin >= 1 && isa(name, 'uint64') && isscalar(name)
+                ptr_ = name;
+            else
+                ptr_ = bindings_tests_native('bindings_tests_Shape_create', name);
+                if isempty(ptr_)
+                    error('Failed to create bindings_tests.Shape in Shape.Shape');
+                end
+            end
+            this.ptr = ptr_;
+            if numel(varargin) > 0
                 this.set(varargin{:});
             end
         end

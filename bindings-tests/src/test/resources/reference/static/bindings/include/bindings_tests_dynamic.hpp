@@ -230,12 +230,29 @@ private:
  */
 class Shape {
 public:
+
+  /**
+   * @brief Creates a plain named shape without area or sides.
+   *
+   * @param name
+   * @return Base class for the shape hierarchy.
+   * @throw on internal errors
+   */
+  Shape(const char* name);
+  Shape(const std::string& name);
   std::string getName() const noexcept;
   void setName(const char* name) noexcept;
   void setName(const std::string& name) noexcept;
 
   /**
-   * @brief Area of the shape. Dispatches to the concrete subclass.
+   * @brief Creates a plain shape with the same name, without area or sides.
+   *
+   * @return Base class for the shape hierarchy.
+   */
+  Shape plainCopy() const noexcept;
+
+  /**
+   * @brief Area of the shape. Dispatches to the concrete subclass, zero for a plain shape.
    */
   double area() const noexcept;
 
@@ -1040,6 +1057,14 @@ inline Naming::~Naming() noexcept {
 }
 
 // Shape
+inline Shape::Shape(const char* name) {
+  static auto bindings_tests_Shape_create = DynamicLookup::instance().getFunc<internal::ShapePtr(*)(internal::ErrorInfo*, const char*)>("bindings_tests_Shape_create");
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Shape_create(&error_, name);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Shape");
+}
+inline Shape::Shape(const std::string& name) : Shape(name.c_str()) {}
 inline std::string Shape::getName() const noexcept {
   static auto bindings_tests_Shape_getName = DynamicLookup::instance().getFunc<const char*(*)(internal::ShapePtr)>("bindings_tests_Shape_getName");
   auto ptr = bindings_tests_Shape_getName(ptr_);
@@ -1051,6 +1076,11 @@ inline void Shape::setName(const char* name) noexcept {
 }
 inline void Shape::setName(const std::string& name) noexcept {
   setName(name.c_str());
+}
+inline Shape Shape::plainCopy() const noexcept {
+  static auto bindings_tests_Shape_plainCopy = DynamicLookup::instance().getFunc<internal::ShapePtr(*)(internal::ShapePtr)>("bindings_tests_Shape_plainCopy");
+  auto ptr = bindings_tests_Shape_plainCopy(ptr_);
+  return Shape(ptr);
 }
 inline double Shape::area() const noexcept {
   static auto bindings_tests_Shape_area = DynamicLookup::instance().getFunc<double(*)(internal::ShapePtr)>("bindings_tests_Shape_area");

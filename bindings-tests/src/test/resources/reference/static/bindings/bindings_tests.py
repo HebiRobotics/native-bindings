@@ -256,10 +256,14 @@ libbindings_tests.custom_prefix_Naming_release.argtypes = [NamingPtr]
 libbindings_tests.custom_prefix_Naming_release.restype = None
 
 # ==== Shape ====
+libbindings_tests.bindings_tests_Shape_create.argtypes = [POINTER(_ErrorInfo), c_char_p]
+libbindings_tests.bindings_tests_Shape_create.restype = ShapePtr
 libbindings_tests.bindings_tests_Shape_getName.argtypes = [ShapePtr]
 libbindings_tests.bindings_tests_Shape_getName.restype = c_char_p
 libbindings_tests.bindings_tests_Shape_setName.argtypes = [ShapePtr, c_char_p]
 libbindings_tests.bindings_tests_Shape_setName.restype = None
+libbindings_tests.bindings_tests_Shape_plainCopy.argtypes = [ShapePtr]
+libbindings_tests.bindings_tests_Shape_plainCopy.restype = ShapePtr
 libbindings_tests.bindings_tests_Shape_area.argtypes = [ShapePtr]
 libbindings_tests.bindings_tests_Shape_area.restype = c_double
 libbindings_tests.bindings_tests_Shape_sideCount.argtypes = [ShapePtr]
@@ -679,8 +683,25 @@ class Shape:
 
     __slots__ = ('ptr',)
 
-    def __init__(self, *args, **kwargs):
-        raise TypeError('Shape instances are created by the library')
+    def __init__(self, name: str) -> None:
+        """Creates a plain named shape without area or sides.
+
+        Args:
+            name:
+
+        Returns:
+            Base class for the shape hierarchy.
+
+        Raises:
+            Exception: on internal errors
+        """
+        if name is not None and not isinstance(name, c_char_p):
+            name = c_char_p(name.encode('utf-8') if isinstance(name, str) else name)
+        error_ = _ErrorInfo()
+        ptr_ = _checked(error_, libbindings_tests.bindings_tests_Shape_create(byref(error_), name))
+        if not ptr_:
+            raise RuntimeError('Failed to create Shape in Shape::__init__')
+        self._attach(ptr_)
 
     @classmethod
     def _wrap(cls, ptr: ShapePtr):
@@ -710,8 +731,21 @@ class Shape:
             name = c_char_p(name.encode('utf-8') if isinstance(name, str) else name)
         libbindings_tests.bindings_tests_Shape_setName(self.ptr, name)
 
+    def plain_copy(self, *, name: str = None) -> Shape:
+        """Creates a plain shape with the same name, without area or sides.
+
+        Returns:
+            Base class for the shape hierarchy.
+        """
+        ptr_ = libbindings_tests.bindings_tests_Shape_plainCopy(self.ptr)
+        if not ptr_:
+            raise RuntimeError('Failed to create Shape in Shape::plain_copy')
+        obj_ = Shape._wrap(ptr_)
+        if name is not None: obj_.name = name
+        return obj_
+
     def area(self) -> float:
-        """Area of the shape. Dispatches to the concrete subclass."""
+        """Area of the shape. Dispatches to the concrete subclass, zero for a plain shape."""
         return libbindings_tests.bindings_tests_Shape_area(self.ptr)
 
     def side_count(self) -> int:

@@ -366,6 +366,17 @@ static void testShapes() {
   CHECK(squareAsShape.area() == 9.0);
   CHECK(squareAsShape.sideCount() == 4);
   CHECK(squareAsShape.getName() == "square");
+
+  // The parent has a constructor of its own, next to the protected pointer
+  // constructor the subclasses delegate to
+  bt::Shape plain("plain");
+  CHECK(plain.area() == 0.0);
+  CHECK(plain.sideCount() == 0);
+  CHECK(plain.getName() == "plain");
+
+  bt::Shape copy = circle.plainCopy();
+  CHECK(copy.getName() == "circle");
+  CHECK(copy.sideCount() == 0);
 }
 
 // ---------------------------------------------------------------------------

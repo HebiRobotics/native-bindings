@@ -360,10 +360,10 @@ are documented rather than fixed so that the extraction stayed behaviour preserv
   always cross as `uint64`.
 - **Structs are not supported.** There is no by-value struct mapping, and `@CExternalEnums`
   is declared but never read by the processor.
-- **Only leaf classes may declare constructors**, and an abstract parent shares its
-  handle registry with the whole hierarchy. `pythonOverload` and `matlabOverload` on a
-  constructor are ignored once its class declares more than one, and a `cppOverloads`
-  entry on a constructor delegates, so its `body` is not emitted.
+- **An abstract parent shares its handle registry with the whole hierarchy.**
+  `pythonOverload` and `matlabOverload` on a constructor are ignored once its class
+  declares more than one, and a `cppOverloads` entry on a constructor delegates, so its
+  `body` is not emitted.
 
 ## License
 

@@ -324,8 +324,23 @@ classdef BindingsTest < matlab.unittest.TestCase
             testCase.verifyTrue(isa(circle, 'bindings_tests.Shape'));
             testCase.verifyTrue(isa(square, 'bindings_tests.Shape'));
 
+            % The parent has a constructor of its own. The subclass constructors
+            % still hand their cast pointer to it, which takes the uint64 case,
+            % and a library-returned Shape handle wraps the same way.
+            plain = bindings_tests.Shape('plain');
+            testCase.verifyEqual(plain.area(), 0.0);
+            testCase.verifyEqual(plain.sideCount(), 0);
+            testCase.verifyEqual(plain.name, 'plain');
+
+            copy = circle.plainCopy();
+            testCase.verifyClass(copy, 'bindings_tests.Shape');
+            testCase.verifyEqual(copy.name, 'circle');
+            testCase.verifyEqual(copy.sideCount(), 0);
+
             delete(circle);
             delete(square);
+            delete(plain);
+            delete(copy);
         end
 
         function testPalette(testCase)

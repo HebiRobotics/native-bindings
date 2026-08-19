@@ -416,6 +416,7 @@ static void test_shapes(void) {
     bindings_tests_CirclePtr circle;
     bindings_tests_SquarePtr square;
     bindings_tests_ShapePtr shape;
+    bindings_tests_ShapePtr copy;
 
     circle = bindings_tests_Circle_create(NULL, 2.0);
     assert(circle != NULL);
@@ -436,6 +437,13 @@ static void test_shapes(void) {
     assert(fabs(bindings_tests_Shape_area(shape) - 3.14159265358979323846 * 4.0) < 1e-9);
     assert(bindings_tests_Shape_sideCount(shape) == 0);
     assert(strcmp(bindings_tests_Shape_getName(shape), "circle") == 0);
+
+    /* A base handle returned by the library, from a parent that has a constructor */
+    copy = bindings_tests_Shape_plainCopy(shape);
+    assert(copy != NULL);
+    assert(strcmp(bindings_tests_Shape_getName(copy), "circle") == 0);
+    assert(bindings_tests_Shape_sideCount(copy) == 0);
+    bindings_tests_Shape_release(copy);
     bindings_tests_Shape_release(shape);
 
     shape = bindings_tests_Square_to_Shape(square);
@@ -443,6 +451,14 @@ static void test_shapes(void) {
     assert(bindings_tests_Shape_area(shape) == 9.0);
     assert(bindings_tests_Shape_sideCount(shape) == 4);
     assert(strcmp(bindings_tests_Shape_getName(shape), "square") == 0);
+    bindings_tests_Shape_release(shape);
+
+    /* The parent has a constructor of its own */
+    shape = bindings_tests_Shape_create(NULL, "plain");
+    assert(shape != NULL);
+    assert(bindings_tests_Shape_area(shape) == 0.0);
+    assert(bindings_tests_Shape_sideCount(shape) == 0);
+    assert(strcmp(bindings_tests_Shape_getName(shape), "plain") == 0);
     bindings_tests_Shape_release(shape);
 
     printf("shapes ok\n");

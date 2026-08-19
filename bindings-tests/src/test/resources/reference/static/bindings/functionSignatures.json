@@ -692,10 +692,39 @@
         "type": ["bindings_tests.Color", "choices={'Red', 'Green', 'Blue'}"]
       }]
   },
+  "bindings_tests.Shape": {
+    "inputs": [{
+        "kind": "required",
+        "name": "name",
+        "type": ["char"]
+      }, {
+        "kind": "namevalue",
+        "name": "name",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Shape"]
+      }]
+  },
   "bindings_tests.Shape.area": {
     "inputs": [{
         "name": "this",
         "type": "bindings_tests.Shape"
+      }]
+  },
+  "bindings_tests.Shape.plainCopy": {
+    "inputs": [{
+        "name": "this",
+        "type": "bindings_tests.Shape"
+      }, {
+        "kind": "namevalue",
+        "name": "name",
+        "type": ["char"]
+      }],
+    "outputs": [{
+        "name": "obj",
+        "type": ["bindings_tests.Shape"]
       }]
   },
   "bindings_tests.Shape.sideCount": {

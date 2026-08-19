@@ -354,6 +354,21 @@ class ShapesTest(unittest.TestCase):
         # implementation explicitly needs fget. If the generator ever emits a
         # plain method instead, this becomes bindings_tests.Shape.get_name(...).
 
+    def test_parent_constructor(self):
+        # The parent has a constructor of its own. Subclasses attach through
+        # _attach, so their __init__ never runs it, and a library-returned
+        # Shape handle wraps without running it either.
+        plain = bindings_tests.Shape("plain")
+        self.assertEqual(0.0, plain.area())
+        self.assertEqual(0, plain.side_count())
+        self.assertEqual("plain", plain.name)
+
+        copy = bindings_tests.Circle(2.0).plain_copy()
+        self.assertIsInstance(copy, bindings_tests.Shape)
+        self.assertNotIsInstance(copy, bindings_tests.Circle)
+        self.assertEqual("circle", copy.name)
+        self.assertEqual(0, copy.side_count())
+
 
 class PaletteTest(unittest.TestCase):
     """Enums, surfaced as an IntEnum with upper case names."""

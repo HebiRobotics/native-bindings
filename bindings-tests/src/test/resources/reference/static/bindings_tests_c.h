@@ -153,8 +153,10 @@ DLL_PUBLIC int custom_prefix_Naming_add_two_numbers(int first, int second);
 DLL_PUBLIC void custom_prefix_Naming_release(custom_prefix_NamingPtr obj);
 
 // ==== Shape ====
+DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Shape_create(bindings_tests_ErrorInfo* _error, const char* name);
 DLL_PUBLIC const char* bindings_tests_Shape_getName(bindings_tests_ShapePtr obj);
 DLL_PUBLIC void bindings_tests_Shape_setName(bindings_tests_ShapePtr obj, const char* name);
+DLL_PUBLIC bindings_tests_ShapePtr bindings_tests_Shape_plainCopy(bindings_tests_ShapePtr obj);
 DLL_PUBLIC double bindings_tests_Shape_area(bindings_tests_ShapePtr obj);
 DLL_PUBLIC int bindings_tests_Shape_sideCount(bindings_tests_ShapePtr obj);
 DLL_PUBLIC void bindings_tests_Shape_release(bindings_tests_ShapePtr obj);

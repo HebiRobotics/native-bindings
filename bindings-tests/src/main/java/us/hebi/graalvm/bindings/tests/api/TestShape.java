@@ -8,9 +8,10 @@ import us.hebi.graalvm.bindings.annotations.CLibMethod;
 import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
 
 /**
- * Abstract base of the inheritance test. Subclasses share this class's handle
- * registry, so a Circle handle can be passed to any method declared here after
- * an upcast.
+ * Base of the inheritance test. Subclasses share this class's handle registry, so a
+ * Circle handle can be passed to any method declared here after an upcast. The base
+ * has a constructor of its own, so a parent with a value constructor is covered next
+ * to the leaves.
  * <p>
  * {@link TestCircle} is declared here rather than in its own file to cover annotated
  * static nested classes. Nothing about the C ABI changes: every symbol comes from the
@@ -22,7 +23,7 @@ import static us.hebi.graalvm.bindings.annotations.MethodFlag.*;
  */
 @CLibComment("Base class for the shape hierarchy.")
 @CLibClass(value = "Shape", abstractClass = true)
-public abstract class TestShape {
+public class TestShape {
 
     @CLibComment("A circle. Inherits name and area from Shape.")
     @CLibClass("Circle")
@@ -78,6 +79,22 @@ public abstract class TestShape {
 
     }
 
+    @CLibMethod(constructor = true)
+    @CLibComment("Creates a plain named shape without area or sides.")
+    public static TestShape create(String name) {
+        return new TestShape(name);
+    }
+
+    /**
+     * Returned as the base type, so the wrappers have to wrap a library handle of a parent
+     * class that declares a constructor.
+     */
+    @CLibMethod(flags = {Noexcept, Const})
+    @CLibComment("Creates a plain shape with the same name, without area or sides.")
+    public TestShape plainCopy() {
+        return new TestShape(name);
+    }
+
     @CLibMethod(flags = {Noexcept, Const}, property = "name")
     public String getName() {
         return name;
@@ -89,12 +106,16 @@ public abstract class TestShape {
     }
 
     @CLibMethod(flags = {Noexcept, Const})
-    @CLibComment("Area of the shape. Dispatches to the concrete subclass.")
-    public abstract double area();
+    @CLibComment("Area of the shape. Dispatches to the concrete subclass, zero for a plain shape.")
+    public double area() {
+        return 0;
+    }
 
     @CLibMethod(flags = {Noexcept, Const})
     @CLibComment("Number of sides. Zero for shapes without straight edges.")
-    public abstract int sideCount();
+    public int sideCount() {
+        return 0;
+    }
 
     protected TestShape(String name) {
         this.name = name;

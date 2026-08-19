@@ -8,6 +8,8 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.WordFactory;
 import us.hebi.graalvm.bindings.runtime.pointers.CPointers;
 import us.hebi.graalvm.bindings.runtime.pointers.Handles;
+import us.hebi.graalvm.bindings.runtime.structs.CLibErrors;
+import us.hebi.graalvm.bindings.runtime.structs.ErrorInfo;
 import us.hebi.graalvm.bindings.tests.api.TestShape;
 
 public final class TestShape$CEntries {
@@ -27,6 +29,33 @@ public final class TestShape$CEntries {
     public static void bindings_tests_Shape_release(IsolateThread _isolate,
             final ObjectHandle handle) {
         Handles.destroy(INSTANCES, handle);
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Shape_create"
+    )
+    public static ObjectHandle bindings_tests_Shape_create(IsolateThread _isolate, ErrorInfo _error,
+            CCharPointer name) {
+        CLibErrors.clear(_error);
+        try {
+            return TestShape$CEntries._registerInstance(TestShape.create(CPointers.utf8ToJavaString(name)));
+        } catch (Throwable throwable) {
+            CLibErrors.fill(throwable, _error, "bindings_tests");
+            return WordFactory.nullPointer();
+        }
+    }
+
+    @CEntryPoint(
+            name = "__bindings_tests_Shape_plainCopy"
+    )
+    public static ObjectHandle bindings_tests_Shape_plainCopy(IsolateThread _isolate,
+            ObjectHandle _obj) {
+        try {
+            return TestShape$CEntries._registerInstance(_getInstance(_obj).plainCopy());
+        } catch (Throwable throwable) {
+            // Declared noexcept, so there is no error struct to report through
+            return WordFactory.nullPointer();
+        }
     }
 
     @CEntryPoint(

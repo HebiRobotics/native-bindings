@@ -222,12 +222,29 @@ private:
  */
 class Shape {
 public:
+
+  /**
+   * @brief Creates a plain named shape without area or sides.
+   *
+   * @param name
+   * @return Base class for the shape hierarchy.
+   * @throw on internal errors
+   */
+  Shape(const char* name);
+  Shape(const std::string& name);
   std::string getName() const noexcept;
   void setName(const char* name) noexcept;
   void setName(const std::string& name) noexcept;
 
   /**
-   * @brief Area of the shape. Dispatches to the concrete subclass.
+   * @brief Creates a plain shape with the same name, without area or sides.
+   *
+   * @return Base class for the shape hierarchy.
+   */
+  Shape plainCopy() const noexcept;
+
+  /**
+   * @brief Area of the shape. Dispatches to the concrete subclass, zero for a plain shape.
    */
   double area() const noexcept;
 
@@ -916,8 +933,10 @@ extern "C" {
   int custom_prefix_Naming_get_start_value(internal::NamingPtr);
   int custom_prefix_Naming_add_two_numbers(int, int);
   void custom_prefix_Naming_release(internal::NamingPtr);
+  internal::ShapePtr bindings_tests_Shape_create(internal::ErrorInfo*, const char*);
   const char* bindings_tests_Shape_getName(internal::ShapePtr);
   void bindings_tests_Shape_setName(internal::ShapePtr, const char*);
+  internal::ShapePtr bindings_tests_Shape_plainCopy(internal::ShapePtr);
   double bindings_tests_Shape_area(internal::ShapePtr);
   int bindings_tests_Shape_sideCount(internal::ShapePtr);
   void bindings_tests_Shape_release(internal::ShapePtr);
@@ -1100,6 +1119,13 @@ inline Naming::~Naming() noexcept {
 }
 
 // Shape
+inline Shape::Shape(const char* name) {
+  internal::ErrorInfo error_ = {};
+  ptr_ = bindings_tests_Shape_create(&error_, name);
+  checkError(error_);
+  checkNotNull(ptr_, "Could not create Shape");
+}
+inline Shape::Shape(const std::string& name) : Shape(name.c_str()) {}
 inline std::string Shape::getName() const noexcept {
   auto ptr = bindings_tests_Shape_getName(ptr_);
   return !ptr ? std::string() : std::string(ptr); // copy utf8
@@ -1109,6 +1135,10 @@ inline void Shape::setName(const char* name) noexcept {
 }
 inline void Shape::setName(const std::string& name) noexcept {
   setName(name.c_str());
+}
+inline Shape Shape::plainCopy() const noexcept {
+  auto ptr = bindings_tests_Shape_plainCopy(ptr_);
+  return Shape(ptr);
 }
 inline double Shape::area() const noexcept {
   return bindings_tests_Shape_area(ptr_);
