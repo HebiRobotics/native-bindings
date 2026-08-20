@@ -125,8 +125,18 @@ do
         BASE_NAME=$(basename "${arg}")
         if [[ "$SEEN_LIBS" != *" ${BASE_NAME} "* ]]; then
             SEEN_LIBS+="${BASE_NAME} "
-            echo "* Copied static lib: $arg"  >> ${LOG_FILE}
-            cp $arg ${STATIC_OUTPUT_PATH}
+            # Liberica NIK ships libjavafx_iio.a as a bare ELF object. ld links it regardless
+            # of the name, but the stage 2 merge (ar -M addlib) only accepts real archives,
+            # so anything without the archive magic gets wrapped into one on the way.
+            if [ "$(head -c 7 "$arg")" = "!<arch>" ]; then
+                echo "* Copied static lib: $arg"  >> ${LOG_FILE}
+                cp $arg ${STATIC_OUTPUT_PATH}
+            else
+                echo "* Wrapped object into static lib: $arg"  >> ${LOG_FILE}
+                OBJ_NAME="${BASE_NAME%.a}.o"
+                cp $arg "${STATIC_OUTPUT_PATH}/${OBJ_NAME}"
+                (cd ${STATIC_OUTPUT_PATH} && ar -rcs "${BASE_NAME}" "${OBJ_NAME}" && rm "${OBJ_NAME}")
+            fi
             ARCHIVE_LINES+="    \${CMAKE_CURRENT_LIST_DIR}/${BASE_NAME}  # ${arg}"$'\n'
         else
             echo "* Skipped duplicate: $arg" >> ${LOG_FILE}
