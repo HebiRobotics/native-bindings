@@ -113,7 +113,10 @@ public class PythonBindingsGenerator extends BindingGenerator {
                         lib_file = lib_name + '.dll'
                         cache_home = os.getenv('LOCALAPPDATA')
                     elif os_name == 'Linux' and architecture == '64bit':
-                        lib_platform = 'linux_amd64'
+                        if platform.machine() in ['arm64', 'aarch64']:
+                            lib_platform = 'linux_arm64'
+                        else:
+                            lib_platform = 'linux_amd64'
                         lib_file = 'lib' + lib_name + '.so'
                         cache_home = os.getenv('XDG_CACHE_HOME')
                         if not cache_home:
