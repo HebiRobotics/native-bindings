@@ -67,6 +67,10 @@ if(MSVC)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The Graal image objects carry no .note.GNU-stack section
     set_property(TARGET bindings_tests::static PROPERTY INTERFACE_LINK_OPTIONS "-Wl,-z,noexecstack")
+elseif(APPLE)
+    # JavaFX defines jStringToNSString in both glass and prism_mtl, and ld only
+    # downgrades that duplicate to a warning when dead stripping
+    set_property(TARGET bindings_tests::static PROPERTY INTERFACE_LINK_OPTIONS "-Wl,-dead_strip")
 endif()
 
 set(bindings_tests_FOUND TRUE)

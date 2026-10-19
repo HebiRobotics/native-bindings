@@ -108,6 +108,9 @@ if (APPLE)
     enable_language(OBJC)
     target_sources(<libName> PRIVATE ${CMAKE_CURRENT_LIST_DIR}/<libName>_objc.m)
     target_link_libraries(<libName> PRIVATE "")
+    # Same as the native-image link. JavaFX defines jStringToNSString in both glass and
+    # prism_mtl, and ld only downgrades that duplicate to a warning when dead stripping
+    target_link_options(<libName> PRIVATE "-Wl,-dead_strip")
 endif ()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
