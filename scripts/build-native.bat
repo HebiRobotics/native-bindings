@@ -40,16 +40,16 @@ echo ==^> Building the shared library ^(this takes a few minutes^)
 call mvn -B -f "%REPO_ROOT%\pom.xml" clean verify -Pnative %*
 if errorlevel 1 exit /b 1
 
-rem Stage two. CMake links that static library into the final shared library and, if
-rem MATLAB is available, builds the MEX gateway that the MATLAB wrapper calls into.
+rem Stage two. CMake links that static library into the final shared library and builds
+rem the MEX gateway that the MATLAB wrapper calls into, against MATLAB's SDK if one is
+rem found and the bundled one otherwise.
 if not defined MATLABROOT call :find_matlabroot
 if defined MATLABROOT (
     echo.
     echo Using MATLABROOT: %MATLABROOT%
 ) else (
     echo.
-    echo MATLAB not found. Set MATLABROOT to build the MEX gateway.
-    echo The C, C++ and Python suites do not need it, so the build continues.
+    echo MATLAB not found, building the MEX gateway against the bundled MEX SDK.
 )
 
 echo.

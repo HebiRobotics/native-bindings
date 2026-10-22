@@ -11,7 +11,7 @@ BINDINGS_DIR="$STATIC_DIR/bindings"
 LIB_NAME="bindings_tests"
 
 # Stage two: cmake links the static library from stage one into the final shared
-# library and, if MATLABROOT is set, the MEX gateway.
+# library and the MEX gateway.
 NATIVE_BUILD_DIR="$MODULE_DIR/target/native-build"
 MEX_NAME="${LIB_NAME}_native"
 
@@ -42,9 +42,8 @@ esac
 # CMakeLists.txt copies everything it built into this directory below the build tree
 RELEASE_LIB_DIR="$NATIVE_BUILD_DIR/release/${LIB_NAME}/${LIB_NAME}/lib/$PLATFORM"
 
-# Sets MATLABROOT if MATLAB can be found, otherwise leaves it empty. cmake only adds the
-# MEX target when the variable is present in the environment, and the C, C++ and Python
-# suites do not need it.
+# Sets MATLABROOT if MATLAB can be found, otherwise leaves it empty. cmake then builds the
+# MEX gateway against that installation's SDK instead of the bundled one.
 find_matlabroot() {
     if [ -n "${MATLABROOT:-}" ]; then
         return

@@ -5,8 +5,8 @@
 #   scripts/build-native.sh
 #
 # Requires a GraalVM JDK on JAVA_HOME, a native toolchain and CMake. MATLAB is optional:
-# without it the MEX gateway is skipped. Any extra arguments are passed through to Maven,
-# for example: scripts/build-native.sh -o
+# without it the MEX gateway builds against the bundled MEX SDK. Any extra arguments are
+# passed through to Maven, for example: scripts/build-native.sh -o
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -16,8 +16,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 step "Building the shared library (this takes a few minutes)"
 "$MVN" -B -f "$REPO_ROOT/pom.xml" clean verify -Pnative "$@"
 
-# Stage two. CMake links that static library into the final shared library and, if
-# MATLAB is available, builds the MEX gateway that the MATLAB wrapper calls into.
+# Stage two. CMake links that static library into the final shared library and builds
+# the MEX gateway that the MATLAB wrapper calls into, against MATLAB's SDK if one is
+# found and the bundled one otherwise.
 find_matlabroot
 if [ -n "${MATLABROOT:-}" ]; then
     echo
@@ -25,8 +26,7 @@ if [ -n "${MATLABROOT:-}" ]; then
     export MATLABROOT
 else
     echo
-    echo "MATLAB not found. Set MATLABROOT to build the MEX gateway."
-    echo "The C, C++ and Python suites do not need it, so the build continues."
+    echo "MATLAB not found, building the MEX gateway against the bundled MEX SDK."
 fi
 
 step "Linking the release library with CMake"

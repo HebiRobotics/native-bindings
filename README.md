@@ -316,7 +316,7 @@ You will need:
 | A C toolchain | MSVC on Windows, gcc or clang elsewhere. Also used by the C and C++ suites |
 | CMake 3.17+ | Links the release library and builds the C and C++ suites through CTest |
 | Python 3.8+ | `numpy` is only needed for the array bindings |
-| MATLAB R2018b+ | Optional. Set `MATLABROOT`, or put `matlab` on `PATH` for the scripts to derive it |
+| MATLAB R2018b+ | Optional, only for running the MATLAB suite. Building the MEX gateway does not need it |
 
 On Windows, `native-image` and CMake both need `cl.exe` on `PATH`. Run the scripts from
 a shell that already has the MSVC environment loaded, such as the `x64 Native Tools
@@ -342,11 +342,9 @@ cmake -S bindings-tests/target/image/static -B bindings-tests/target/native-buil
 cmake --build bindings-tests/target/native-build --config Release
 ```
 
-This links the static library into the final shared library and, when `MATLABROOT` points
-at a MATLAB installation or a MEX SDK, also builds the MATLAB MEX gateway. The scripts use
-`MATLABROOT` if it is already set and otherwise derive it from `matlab` on `PATH`. If
-MATLAB cannot be found they say so and carry on without the gateway, because only the
-MATLAB suite needs it.
+This links the static library into the final shared library and builds the MATLAB MEX
+gateway. The gateway needs no MATLAB installation: it compiles against a bundled minimal
+MEX SDK that covers the API subset it uses.
 
 The scripts then copy the built library into
 `bindings-tests/target/image/static/bindings/lib/<platform>/` and, if it was built, the
