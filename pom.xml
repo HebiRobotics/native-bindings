@@ -36,7 +36,7 @@
         <glue.version>1.2.1</glue.version>
         <graalvm.tools.version>0.11.5</graalvm.tools.version>
         <quickbuf.version>1.4</quickbuf.version>
-        <protoc.version>3.19.4</protoc.version>
+        <protoc.version>4.36.2</protoc.version>
         <javapoet.version>1.13.0</javapoet.version>
         <guava.version>33.4.0-jre</guava.version>
         <auto.common.version>1.2.2</auto.common.version>

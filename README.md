@@ -63,13 +63,22 @@ value = counter.value;
 
 ## Using it
 
-Add the runtime to your dependencies and the generator to your processor path:
+Nothing is published to Maven Central yet. Install the snapshot into your local
+repository first:
+
+```bash
+git clone -b develop https://github.com/HebiRobotics/native-bindings.git
+cd native-bindings
+mvn install -DskipTests
+```
+
+Then add the runtime to your dependencies and the generator to your processor path:
 
 ```xml
 <dependency>
     <groupId>us.hebi.graalvm</groupId>
     <artifactId>bindings-runtime</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -81,7 +90,7 @@ Add the runtime to your dependencies and the generator to your processor path:
             <path>
                 <groupId>us.hebi.graalvm</groupId>
                 <artifactId>bindings-generator</artifactId>
-                <version>0.1.0</version>
+                <version>0.1.0-SNAPSHOT</version>
             </path>
             <!-- Required. The processor path is an isolated classloader and does not
                  inherit provided-scope dependencies from the generator. -->
@@ -100,6 +109,51 @@ Add the runtime to your dependencies and the generator to your processor path:
     </configuration>
 </plugin>
 ```
+
+### Building the native library
+
+The build has two stages. Stage one is native-image, run with a compiler wrapper that the
+processor generates into `bindings.outputDir` as `compiler-windows.bat`, `compiler-osx.sh`
+or `compiler-linux.sh`. The wrapper calls the platform C compiler as usual and additionally
+writes a static library plus the cmake fragments stage two needs. Pass it as a single
+`=` separated argument, for example with the GraalVM native build tools:
+
+```xml
+<plugin>
+    <groupId>org.graalvm.buildtools</groupId>
+    <artifactId>native-maven-plugin</artifactId>
+    <configuration>
+        <imageName>mylib</imageName>
+        <outputDirectory>${project.build.directory}/image</outputDirectory>
+        <sharedLibrary>true</sharedLibrary>
+        <buildArgs>
+            <buildArg>--native-compiler-path=${project.build.directory}/image/static/compiler-linux.sh</buildArg>
+        </buildArgs>
+    </configuration>
+</plugin>
+```
+
+Stage two is CMake over the output directory, using the `CMakeLists.txt` the processor
+generated there:
+
+```bash
+cmake -S target/image/static -B target/native-build
+cmake --build target/native-build --config Release
+```
+
+Stage two is not optional. The stage one library only exports GraalVM's `__`-prefixed
+entry points, while the C, C++, Python and MATLAB wrappers all call the API declared in the
+generated header, which stage two compiles from the generated shim. It produces:
+
+- a release directory `target/native-build/release/<libName>/<libName>/` holding the
+  language wrappers, with the shared library in its `lib/<platform>/`, plus a zip of the
+  same for distribution
+- a single merged static archive under `target/native-build/static/`, for applications that
+  want to link everything into one binary (see *Linking the static package* below)
+- the MATLAB MEX gateway, built against a bundled minimal MEX SDK
+
+`bindings-tests/pom.xml` and `scripts/build-native.{bat,sh}` are a complete working
+example of both stages, including the per-platform choice of the wrapper.
 
 ### Options
 
