@@ -58,8 +58,9 @@ value = counter.value;
 | `bindings-generator` | The annotation processor and the four language generators | Your build, as an `annotationProcessorPath` only |
 | `bindings-tests` | A small annotated API that exercises every feature, the reference file comparison, and the per-language test suites | Nothing. It is the test bed |
 
-`bindings-runtime` has no dependencies beyond the GraalVM native-image API, which is
-`provided`. Nothing from the generator ends up on your runtime classpath.
+`bindings-runtime` depends on the GraalVM native-image API, which is `provided`, and on
+[`us.hebi.glue`](https://central.sonatype.com/artifact/us.hebi.glue/glue) for buffer and
+unsafe access. Nothing from the generator ends up on your runtime classpath.
 
 ## Using it
 
@@ -312,7 +313,7 @@ You will need:
 
 | Tool | Notes |
 |---|---|
-| GraalVM JDK 21 | On `JAVA_HOME`. `mvn -Pnative` calls `native-image` from it |
+| GraalVM for JDK 21 or later | On `JAVA_HOME`. `mvn -Pnative` calls `native-image` from it. CI builds with GraalVM 25 |
 | A C toolchain | MSVC on Windows, gcc or clang elsewhere. Also used by the C and C++ suites |
 | CMake 3.17+ | Links the release library and builds the C and C++ suites through CTest |
 | Python 3.8+ | `numpy` is only needed for the array bindings |
@@ -370,7 +371,7 @@ others points at that language's generator rather than at the API.
 
 ### What the test API covers
 
-`bindings-tests/src/main/java/.../api/` holds thirteen small classes, each aimed at one
+`bindings-tests/src/main/java/.../api/` holds fifteen small classes, each aimed at one
 part of the feature matrix. Everything is deterministic and synchronous: no UI, no
 threads, no sleeps. Every language suite asserts the same value table, so a divergence
 between languages is immediately visible.
@@ -388,6 +389,8 @@ between languages is immediately visible.
 | `TestIsolated` | A second isolate with its own state and its own error provider |
 | `TestCallbacks` | Synchronous function pointer callbacks |
 | `TestIndices` | `@CLibIndex` conversion, including defaults that shift into the target language |
+| `TestStructs` | A user-defined struct passed by value, and the same struct as a `@CLibOut` return |
+| `TestNaming` | `cPrefix` and `useCamelCase`, for matching an existing hand-written C ABI |
 | `TestIgnored` | A class level `ignore`, which must produce no output at all |
 
 `ProcessorValidationTest` covers the other half: the cases that are rejected at compile
