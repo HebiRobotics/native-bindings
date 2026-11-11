@@ -77,8 +77,24 @@ echo "    \${CMAKE_CURRENT_LIST_DIR}/${LIB_NAME}.a" >> ${CMAKE_LIBS}
 # the GraalVM archives, so each one is recorded only the first time it is seen.
 # TODO: how should "-framework,Foundation" be added?
 SEEN_LIBS=" "
+
+# Archives passed with -force_load are also on the command line as plain files,
+# and the plain one comes first. Only the -force_load entry is recorded.
+FORCE_LOADED=" "
 for arg in $CC_ARGS
 do
+    if [[ $arg =~ ^-Wl,-force_load,.*\.(a)$ ]]; then
+        FORCE_LOADED+="${arg##*/} "
+    fi
+done
+
+for arg in $CC_ARGS
+do
+    if [[ $arg != -* && "$FORCE_LOADED" == *" ${arg##*/} "* ]]; then
+        echo "* Skipped in favor of -force_load: $arg" >> ${LOG_FILE}
+        continue
+    fi
+
     # handle specific libraries specified with -Wl,-force_load (e.g. libglass.a)
     prefix=""
     if [[ $arg =~ ^-Wl,-force_load,.*\.(a)$ ]]; then
